@@ -73,3 +73,24 @@ Personality: precise, map-like, for people who like to read the data.
 - The panel background is solid (no live vibrancy) so screenshots are deterministic. Production may use a material.
 - Native macOS has no sparklines requirement; every chart in the concepts carries axis labels and values.
 - Screenshots: macOS 26, `NSHostingView` rendered through an `NSWindow` at 2x, light and dark, on a mock desktop with menu bar. Tool: the `Shots` executable in each concept (not the browser preview, not Playwright).
+
+## C4 Tiles (owner-pinned: "very closely mimic the reference's display")
+
+Added 2026-11-14 after the owner saw C1-C3 and asked for the panel to closely follow the reference app's display (Source A, vorssaint.com). A user-pinned direction beats the roll, so it did not go through concept-seed.
+
+What was observed on the reference's public live demo (public page, read only; nothing downloaded):
+- A dark, rounded panel under the notch with the current view's title top-left and a "..." menu top-right (Keep open, Settings, Collapse).
+- Home view is a launcher: a grid of tool tiles (icon above label, a keyboard-shortcut hint under the label), with a back arrow and a search icon in the header and pager dots at the side.
+- A tool view is a dashboard of rounded tiles: small icon + label top-left, one large value, a thin progress bar; narrow tiles three across, wider tiles two across, mixed row heights.
+- A few round buttons float beside the panel (grid, timer, settings, volume).
+
+What this concept takes: the structure and interaction model (launcher grid with shortcut hints and search, header with title and overflow menu, tool views as stat tiles, wide and narrow tile rhythm, pager). What it does not take: the reference's name, logo, icons, copy, imagery, or the notch-island placement (not one of the owner's picks). Icons are SF Symbols, copy is original, the panel hangs from the status item. Impact on the plan: this replaces the four-tab IA (S02-S05) with a launcher plus one tile view per tool; if approved, `replica/recon.md`, `docs/blueprint.md` and `prd.md` are updated in Phase 3C.
+
+- THESIS: One panel, one pattern: everything is a tile. Home is a grid of the tools you switched on; a tool opens into a tile dashboard; the limit, the reason and the history are tiles like any other.
+- OWN-WORLD: Dark first: near-black ground `#0B0B0D`, tiles `#18181B` with a 1 px `#FFFFFF14` border, 16 pt radius, 12 pt gaps, white text, secondary `#A1A1AA` (must stay >= 4.5:1). Light appearance designed separately: ground `#F1F1F4`, white tiles, hairline `#00000014`. SF Pro (system), values 24 pt semibold with tabular digits, labels 11-12 pt. One accent per meaning: amber `#F5A524` for paused or caution, system blue for the limit, green for healthy; everything else is monochrome.
+- STORY: Open, see your tools, open one, read its tiles, act. For battery: the state tile says why, the limit tile changes the limit, Top up is a tile you click.
+- FIRST VIEWPORT (Battery view, 420 pt wide): header (back arrow, "Battery", search, "..." menu). Row 1: Charge tile (74%, thin bar with a notch at the 80% limit), Limit tile (80%, minus and plus steppers and drag on the bar), Temperature tile (41.2 C against 40 C, amber). Row 2: a wide State tile (paused, with the plain-language reason) beside a Top up action tile. Row 3: Power tile (to Mac, to battery, adapter rating), Health tile (cycles, maximum capacity), Hardware percentage tile. Row 4: a wide History tile (24 h chart with plugged-in spans and the limit line, axes labelled). Row 5: Schedule tile (three items).
+- ALSO RENDER: Home launcher (grid of tool tiles with shortcut hints, search in the header, pager dots, one tile shown as switched off with an "off" mark) and the System view (CPU, GPU, Memory tiles; Network, Disk, Power tiles; Keep awake tile; Fan safe mode tile in its off state; SoC temperature).
+- FORM: owner-pinned, no seed.
+- Organisation: launcher home, tool views reached by tile, back arrow, search, 420 pt wide, scrolls beyond about 640 pt.
+- FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
