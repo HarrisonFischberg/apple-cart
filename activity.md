@@ -34,3 +34,10 @@
 - STOP: waiting on owner pick.
 - Owner asked to closely mimic the reference display (Source A) after seeing C1-C3. Looked at its public live demo in the in-app browser (read only, public page). Built C4 Tiles in ../apple-cart-ui-4 (ui-4): 6 screenshots. Awaiting approval.
 - Owner approved C4 Tiles ("do"). Merged ui-4 into main (local, not pushed); removed worktrees; deleted merged branches ui-4, ui-base, phase-2/spec; kept ui-1..3. Plan docs updated for launcher IA. DESIGN.md + .impeccable/design.json written by documenter (Phase 3C). Next: Phase 4 (Sonnet, T001 and the T002 spike).
+
+## 2026-11-14 Phase 4 start (Sonnet)
+
+- Ralph quickstart cloned (owner yes), reviewed, adapted into ralph/ (6-iteration cap, Sonnet pinned, no network/push). Not run yet. /goal not available; bounded condition lives in PROMPT.md.
+- T001 done: XcodeGen project, Core + HelperProtocol modules, status item app. xcodebuild BUILD SUCCEEDED (only an OS tool warning, none from our code); 4 tests pass; app ran 3 s, LSUIElement true, ad-hoc signed. Menu bar icon NOT seen (no screen capture permission here).
+- T002 partial: public research + read-only probes in docs/spikes/charge-control.md. Found AlDente Pro helper installed and Vorssaint running on this Mac, so a write test needs them quit and reset first. No battery or system write was made.
+- Branch phase-4/build, local only. Next: owner decisions for T002; Ralph can run tasks that do not need the owner (T003+).
