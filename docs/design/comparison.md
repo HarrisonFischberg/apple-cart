@@ -1,6 +1,6 @@
 # Design comparison (Phase 3B)
 
-Status: awaiting the owner's pick, 2026-11-14. Written by Sonnet from the rendered screenshots; Opus has not reviewed it (the workflow gives the recommendation to Opus; the owner can ask for that pass).
+Status: awaiting the owner's approval of C4, 2026-11-14. The owner saw C1-C3 and asked for the panel to closely mimic the reference app's display; C4 was added for that. Written by Sonnet from the rendered screenshots; Opus has not reviewed it (the workflow gives the recommendation to Opus; the owner can ask for that pass).
 
 Screenshots: `docs/design/screenshots/`, macOS 26, 2x, light and dark, mock desktop with menu bar. Tool: the `Shots` executable in each concept (SwiftUI through an NSWindow), not the browser preview. All three use the same demo data and show the same state: charging paused because the battery is 41.2 °C against a 40 °C limit. Branches: `ui-1`, `ui-2`, `ui-3` in worktrees `../apple-cart-ui-N`, local only.
 
@@ -14,6 +14,13 @@ Screenshots: `docs/design/screenshots/`, macOS 26, 2x, light and dark, mock desk
 | Type | DIN Condensed numerals + system | Helvetica Neue, two weights | Avenir Next Condensed numerals + system |
 | Reads first | charge and limit on the tape | the dial | the history map and the reason |
 | Shows the reason | red callout under the tape | orange text under the dial | olive callout, with the numbered event that caused it |
+
+## C4 Tiles (added at the owner's request)
+
+Follows the reference's observed display structure (public live demo, read only): launcher grid of tool tiles with shortcut hints, header with title, search and overflow menu, tool views made of stat tiles with a large value and a thin bar, wide and narrow tile rhythm. Own icons (SF Symbols), own wording, no logo or imagery from the reference, no notch island. 420 pt wide, dark first with a separately designed light appearance. Screenshots: `c4-home`, `c4-battery`, `c4-system` in light and dark.
+
+- Strong: the closest match to what you asked for; one repeated pattern (everything is a tile) that scales to the 16 tools you picked; the pause reason and the limit are tiles like any other, so nothing needs learning; the home launcher shows every tool, with off tools dimmed.
+- Weak: it replaces the four-tab IA with a launcher plus one view per tool (the plan documents change if you approve it); Battery is about 936 pt tall and System runs past 680, so both scroll in production (the System shot is cut at 680, the quick-toggles tile is below the fold); the Limit tile's bar is only about 40 pt wide, a small drag target, so it needs a wider control; tile heights leave some empty space (State tile, home tiles); the overflow menu was built but not rendered open.
 
 ## What each does well, and where it is weak
 
@@ -32,6 +39,8 @@ Screenshots: `docs/design/screenshots/`, macOS 26, 2x, light and dark, mock desk
 - C1 and C2 each have a measured contrast problem above; C3's contrast was judged by eye only.
 
 ## Recommendation (Sonnet's, not yet reviewed by Opus)
+
+Since you asked for the reference's look: **C4 Tiles**. If you would rather not change the panel structure, the earlier recommendation stands:
 
 **C2 Rams as the base**, then borrow C3's numbered event legend for the history chart later. It best matches the product principle that the app should feel like part of macOS, it is the only one that fits a menu bar panel without scrolling, and its weaknesses (orange contrast, dark-mode switch) are small fixes. Choose C3 instead if the point of the app to you is understanding battery behavior at a glance; choose C1 if you want the app to look unmistakably its own and accept a taller, louder panel.
 

@@ -32,3 +32,4 @@
 - Not exercised: dragging, arrow keys, VoiceOver in any concept.
 - Lesson: do not pass isolation worktree to builder subagents that must work in pre-made worktrees (cost one wasted round).
 - STOP: waiting on owner pick.
+- Owner asked to closely mimic the reference display (Source A) after seeing C1-C3. Looked at its public live demo in the in-app browser (read only, public page). Built C4 Tiles in ../apple-cart-ui-4 (ui-4): 6 screenshots. Awaiting approval.
