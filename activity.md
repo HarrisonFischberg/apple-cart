@@ -48,3 +48,10 @@
 - One test failed on the first run because the test itself held the tool alive; fixed by not holding it, the release assertion is unchanged.
 - UIPreview dev tool renders views light/dark (docs/design/screenshots/build/). Offscreen windows are inactive, so switch tint cannot be seen there; confirm the on-state color in the running app.
 - Every switch currently reads Not built yet in the app (no tool is registered until its task).
+
+## 2026-11-14 T004 (Sonnet)
+
+- Core: LauncherModel (order, hide, search, arrow-key neighbours) and PanelModel (route, keep open, reset on close), persisted via SettingsStore; 7 new tests, 15 total pass.
+- UI: PanelView (420x560, header with back, search, overflow menu: Keep open, Settings, Collapse, Quit), 4-column tile grid, drag to reorder, context menu (Open, Hide), arrow/Return/Space keys, Add tools tile, empty and no-match states, placeholder for tools with no view. Only tools that are on show; off tools are not dimmed. No shortcut hints yet (no tool has a shortcut).
+- App: PanelController with non-activating NSPanel, global and local mouse monitors for outside click, Esc closes, positioned under the status item; right click shows Settings/Quit. xcodebuild BUILD SUCCEEDED; app launched and stayed running.
+- NOT verified live: no accessibility or screen permission here, so the status item click, click-inside, outside-click and Esc were never exercised. Offscreen renders (t004-launcher/empty, light and dark) checked by eye. Owner should click the icon once.

@@ -3,29 +3,6 @@ import Testing
 @testable import Core
 
 @MainActor
-private final class FakeTool: Tool {
-    var started = 0
-    var stopped = 0
-    var ticker: Task<Void, Never>?
-
-    func start() {
-        started += 1
-        ticker = Task { while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) } }
-    }
-
-    func stop() {
-        stopped += 1
-        ticker?.cancel()
-    }
-}
-
-private final class MemoryStore: SettingsStore {
-    var ids: Set<FeatureID> = []
-    func enabledFeatures() -> Set<FeatureID> { ids }
-    func setEnabledFeatures(_ ids: Set<FeatureID>) { self.ids = ids }
-}
-
-@MainActor
 @Suite struct FeatureRegistryTests {
     @Test func everythingIsOffByDefault() {
         let registry = FeatureRegistry(store: MemoryStore())

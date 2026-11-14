@@ -16,6 +16,12 @@ final class DemoStore: SettingsStore {
     var ids: Set<FeatureID> = [.battery]
     func enabledFeatures() -> Set<FeatureID> { ids }
     func setEnabledFeatures(_ ids: Set<FeatureID>) { self.ids = ids }
+    var order: [FeatureID] = []
+    var hidden: Set<FeatureID> = []
+    func launcherOrder() -> [FeatureID] { order }
+    func setLauncherOrder(_ ids: [FeatureID]) { order = ids }
+    func hiddenFeatures() -> Set<FeatureID> { hidden }
+    func setHiddenFeatures(_ ids: Set<FeatureID>) { hidden = ids }
 }
 
 @MainActor
@@ -49,8 +55,19 @@ MainActor.assumeIsolated {
 
     let registry = FeatureRegistry(store: DemoStore())
     for id in [FeatureID.battery, .system, .keepAwake] { registry.register(id) { DemoTool() } }
+    @MainActor func panelView(_ store: DemoStore, _ ids: [FeatureID]) -> PanelView {
+        let reg = FeatureRegistry(store: store)
+        for id in FeatureID.allCases { reg.register(id) { DemoTool() } }
+        return PanelView(launcher: LauncherModel(registry: reg, store: store), panel: PanelModel(),
+                         openSettings: {}, collapse: {}, quit: {})
+    }
+    let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
+    let empty = DemoStore(); empty.ids = []
     for dark in [false, true] {
-        render(name: "t003-features-\(dark ? "dark" : "light")", size: NSSize(width: 480, height: 760),
+        let tag = dark ? "dark" : "light"
+        render(name: "t003-features-\(tag)", size: NSSize(width: 480, height: 760),
                dark: dark, view: FeaturesSettingsView(registry: registry), outDir: out)
+        render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
+        render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }
 }
