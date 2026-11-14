@@ -22,6 +22,8 @@ targets:
     dependencies:
       - package: AppleCartKit
         product: Core
+      - package: AppleCartKit
+        product: UI
     info:
       path: App/Info.plist
       properties:

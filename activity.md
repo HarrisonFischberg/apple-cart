@@ -41,3 +41,10 @@
 - T001 done: XcodeGen project, Core + HelperProtocol modules, status item app. xcodebuild BUILD SUCCEEDED (only an OS tool warning, none from our code); 4 tests pass; app ran 3 s, LSUIElement true, ad-hoc signed. Menu bar icon NOT seen (no screen capture permission here).
 - T002 partial: public research + read-only probes in docs/spikes/charge-control.md. Found AlDente Pro helper installed and Vorssaint running on this Mac, so a write test needs them quit and reset first. No battery or system write was made.
 - Branch phase-4/build, local only. Next: owner decisions for T002; Ralph can run tasks that do not need the owner (T003+).
+
+## 2026-11-14 T003 (Sonnet)
+
+- Feature switches: Core has FeatureRegistry (off by default, start on enable, stop and release on disable, ignores switching on a tool that is not built), SettingsStore (UserDefaults, unknown ids dropped), FeatureFamily; UI module has Settings > Features view; app menu has Settings…. 8 registry tests + 4 earlier all pass; xcodebuild BUILD SUCCEEDED, no warnings from our code.
+- One test failed on the first run because the test itself held the tool alive; fixed by not holding it, the release assertion is unchanged.
+- UIPreview dev tool renders views light/dark (docs/design/screenshots/build/). Offscreen windows are inactive, so switch tint cannot be seen there; confirm the on-state color in the running app.
+- Every switch currently reads Not built yet in the app (no tool is registered until its task).
