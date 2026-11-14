@@ -68,6 +68,10 @@ MainActor.assumeIsolated {
     let permReg = FeatureRegistry(store: permStore)
     for id in FeatureID.allCases { permReg.register(id) { DemoTool() } }
     let permModel = PermissionsModel(checker: DemoChecker(), registry: permReg)
+    let sampler = BatterySampler(interval: .seconds(1))
+    sampler.hold("preview")
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 4))
+    if let r = sampler.latest { print("READING percent=\(r.percent) measured=\(r.measuredPercent ?? -1) plugged=\(r.isPluggedIn) charging=\(r.isCharging) cycles=\(r.cycleCount ?? -1) battW=\(r.batteryWatts) sysW=\(r.systemWatts ?? -1)") }
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
@@ -78,6 +82,8 @@ MainActor.assumeIsolated {
                dark: dark, view: FeaturesSettingsView(registry: registry), outDir: out)
         render(name: "t005-permissions-\(tag)", size: NSSize(width: 560, height: 600), dark: dark,
                view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
+        render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
+               view: BatteryView(sampler: sampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

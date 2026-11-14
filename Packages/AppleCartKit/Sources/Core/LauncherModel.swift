@@ -79,6 +79,8 @@ public final class LauncherModel {
 public final class PanelModel {
     public private(set) var route: FeatureID?
     public var keepOpen = false
+    /// True while the window is on screen; tool views use it to stop work when hidden.
+    public var isOpen = false
 
     public init() {}
 
@@ -86,6 +88,7 @@ public final class PanelModel {
     public func back() { route = nil }
 
     public func panelDidClose(launcher: LauncherModel) {
+        isOpen = false
         launcher.searchText = ""
         if !keepOpen { route = nil }
     }

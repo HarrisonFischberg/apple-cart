@@ -10,7 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController?
     // No tools are registered yet (they arrive with their tasks), so every switch shows "Not built yet".
     private let store = UserDefaultsSettingsStore()
-    private lazy var registry = FeatureRegistry(store: store)
+    private lazy var registry: FeatureRegistry = {
+        let r = FeatureRegistry(store: store)
+        r.register(.battery) { BatteryTool() } // the readout only runs while a view holds the sampler
+        return r
+    }()
+    private let battery = BatterySampler()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -20,7 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
-                                          openSettings: { [weak self] in self?.openSettings() })
+                                          openSettings: { [weak self] in self?.openSettings() },
+                                          toolView: { [battery] id, panel in
+            id == .battery ? AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery)) : nil
+        })
     }
 
     @objc private func statusItemClicked() {

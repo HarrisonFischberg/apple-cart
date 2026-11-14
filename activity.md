@@ -61,3 +61,12 @@
 - Core: Permission (screen recording, full disk access, accessibility, notifications; each names its tools, reason and System Settings pane), PermissionChecker (read-only), PermissionsModel (active users, unused-but-granted). 5 new tests, 20 total pass.
 - UI: Permissions tab beside Features in the Settings window. App: SystemPermissionChecker uses preflight calls only, so nothing prompts at launch. xcodebuild BUILD SUCCEEDED; light/dark previews checked.
 - Not verified live: real statuses and Open Settings deep links (no screen or accessibility permission here). Full Disk Access check probes a Safari file, shows Checking if absent. Requests themselves are done by each tool's task, naming the tool.
+
+## 2026-11-14 T006 (Sonnet)
+
+- Core: BatteryReading (parsed from AppleSmartBattery properties), BatteryHistory (24 h rolling), EnergyUsers (ps, grouped by app), BatterySampler (timer runs only while a holder exists). 6 new tests, 26 total pass.
+- UI: BatteryView (percent, state, power flow, true charge, capacity vs new, cycles, temperature, system watts, charger, graph, busiest apps). Opens from the Battery tile; it holds the sampler only while the panel is open on that view (PanelModel.isOpen).
+- Checked against this Mac: percent 80, cycles 98, plugged in, not charging, battery 0 W all match pmset/ioreg. True charge 79.0% comes from raw capacity values.
+- Findings: macOS 27 exposes no Temperature key, so the row says so. system_profiler shows Maximum Capacity 96%, our measured raw ratio is 92% (labelled Capacity vs new), they differ by definition.
+- Decision: the 24 h graph only records while a view or readout holds the sampler (T007 menu bar readout will hold it), so it shows real gaps instead of sampling in the background. Revisit if the owner wants a background history option.
+- Not seen live: the running app (no click access here).
