@@ -43,3 +43,4 @@ GitHub: `gh` logged in (two accounts in keyring; HarrisonFischberg is the one us
 | web-quality-audit + siblings (evidence) | NOT APPLICABLE | `~/.claude/skills/web-quality-audit` | Present, but no web surface |
 
 Missing tool or credential = BLOCKED, never PASS.
+| XcodeGen | Yes | 2.46.0 | `brew install xcodegen` 2026-11-14, owner approved |

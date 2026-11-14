@@ -8,7 +8,7 @@
 | 4 | Ralph fresh-context loop not cloned. | failed check | Claude | Phase 4 | OPEN |
 | 6 | Charge control on macOS 26/27 unproven (native limit, calibration state ignores limits); spike T002 decides go/no-go. | failed check | Claude + Harold present | M2 battery control | OPEN |
 | 7 | Developer ID Application certificate needed for notarized builds; not yet confirmed on this Mac. | missing fact | Harold | T026 / release | OPEN |
-| 8 | Minimum OS / chip (proposed macOS 26+, Apple silicon only). | approval | Harold | Blueprint | OPEN |
+| 8 | Minimum OS / chip: macOS 26+, Apple silicon only (approved 2026-11-14). | decision | Harold | — | CLOSED |
 | 5 | Each chosen feature needing a macOS permission (Accessibility, Screen Recording, Full Disk Access, etc.) must be listed in the data inventory. | approval | Harold | Blueprint | OPEN |
 
 ## Intake answers (2026-11-14)

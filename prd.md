@@ -1,6 +1,6 @@
 # apple-cart — PRD
 
-Status: DRAFT for owner approval, 2026-11-14 (Phase 3). Blueprint: `docs/blueprint.md`.
+Status: APPROVED by owner 2026-11-14 (macOS 26+, Apple silicon only). Blueprint: `docs/blueprint.md`.
 
 ## Purpose
 

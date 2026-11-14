@@ -1,6 +1,6 @@
 # Blueprint
 
-Status: DRAFT for owner approval, 2026-11-14 (Phase 3, Opus). Works from `replica/` only.
+Status: APPROVED by owner 2026-11-14 (Phase 3, Opus). Minimum OS: macOS 26+, Apple silicon only. Works from `replica/` only.
 
 ## 1. Stack decision
 
@@ -17,7 +17,7 @@ Status: DRAFT for owner approval, 2026-11-14 (Phase 3, Opus). Works from `replic
 | Readings | IOKit (power sources, AppleSmartBattery registry, SMC reads), `host_statistics`, `IOPMAssertion` | System frameworks | Third-party monitoring libraries |
 | Distribution | Developer ID signed, notarized DMG; optional Homebrew cask later | Owner decided after comparison | — |
 
-**Minimum OS (proposed): macOS 26 or later, Apple silicon only.** Charge control differs by OS and chip; one backend family keeps the riskiest part small. Cost: Intel Macs and macOS 15 users are excluded. Owner decides at approval.
+**Minimum OS (approved): macOS 26 or later, Apple silicon only.** Charge control differs by OS and chip; one backend family keeps the riskiest part small. Cost: Intel Macs and macOS 15 users are excluded. Owner decides at approval.
 
 ## 2. Data model (local only; the only actor is the Mac's user, plus the root helper)
 

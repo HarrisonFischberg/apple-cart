@@ -23,3 +23,4 @@
 - Blueprint, PRD (26 tasks, 6 milestones), data inventory and launch blockers written. replica-architect output adapted to native (replica/architecture.md).
 - Researched macOS 27 charge-control reports; spike T002 gates battery control.
 - STOP: waiting on owner approval of blueprint, minimum OS, and installing XcodeGen.
+- Owner approved blueprint, macOS 26+ Apple silicon, and XcodeGen install (2.46.0). Next: Phase 3B design directions (Sonnet builds).
