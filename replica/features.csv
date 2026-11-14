@@ -1,0 +1,47 @@
+feature,area,priority,original,clone,notes
+One menu bar icon opening a tabbed panel; sections reorder or hide; compact mode,foundation,must,yes,no,panel stays open while clicking inside it
+Every tool off by default and fully unloaded when off,foundation,must,yes,no,no CPU or memory use from tools that are off
+Permission asked only when the tool needing it is enabled; Settings maps tools to permissions and offers to drop unused ones,foundation,must,yes,no,
+Notarized direct download with built-in auto-updates and launch at login,foundation,must,yes,no,App Store sandbox ruled out by 20 picked tools
+Live readouts next to the menu bar icon (battery %, charging state, CPU, memory, fan),foundation,must,yes,no,
+Charge limit: hold battery at a chosen percentage while plugged in,battery,must,yes,no,privileged helper; panel names whatever is pausing charging; reset to 100% on removal; verify on macOS 27
+Heat protection: pause charging above a set temperature,battery,must,yes,no,shown in panel when it is the reason charging is paused
+Sailing range: drift a few percent below the limit before recharging,battery,must,yes,no,
+Discharge while plugged in to a chosen level (manual or automatic),battery,must,yes,no,
+Top up to 100% once until unplugged,battery,must,yes,no,
+Stop charging while asleep and keep the limit after the app quits,battery,must,yes,no,
+Battery details: health; cycles; temperature; 24-hour history; accessory battery alerts,battery,must,yes,no,
+Power flow: live watts from charger; into battery; used by the Mac,battery,must,yes,no,no helper needed
+True battery percentage beside the rounded system figure,battery,must,yes,no,
+Calibration cycle on demand or on a schedule,battery,should,yes,no,
+Battery schedule: timed actions with catch-up for missed tasks,battery,should,yes,no,added at final review
+MagSafe light shows charge state or turns off,battery,should,yes,no,
+Energy-hungry apps list with quit,battery,should,yes,no,
+Keep awake: timer; until a charge level; display on; lid closed,system,must,yes,no,closed-lid mode needs admin step
+System monitor: CPU; GPU; memory; network; disk; temperature,system,must,yes,no,
+Fan control in safe mode: raise fans above the system curve but never below,system,could,yes,no,changed at final review; admin helper
+Quick toggles: dark mode; Night Shift; Low Power; hidden files; desktop icons; empty Trash; eject all,system,should,yes,no,
+Turn Bluetooth off during sleep,system,could,yes,no,
+Volume guard: cap volume on wake; lower it when headphones disconnect,system,should,yes,no,
+Flush DNS cache,system,could,yes,no,admin prompt
+Uninstaller: remove apps with leftovers; preview first; move to Trash,clean,should,yes,no,Full Disk Access asked on enable
+Cache cleaner: preview first; move to Trash,clean,should,yes,no,Full Disk Access asked on enable
+Disk usage map,clean,should,yes,no,Full Disk Access asked on enable
+App and Homebrew update checks,clean,should,yes,no,
+Clipboard history with search and pins; never stores items marked concealed or sensitive,clipboard,should,yes,no,weak-history complaint addressed
+Clipboard auto-clear after about a minute and on lock (history keeps non-sensitive items),clipboard,should,yes,no,
+Paste as plain text by shortcut,clipboard,should,yes,no,Accessibility
+Strip tracking parameters from copied links,clipboard,should,yes,no,
+Copy text from any screen region (on-device recognition),clipboard,should,yes,no,Screen Recording
+Read QR codes and barcodes from screen or a copied image,clipboard,should,yes,no,Screen Recording
+Break reminders: eyes; stretch; water,tools,should,yes,no,
+Cleaning mode: lock keyboard and trackpad for wiping,tools,could,yes,no,Input Monitoring
+Clear all notifications by shortcut,tools,could,yes,no,Accessibility
+Outgoing connection list and map,later,could,yes,later,moved to Later at final review; map needs a licensed location database
+On-device dictation into any app,later,could,yes,later,moved to Later at final review; system dictation exists
+Mouse jiggler,dropped,could,yes,skip,owner dropped; keep awake covers it
+Cloud share links for files,skip,could,yes,skip,needs a server (out of scope)
+Phone companion and sync,skip,could,yes,skip,needs a server; Mac only
+Sales; stocks; crypto; weather dashboards,skip,could,yes,skip,depend on outside data services
+Integrations with specific third-party productivity apps,skip,could,yes,skip,ties the app to other products
+Licensing; trials; paid tiers,skip,could,yes,skip,out of scope for v1

@@ -15,13 +15,8 @@ Node v24.22.0, Python 3.9.6.
 - `{{APP_NAME}}`: Apple Cart (working title only; cannot be the public name, see launch-blockers #1). Slug `apple-cart`.
 - `{{APP_DIR}}`: `/Users/harrison/projects/apple-cart`
 - `{{LAB_DIR}}`: `~/apple-cart-lab`
-- `{{SOURCES}}`: five live Mac apps, public pages only. For each: catalogue every feature and option; the owner picks a la carte at the comparison stop.
-  - https://sindresorhus.com/supercharge
-  - https://vorssaint.com (also the model for the overall menu bar form)
-  - https://getdroppy.app
-  - https://macapp.supply/app/vehla
-  - https://habitatformac.com
-- `{{AVOID_TERMS}}`: derived from the sources' names, domains, and authors; confirmed in Phase 2B.
+- `{{SOURCES}}`: six live Mac apps (Sources A-F; A is the model for the overall menu bar form), public pages only. Names and URLs were kept in the lab folder outside this repo and erased after Phase 2B.
+- `{{AVOID_TERMS}}`: confirmed in Phase 2B; kept outside the repo at `~/apple-cart-avoid-terms.txt` for the Phase 7 sweep.
 - `{{UI_OPTION_COUNT}}`: 3 (lean)
 
 | Tool | Available | Version | How verified |

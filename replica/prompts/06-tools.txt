@@ -1,0 +1,1 @@
+Build small tools: break reminders (eyes, stretch, water) with snooze and Reduce Motion support; cleaning mode that blacks the screen and locks keyboard and trackpad with an always-visible exit instruction; clear all notifications by shortcut.
