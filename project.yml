@@ -1,0 +1,40 @@
+name: AppleCart
+options:
+  bundleIdPrefix: app.rarecreatures
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+packages:
+  AppleCartKit:
+    path: Packages/AppleCartKit
+targets:
+  AppleCart:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: AppleCartKit
+        product: Core
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Apple Cart
+        LSUIElement: true
+        LSMinimumSystemVersion: "26.0"
+    settings:
+      base:
+        # Provisional until the public name is chosen (launch blocker 9).
+        PRODUCT_BUNDLE_IDENTIFIER: app.rarecreatures.applecart
+        PRODUCT_NAME: AppleCart
+schemes:
+  AppleCart:
+    build:
+      targets:
+        AppleCart: all

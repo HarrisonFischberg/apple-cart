@@ -9,3 +9,8 @@ build/
 ralph/logs/
 .build/
 .swiftpm/
+*.xcodeproj/
+ralph/logs/
+ralph/STOP
+.claude/settings.local.json
+.claude/worktrees/
