@@ -17,3 +17,9 @@
 - Merged spec written to replica/ (recon.md, features.csv, prompts/, decisions.md); sanitized docs/rea-findings.md.
 - Brand sweep with --include-replica: clean. Source names removed from docs/tool-environment.md and docs/intake-notes.md.
 - Next: erase lab folder (owner yes), then Phase 3 blueprint.
+
+## 2026-11-14 Phase 3 (Opus)
+
+- Blueprint, PRD (26 tasks, 6 milestones), data inventory and launch blockers written. replica-architect output adapted to native (replica/architecture.md).
+- Researched macOS 27 charge-control reports; spike T002 gates battery control.
+- STOP: waiting on owner approval of blueprint, minimum OS, and installing XcodeGen.

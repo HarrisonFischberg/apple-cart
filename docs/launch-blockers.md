@@ -3,9 +3,12 @@
 | # | Blocker | Type (missing fact / failed check / legal review / approval) | Owner | Needed for | Status |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Public name. "Apple Cart" is a working title only: it contains Apple's trademark and App Review rejects such names. Pick a public name at the brand phase. | missing fact | Harold | Any public release | OPEN |
-| 2 | Distribution route (Mac App Store sandbox vs notarized direct download) is undecided; depends on which features are picked. | missing fact | Harold | Blueprint (Phase 3) | OPEN, decide at comparison stop |
+| 2 | Distribution: notarized direct download (decided 2026-11-14; 20 picks can't run sandboxed). | decision | Harold | — | CLOSED |
 | 3 | Money model undecided (app is free for now; no paid or licensing code in v1). | missing fact | Harold | Launch | OPEN |
 | 4 | Ralph fresh-context loop not cloned. | failed check | Claude | Phase 4 | OPEN |
+| 6 | Charge control on macOS 26/27 unproven (native limit, calibration state ignores limits); spike T002 decides go/no-go. | failed check | Claude + Harold present | M2 battery control | OPEN |
+| 7 | Developer ID Application certificate needed for notarized builds; not yet confirmed on this Mac. | missing fact | Harold | T026 / release | OPEN |
+| 8 | Minimum OS / chip (proposed macOS 26+, Apple silicon only). | approval | Harold | Blueprint | OPEN |
 | 5 | Each chosen feature needing a macOS permission (Accessibility, Screen Recording, Full Disk Access, etc.) must be listed in the data inventory. | approval | Harold | Blueprint | OPEN |
 
 ## Intake answers (2026-11-14)
