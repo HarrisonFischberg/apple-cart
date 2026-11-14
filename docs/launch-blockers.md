@@ -45,3 +45,5 @@ Never infer these from a reference app. Never invent them.
 - Data types and sensitive data: none planned (local only); re-check per chosen feature
 - Vendors, SDKs, analytics, AI providers, processors: none planned
 - Retention or deletion exceptions: UNKNOWN
+
+- **Bluetooth off in sleep (T013, 2026-11-14):** macOS has no public API to switch Bluetooth power; the known routes are a private IOBluetooth call or the external `blueutil` tool. Neither is allowed here (no private APIs, no bundled third-party binaries without a license review). Not built. Owner decision needed: drop it, or accept a private-API call with the risk that a macOS update breaks it.

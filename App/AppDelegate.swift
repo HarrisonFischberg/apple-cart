@@ -14,11 +14,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.battery) { BatteryTool() } // the readout only runs while a view holds the sampler
         r.register(.system) { SystemTool() }
         r.register(.keepAwake) { [keepAwake] in KeepAwakeTool(keepAwake) }
+        r.register(.quickToggles) { QuickTogglesTool() }
+        r.register(.volumeGuard) { [volumeGuard] in volumeGuard }
         return r
     }()
     private let battery = BatterySampler()
     private let systemSampler = SystemSampler()
     private let keepAwake = KeepAwake()
+    private let quickToggles = QuickToggles(prefs: SystemPreferences())
+    private let volumeGuard = VolumeGuard(audio: CoreAudioOutput(),
+                                          maxPercent: { UserDefaults.standard.object(forKey: "volumeGuard.max") as? Int ?? 70 })
     private lazy var readoutSettings = ReadoutSettings(store: store)
     private var statusReadout: StatusReadout?
 
@@ -33,11 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [battery, systemSampler, keepAwake] id, panel in
+                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
             case .keepAwake: AnyView(KeepAwakeView(keepAwake: keepAwake))
+            case .quickToggles: AnyView(QuickTogglesView(toggles: quickToggles))
+            case .volumeGuard: AnyView(VolumeGuardView(guardTool: volumeGuard))
             default: nil
             }
         })

@@ -15,3 +15,10 @@ final class SystemTool: Tool {
     func start() {}
     func stop() {}
 }
+
+/// Quick toggles read the system when shown; nothing runs in the background.
+@MainActor
+final class QuickTogglesTool: Tool {
+    func start() {}
+    func stop() {}
+}

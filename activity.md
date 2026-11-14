@@ -85,3 +85,11 @@
 - UI: Keep awake view (presets 15 min to until I stop, display toggle, battery level stepper, live countdown, last stop reason) and System view. Turning the Keep awake tool off ends the session. Last-used choices are remembered.
 - Not seen live: the running app's click path (no screen or accessibility access). System readings looked plausible in the preview (CPU 20%, 19.0 of 32.0 GB).
 - Limit: the level rule polls the battery every 30 s, so it can overshoot by up to 30 s of drain.
+
+## 2026-11-14 T013 (Sonnet)
+
+- Core: QuickToggles (hidden files, all extensions, Dock auto-hide, desktop icons) over CFPreferences, then restart Finder or Dock; state is re-read after each change so the switch shows what the system holds. VolumeGuard lowers volume to the owner's limit when the default output device changes (CoreAudio listener, no timer, never raises). 6 new tests, 45 total pass.
+- Checked read-only on this Mac against `defaults read`: all four states match (autohide on, others at macOS defaults). No toggle was flipped for real, because that restarts Finder and Dock on the owner's machine; the write path is covered by fake-preference tests only.
+- Volume read worked (0.69 on this Mac). Volume lowering on a real device change not exercised.
+- Bluetooth off in sleep not built: no public API. Recorded in docs/launch-blockers.md.
+- Not seen live: the running app (owner is away from the Mac; no screen access here).

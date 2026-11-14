@@ -88,6 +88,10 @@ MainActor.assumeIsolated {
     sysSampler.hold("preview")
     let awake = KeepAwake()
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 2.5))
+    let realToggles = QuickToggles(prefs: SystemPreferences())
+    print("TOGGLES", QuickToggle.allCases.map { "\($0.rawValue)=\(realToggles.states[$0] ?? false)" }.joined(separator: " "))
+    print("VOLUME", CoreAudioOutput().volume() as Any)
+    let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
@@ -105,6 +109,10 @@ MainActor.assumeIsolated {
                view: SystemView(sampler: sysSampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t008-keepawake-\(tag)", size: PanelView.size, dark: dark,
                view: KeepAwakeView(keepAwake: awake).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t013-toggles-\(tag)", size: PanelView.size, dark: dark,
+               view: QuickTogglesView(toggles: realToggles).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t013-volume-\(tag)", size: PanelView.size, dark: dark,
+               view: VolumeGuardView(guardTool: guardTool).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }
