@@ -33,3 +33,4 @@
 - Lesson: do not pass isolation worktree to builder subagents that must work in pre-made worktrees (cost one wasted round).
 - STOP: waiting on owner pick.
 - Owner asked to closely mimic the reference display (Source A) after seeing C1-C3. Looked at its public live demo in the in-app browser (read only, public page). Built C4 Tiles in ../apple-cart-ui-4 (ui-4): 6 screenshots. Awaiting approval.
+- Owner approved C4 Tiles ("do"). Merged ui-4 into main (local, not pushed); removed worktrees; deleted merged branches ui-4, ui-base, phase-2/spec; kept ui-1..3. Plan docs updated for launcher IA. DESIGN.md + .impeccable/design.json written by documenter (Phase 3C). Next: Phase 4 (Sonnet, T001 and the T002 spike).

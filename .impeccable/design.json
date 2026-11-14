@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T00:00:00Z",
+  "title": "Design System: Apple Cart (working title)",
+  "extensions": {
+    "colorMeta": {
+      "ground-dark": { "role": "neutral", "displayName": "Ground (dark)", "canonical": "#0B0B0D", "tonalRamp": ["#0B0B0D", "#18181B", "#27272B", "#3A3A40", "#5B5B66", "#A1A1AA", "#D4D4D8", "#F1F1F4"] },
+      "blue-dark": { "role": "primary", "displayName": "Control Blue (dark)", "canonical": "#5AB0FF", "tonalRamp": ["#0A2A52", "#0A5ED7", "#2D7FE8", "#5AB0FF", "#82C3FF", "#A9D6FF", "#CFE8FF", "#EAF4FF"], "note": "ramp synthesized, only #0A5ED7 and #5AB0FF are in source" },
+      "amber-dark": { "role": "secondary", "displayName": "Caution Amber (dark)", "canonical": "#F5A524", "tonalRamp": ["#2B2008", "#5C3600", "#8A5300", "#C77700", "#F5A524", "#FFC15A", "#FFD58A", "#FFF1D6"], "note": "all steps except #FFC15A are source values" },
+      "green-dark": { "role": "tertiary", "displayName": "Healthy Green (dark)", "canonical": "#4ADE80", "tonalRamp": ["#0B2A17", "#177A3C", "#22A052", "#4ADE80", "#76E8A0", "#A2F0BF", "#CDF7DC", "#EAFCF1"], "note": "ramp synthesized, only #177A3C and #4ADE80 are in source" }
+    },
+    "typographyMeta": {
+      "value": { "displayName": "Value", "purpose": "The one large tabular number per tile." },
+      "caption": { "displayName": "Caption", "purpose": "Units, shortcut hints, axis labels, helper text." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "limit-spring", "value": "spring(duration: 0.2)", "purpose": "Limit value change from stepper, drag, or arrow keys. Replaced by an immediate set when Reduce Motion is on." },
+      { "name": "reduce-motion", "value": "snap, no animation", "purpose": "accessibilityReduceMotion: value changes apply instantly." }
+    ],
+    "focus": [
+      { "name": "limit-tile-focus", "value": "SwiftUI .focusable() default system focus ring", "purpose": "Limit tile takes keyboard focus; Left/Right arrows change by 5. No custom ring is drawn." }
+    ],
+    "detents": [
+      { "name": "limit-step", "value": "every 5 percent, range 50 to 100 in build", "purpose": "Drag, stepper, and arrow keys snap to multiples of 5." }
+    ],
+    "breakpoints": [
+      { "name": "panel-width", "value": "420pt fixed" },
+      { "name": "scroll-above", "value": "about 640pt tall (shot cap 680pt)" }
+    ],
+    "harnessOnly": [
+      { "name": "panel-drop-shadow", "value": "black 28%, radius 22, y 10", "purpose": "Screenshot harness chrome; not part of the system." },
+      { "name": "thumb-shadow", "value": "black 25%, radius 1.5, y 1", "purpose": "Thumb of the stand-in switch only; native Toggle replaces it." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tile", "kind": "card", "refersTo": "tile",
+      "description": "The universal container: icon and title, one value, short captions.",
+      "html": "<div class=\"ds-tile\"><div class=\"ds-tile-head\">Charge</div><div class=\"ds-tile-value\">74<span>%</span></div><div class=\"ds-bar\"><i></i></div></div>",
+      "css": ".ds-tile{width:122px;height:124px;box-sizing:border-box;padding:12px 10px;border-radius:16px;background:#18181B;border:1px solid #FFFFFF14;display:flex;flex-direction:column;gap:8px;font-family:-apple-system,system-ui;color:#fff}.ds-tile-head{font-size:12px;font-weight:500;color:#A1A1AA}.ds-tile-value{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:auto}.ds-tile-value span{font-size:12px;font-weight:500;margin-left:2px}.ds-bar{height:4px;border-radius:2px;background:#FFFFFF1F}.ds-bar i{display:block;height:4px;width:74%;border-radius:2px;background:#5AB0FF}"
+    },
+    {
+      "name": "Amber Tile", "kind": "card", "refersTo": "tile-amber",
+      "description": "State tile for paused or caution, with the plain-language reason.",
+      "html": "<div class=\"ds-amber\"><div class=\"ds-amber-head\">State</div><div class=\"ds-amber-title\">Charging paused</div><div class=\"ds-amber-body\">Battery is above the heat limit.</div></div>",
+      "css": ".ds-amber{width:257px;box-sizing:border-box;padding:12px 10px;border-radius:16px;background:#2B2008;border:1px solid #F5A524B3;font-family:-apple-system,system-ui;display:flex;flex-direction:column;gap:8px}.ds-amber-head{font-size:12px;font-weight:500;color:#FFD58A}.ds-amber-title{font-size:15px;font-weight:600;color:#FFD58A}.ds-amber-body{font-size:12px;color:#FFD58A}"
+    },
+    {
+      "name": "Launcher Tile", "kind": "card", "refersTo": "launcher-tile",
+      "description": "Tool entry on Home: icon, name, shortcut hint.",
+      "html": "<div class=\"ds-launch\"><b>&#9632;</b><div class=\"ds-launch-name\">Battery</div><div class=\"ds-launch-key\">Opt-Cmd-B</div></div>",
+      "css": ".ds-launch{width:89px;height:104px;box-sizing:border-box;padding:8px;border-radius:16px;background:#18181B;border:1px solid #FFFFFF14;display:flex;flex-direction:column;font-family:-apple-system,system-ui;color:#fff}.ds-launch b{font-size:18px}.ds-launch-name{margin-top:auto;font-size:11px;font-weight:500}.ds-launch-key{font-size:11px;color:#A1A1AA;margin-top:2px}.ds-launch:hover{border-color:#FFFFFF33}"
+    },
+    {
+      "name": "Small Button (filled)", "kind": "custom", "refersTo": "small-button-filled",
+      "description": "Primary action inside a tile.",
+      "html": "<button class=\"ds-btn\">Top up now</button>",
+      "css": ".ds-btn{height:28px;padding:0 12px;border:0;border-radius:8px;background:#5AB0FF;color:#0B0B0D;font:600 11px -apple-system,system-ui}.ds-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}.ds-btn:active{opacity:.85}"
+    },
+    {
+      "name": "Small Button (plain)", "kind": "custom", "refersTo": "small-button",
+      "description": "Secondary action: hairline outline at double strength.",
+      "html": "<button class=\"ds-btn2\">Discharge to...</button>",
+      "css": ".ds-btn2{height:28px;padding:0 12px;border:1px solid #FFFFFF29;border-radius:8px;background:transparent;color:#fff;font:600 11px -apple-system,system-ui}.ds-btn2:focus-visible{outline:2px solid #fff;outline-offset:2px}"
+    },
+    {
+      "name": "Chip", "kind": "chip", "refersTo": "chip",
+      "description": "Single-choice option; selected fills Control Blue.",
+      "html": "<span class=\"ds-chip\">1 hour</span> <span class=\"ds-chip ds-chip-on\">Indefinitely</span>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;height:28px;padding:0 9px;border-radius:999px;border:1px solid #FFFFFF29;color:#fff;font:500 11px -apple-system,system-ui}.ds-chip-on{background:#5AB0FF;border-color:transparent;color:#0B0B0D}"
+    },
+    {
+      "name": "Header", "kind": "nav", "refersTo": "header-button",
+      "description": "Title left, search and overflow right, back chevron in tool views.",
+      "html": "<div class=\"ds-head\"><span>&lsaquo;</span><b>Battery</b><i></i><span>&#8981;</span><span>&hellip;</span></div>",
+      "css": ".ds-head{display:flex;align-items:center;gap:4px;height:52px;padding:0 10px;background:#0B0B0D;color:#fff;font-family:-apple-system,system-ui}.ds-head b{font-size:17px;font-weight:600}.ds-head i{flex:1}.ds-head span{width:28px;height:28px;display:grid;place-items:center;font-size:14px}"
+    },
+    {
+      "name": "Switch (stand-in)", "kind": "custom", "refersTo": "switch-standin",
+      "description": "Drawn 38 x 22 capsule, preview only; production uses native Toggle with tint.",
+      "html": "<span class=\"ds-sw\"><i></i></span>",
+      "css": ".ds-sw{display:inline-block;position:relative;width:38px;height:22px;border-radius:11px;background:#5AB0FF}.ds-sw i{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 1.5px #00000040}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Tile Shelf",
+    "overview": "One panel, one pattern: everything is a tile. Home is a grid of the tools the user switched on; a tool opens into a dashboard of tiles. The panel is quiet and monochrome, and color appears only when it carries a meaning: amber for paused or caution, blue for the user's control, green for healthy. Dark-first but designed twice, with light as its own set of values.",
+    "keyCharacteristics": [
+      "A single container, the tile (16 pt continuous corner, 1 pt hairline), builds every view.",
+      "Near-black ground with slightly lifted tiles in dark; white tiles on pale gray in light.",
+      "Three accents, each with one meaning; everything else is neutral.",
+      "System font only; values at 24 pt semibold with tabular digits, everything else 11 to 17 pt.",
+      "Flat: no shadows on any tile or control; depth is tonal plus hairline."
+    ],
+    "rules": [
+      { "name": "The One Meaning Rule", "body": "Each accent means one thing: amber is paused or over a limit, blue is the user's control, green is healthy. Never use an accent as decoration.", "section": "colors" },
+      { "name": "The Paired Appearance Rule", "body": "Every color role has an explicit light and dark value. Do not derive one by inverting the other.", "section": "colors" },
+      { "name": "The Tinted Text Rule", "body": "Accent text on a tile uses the accent's own text value, hand-checked to at least 5.4:1 in both appearances. Do not put a bar-fill value on text.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "Any number that can change while the panel is open uses tabular digits so the layout does not jitter.", "section": "typography" },
+      { "name": "The Small Ceiling Rule", "body": "Nothing but the header title and values is above 15 pt; the panel is not a place for display type.", "section": "typography" },
+      { "name": "The Flat Tile Rule", "body": "Tiles never get shadows. State is shown by fill, outline color, or dash, not by lift.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every new view from Tile, in whole columns (1, 2, or 3) with a 12 pt gap.",
+      "Do give every new color a light and a dark value and check text at 4.5:1 or better on its tile.",
+      "Do use native SF Symbols, native menus, and native keyboard behavior.",
+      "Do honor Reduce Motion: the limit change animates with a 0.2 s spring, and snaps when Reduce Motion is on.",
+      "Do give each tile an accessibility label that states the value and its context, and hide decorative bars and charts from VoiceOver.",
+      "Do use the production switch: native Toggle with tint. The drawn PreviewSwitchStyle is a harness stand-in."
+    ],
+    "donts": [
+      "Don't add shadows, gradients, or glow to tiles or controls.",
+      "Don't use an accent for decoration, or add a fourth accent.",
+      "Don't use a big ring with a percentage, three identical stat cards, or sparklines that replace readable data.",
+      "Don't use a non-system font for UI; run a font licensing check before any custom face.",
+      "Don't assume a vibrancy material: the panel is a solid Ground fill; a material is an optional production decision.",
+      "Don't copy another app's name, icons, or copy; the working title must not ship as a public name."
+    ]
+  }
+}

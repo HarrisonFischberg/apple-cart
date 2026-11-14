@@ -44,3 +44,5 @@ GitHub: `gh` logged in (two accounts in keyring; HarrisonFischberg is the one us
 
 Missing tool or credential = BLOCKED, never PASS.
 | XcodeGen | Yes | 2.46.0 | `brew install xcodegen` 2026-11-14, owner approved |
+
+Phase 3B/3C (2026-11-14): Impeccable context, concept-seed and the documenter agent ran; critique, audit, extract and polish did not (native target, see docs/design/system.md). Screenshots came from the `Shots` harness (SwiftUI through an NSWindow), not the browser preview or Playwright. The reference's public live demo was viewed once in the in-app browser (read only).
