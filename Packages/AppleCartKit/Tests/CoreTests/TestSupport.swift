@@ -28,4 +28,10 @@ final class MemoryStore: SettingsStore {
     func setLauncherOrder(_ ids: [FeatureID]) { order = ids }
     func hiddenFeatures() -> Set<FeatureID> { hidden }
     func setHiddenFeatures(_ ids: Set<FeatureID>) { hidden = ids }
+    var readout: MenuBarReadout = .percent
+    var firstRun = false
+    func menuBarReadout() -> MenuBarReadout { readout }
+    func setMenuBarReadout(_ r: MenuBarReadout) { readout = r }
+    func firstRunDone() -> Bool { firstRun }
+    func setFirstRunDone(_ done: Bool) { firstRun = done }
 }

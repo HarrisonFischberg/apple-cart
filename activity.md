@@ -71,3 +71,10 @@
 - Decision: the 24 h graph only records while a view or readout holds the sampler (T007 menu bar readout will hold it), so it shows real gaps instead of sampling in the background. Revisit if the owner wants a background history option.
 - Not seen live: the running app (no click access here).
 - Owner decision (11-14): 24 h graph records only while a view or readout holds the sampler. No background sampling.
+
+## 2026-11-14 T007 (Sonnet)
+
+- Core: MenuBarReadout (icon only, percent, percent and watts; icon follows charge), ReadoutSettings (observable, saved), FirstRunModel (2 steps, finish from either). 4 new tests, 30 total pass.
+- UI: first-run overlay in the panel (Skip on both screens, one click), Settings > Menu bar tab. App: StatusReadout updates the status item from the sampler and holds it only while the Battery tool is on and a text readout is chosen; otherwise the icon is static and nothing samples.
+- Timing: the sampler polls every 5 s, so a power change shows within 5 s plus read time. Not measured live.
+- Not seen live: the real status item text (no screen or accessibility access); first-run renders checked light and dark. First-run Choose tools opens Settings and leaves the panel on screen 1.

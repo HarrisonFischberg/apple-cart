@@ -22,6 +22,12 @@ final class DemoStore: SettingsStore {
     func setLauncherOrder(_ ids: [FeatureID]) { order = ids }
     func hiddenFeatures() -> Set<FeatureID> { hidden }
     func setHiddenFeatures(_ ids: Set<FeatureID>) { hidden = ids }
+    var readout: MenuBarReadout = .percent
+    var firstRun = false
+    func menuBarReadout() -> MenuBarReadout { readout }
+    func setMenuBarReadout(_ r: MenuBarReadout) { readout = r }
+    func firstRunDone() -> Bool { firstRun }
+    func setFirstRunDone(_ done: Bool) { firstRun = done }
 }
 
 @MainActor
@@ -72,6 +78,12 @@ MainActor.assumeIsolated {
     sampler.hold("preview")
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 4))
     if let r = sampler.latest { print("READING percent=\(r.percent) measured=\(r.measuredPercent ?? -1) plugged=\(r.isPluggedIn) charging=\(r.isCharging) cycles=\(r.cycleCount ?? -1) battW=\(r.batteryWatts) sysW=\(r.systemWatts ?? -1)") }
+    @MainActor func firstRunPanel(step: Int) -> PanelView {
+        let st = DemoStore(); let reg = FeatureRegistry(store: st)
+        let fr = FirstRunModel(store: st); if step == 1 { fr.next() }
+        return PanelView(launcher: LauncherModel(registry: reg, store: st), panel: PanelModel(), openSettings: {},
+                         collapse: {}, quit: {}, firstRun: fr, readout: ReadoutSettings(store: st))
+    }
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
@@ -84,6 +96,7 @@ MainActor.assumeIsolated {
                view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
         render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
                view: BatteryView(sampler: sampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        for step in 0...1 { render(name: "t007-firstrun\(step + 1)-\(tag)", size: PanelView.size, dark: dark, view: firstRunPanel(step: step), outDir: out) }
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

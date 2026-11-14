@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return r
     }()
     private let battery = BatterySampler()
+    private lazy var readoutSettings = ReadoutSettings(store: store)
+    private var statusReadout: StatusReadout?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -24,8 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.action = #selector(statusItemClicked)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
+        statusReadout = StatusReadout(button: item.button, sampler: battery, registry: registry, settings: readoutSettings)
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
+                                          firstRun: FirstRunModel(store: store), readout: readoutSettings,
                                           toolView: { [battery] id, panel in
             id == .battery ? AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery)) : nil
         })
@@ -57,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.contentView = NSHostingView(rootView: SettingsView(
                 registry: registry,
                 permissions: PermissionsModel(checker: SystemPermissionChecker(), registry: registry),
+                readout: readoutSettings,
                 open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
             window.center()

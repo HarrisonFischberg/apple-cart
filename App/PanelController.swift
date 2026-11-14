@@ -35,12 +35,17 @@ final class PanelController {
     private let openSettings: () -> Void
 
     init(registry: FeatureRegistry, store: SettingsStore, anchor: NSStatusBarButton?, openSettings: @escaping () -> Void,
+         firstRun: FirstRunModel, readout: ReadoutSettings,
          toolView: @escaping (FeatureID, PanelModel) -> AnyView?) {
+        self.firstRun = firstRun
+        self.readout = readout
         launcher = LauncherModel(registry: registry, store: store)
         self.anchor = anchor
         self.openSettings = openSettings
         self.toolViewFactory = toolView
     }
+    private let firstRun: FirstRunModel
+    private let readout: ReadoutSettings
     private let toolViewFactory: (FeatureID, PanelModel) -> AnyView?
 
     var isShown: Bool { window?.isVisible == true }
@@ -68,7 +73,8 @@ final class PanelController {
                              openSettings: { [weak self] in self?.close(); self?.openSettings() },
                              collapse: { [weak self] in self?.close() },
                              quit: { NSApp.terminate(nil) },
-                             toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) })
+                             toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) },
+                             firstRun: firstRun, readout: readout)
         let win = PanelWindow(content: NSHostingView(rootView: view))
         win.onCancel = { [weak self] in self?.close() }
         return win

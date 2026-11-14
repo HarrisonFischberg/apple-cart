@@ -55,10 +55,12 @@ public struct PermissionsView: View {
 public struct SettingsView: View {
     let registry: FeatureRegistry
     let permissions: PermissionsModel
+    let readout: ReadoutSettings
     let open: (URL) -> Void
 
-    public init(registry: FeatureRegistry, permissions: PermissionsModel, open: @escaping (URL) -> Void) {
+    public init(registry: FeatureRegistry, permissions: PermissionsModel, readout: ReadoutSettings, open: @escaping (URL) -> Void) {
         self.registry = registry
+        self.readout = readout
         self.permissions = permissions
         self.open = open
     }
@@ -66,6 +68,8 @@ public struct SettingsView: View {
     public var body: some View {
         TabView {
             FeaturesSettingsView(registry: registry).tabItem { Label("Features", systemImage: "square.grid.2x2") }
+            Form { ReadoutPicker(readout: readout) }.formStyle(.grouped)
+                .tabItem { Label("Menu bar", systemImage: "menubar.rectangle") }
             PermissionsView(model: permissions, open: open).tabItem { Label("Permissions", systemImage: "hand.raised") }
         }
     }

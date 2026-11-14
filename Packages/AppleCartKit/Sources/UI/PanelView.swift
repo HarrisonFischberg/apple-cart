@@ -34,13 +34,18 @@ public struct PanelView: View {
     let collapse: () -> Void
     let quit: () -> Void
     let toolView: (FeatureID) -> AnyView?
+    let firstRun: FirstRunModel?
+    let readout: ReadoutSettings?
 
     @State private var searching = false
     @FocusState private var searchFocused: Bool
 
     public init(launcher: LauncherModel, panel: PanelModel,
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
-                toolView: @escaping (FeatureID) -> AnyView? = { _ in nil }) {
+                toolView: @escaping (FeatureID) -> AnyView? = { _ in nil },
+                firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil) {
+        self.firstRun = firstRun
+        self.readout = readout
         self.launcher = launcher
         self.panel = panel
         self.openSettings = openSettings
@@ -54,7 +59,9 @@ public struct PanelView: View {
             header
             if searching && panel.route == nil { searchField }
             Group {
-                if let route = panel.route {
+                if let firstRun, let readout, !firstRun.isDone {
+                    FirstRunView(model: firstRun, readout: readout, openSettings: openSettings)
+                } else if let route = panel.route {
                     toolView(route) ?? AnyView(ToolPlaceholder(id: route))
                 } else {
                     LauncherGrid(launcher: launcher, panel: panel, openSettings: openSettings)

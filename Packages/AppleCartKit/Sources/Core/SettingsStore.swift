@@ -8,6 +8,10 @@ public protocol SettingsStore: AnyObject {
     func setLauncherOrder(_ ids: [FeatureID])
     func hiddenFeatures() -> Set<FeatureID>
     func setHiddenFeatures(_ ids: Set<FeatureID>)
+    func menuBarReadout() -> MenuBarReadout
+    func setMenuBarReadout(_ r: MenuBarReadout)
+    func firstRunDone() -> Bool
+    func setFirstRunDone(_ done: Bool)
 }
 
 public final class UserDefaultsSettingsStore: SettingsStore {
@@ -42,4 +46,12 @@ public final class UserDefaultsSettingsStore: SettingsStore {
     public func setHiddenFeatures(_ ids: Set<FeatureID>) {
         defaults.set(ids.map(\.rawValue).sorted(), forKey: hiddenKey)
     }
+
+    public func menuBarReadout() -> MenuBarReadout {
+        defaults.string(forKey: "menuBarReadout").flatMap(MenuBarReadout.init(rawValue:)) ?? .percent
+    }
+
+    public func setMenuBarReadout(_ r: MenuBarReadout) { defaults.set(r.rawValue, forKey: "menuBarReadout") }
+    public func firstRunDone() -> Bool { defaults.bool(forKey: "firstRunDone") }
+    public func setFirstRunDone(_ done: Bool) { defaults.set(done, forKey: "firstRunDone") }
 }
