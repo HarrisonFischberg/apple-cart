@@ -6,7 +6,8 @@
 | 2 | Distribution: notarized direct download (decided 2026-11-14; 20 picks can't run sandboxed). | decision | Harold | — | CLOSED |
 | 3 | Money model undecided (app is free for now; no paid or licensing code in v1). | missing fact | Harold | Launch | OPEN |
 | 4 | Ralph fresh-context loop not cloned. | failed check | Claude | Phase 4 | OPEN |
-| 6 | Charge control on macOS 26/27 unproven (native limit, calibration state ignores limits); spike T002 decides go/no-go. | failed check | Claude + Harold present | M2 battery control | OPEN |
+| 6 | Charge control on macOS 26/27 unproven (native limit, calibration state ignores limits); spike T002 decides go/no-go. Partial result in docs/spikes/charge-control.md; AlDente's helper is installed on this Mac and must be quit and reset before any write test. | failed check | Claude + Harold present | M2 battery control | OPEN |
+| 9 | Bundle identifier `app.rarecreatures.applecart` is provisional until the public name is chosen; changing it later resets settings and permissions. | missing fact | Harold | any shipped build | OPEN |
 | 7 | Developer ID Application certificate needed for notarized builds; not yet confirmed on this Mac. | missing fact | Harold | T026 / release | OPEN |
 | 8 | Minimum OS / chip: macOS 26+, Apple silicon only (approved 2026-11-14). | decision | Harold | — | CLOSED |
 | 5 | Each chosen feature needing a macOS permission (Accessibility, Screen Recording, Full Disk Access, etc.) must be listed in the data inventory. | approval | Harold | Blueprint | OPEN |

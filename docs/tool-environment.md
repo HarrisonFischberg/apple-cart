@@ -23,8 +23,8 @@ Node v24.22.0, Python 3.9.6.
 | --- | --- | --- | --- |
 | Replica | Yes | replica-skill 1.0.0 | `installed_plugins.json`; `replica-skill:replica-*` in session skill list |
 | REA (MCP tools answer, not just skill installed) | NEEDS REVIEW | n/a | `rea` MCP server connected and tool schemas load this session; no analysis call made yet. First real call is Phase 2. |
-| Claude Code `/goal` | NEEDS REVIEW | n/a | Not exercised in Phase 0-1; verify before Phase 4. |
-| Ralph fresh-context shell loop | BLOCKED | n/a | Only the `ralph-loop` plugin 1.0.1 (same-context) is installed; the quickstart repo is not cloned. Clone and review before Phase 4. |
+| Claude Code `/goal` | NOT AVAILABLE | n/a | Not offered as a tool or skill in this session. Alternative: the bounded condition (acceptance criteria, 3 attempts, verification command) is written into PROMPT.md each iteration. |
+| Ralph fresh-context shell loop | ADAPTED, NOT YET RUN | quickstart cloned 2026-11-14 to ~/ralph-loop-quickstart | scripts and permission config read; adapted into ralph/ (6-iteration cap, Sonnet pinned, no network or push). First run will test the sandbox with xcodebuild. |
 | Impeccable (`/impeccable` listed in session) | Yes | version not read | `impeccable` in session skill list; installed at `~/projects/.claude/skills/impeccable`; no per-project install or restart needed. |
 
 Impeccable hooks: `SessionStart`, `PostToolUse` (`Edit|Write`), `Stop` live in
@@ -46,3 +46,5 @@ Missing tool or credential = BLOCKED, never PASS.
 | XcodeGen | Yes | 2.46.0 | `brew install xcodegen` 2026-11-14, owner approved |
 
 Phase 3B/3C (2026-11-14): Impeccable context, concept-seed and the documenter agent ran; critique, audit, extract and polish did not (native target, see docs/design/system.md). Screenshots came from the `Shots` harness (SwiftUI through an NSWindow), not the browser preview or Playwright. The reference's public live demo was viewed once in the in-app browser (read only).
+
+Phase 4 (2026-11-14): XcodeGen 2.46.0 generates the project; `xcodebuild` and `swift test` run in this session. Screenshots of the live app are not possible here (screen capture permission is not granted), so UI checks use the Shots-style harness or the owner's eyes.

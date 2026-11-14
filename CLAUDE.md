@@ -22,11 +22,11 @@ loop, Impeccable. Verify each before claiming use: `docs/tool-environment.md`.
 
 | Check | Command |
 | --- | --- |
-| tests | TODO |
-| types | TODO |
-| lint | TODO |
-| build | TODO |
-| e2e | TODO |
+| tests | `swift test --package-path Packages/AppleCartKit` |
+| types | covered by build (Swift 6, warnings as errors) |
+| lint | none yet |
+| build | `xcodegen generate && xcodebuild -scheme AppleCart -destination 'platform=macOS' -derivedDataPath .build/DerivedData build` |
+| e2e | smoke S1-S5 (see prd.md) once the panel exists |
 
 ## Artifacts
 
