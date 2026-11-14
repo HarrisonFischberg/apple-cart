@@ -55,3 +55,9 @@
 - UI: PanelView (420x560, header with back, search, overflow menu: Keep open, Settings, Collapse, Quit), 4-column tile grid, drag to reorder, context menu (Open, Hide), arrow/Return/Space keys, Add tools tile, empty and no-match states, placeholder for tools with no view. Only tools that are on show; off tools are not dimmed. No shortcut hints yet (no tool has a shortcut).
 - App: PanelController with non-activating NSPanel, global and local mouse monitors for outside click, Esc closes, positioned under the status item; right click shows Settings/Quit. xcodebuild BUILD SUCCEEDED; app launched and stayed running.
 - NOT verified live: no accessibility or screen permission here, so the status item click, click-inside, outside-click and Esc were never exercised. Offscreen renders (t004-launcher/empty, light and dark) checked by eye. Owner should click the icon once.
+
+## 2026-11-14 T005 (Sonnet)
+
+- Core: Permission (screen recording, full disk access, accessibility, notifications; each names its tools, reason and System Settings pane), PermissionChecker (read-only), PermissionsModel (active users, unused-but-granted). 5 new tests, 20 total pass.
+- UI: Permissions tab beside Features in the Settings window. App: SystemPermissionChecker uses preflight calls only, so nothing prompts at launch. xcodebuild BUILD SUCCEEDED; light/dark previews checked.
+- Not verified live: real statuses and Open Settings deep links (no screen or accessibility permission here). Full Disk Access check probes a Safari file, shows Checking if absent. Requests themselves are done by each tool's task, naming the tool.

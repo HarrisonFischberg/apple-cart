@@ -61,12 +61,23 @@ MainActor.assumeIsolated {
         return PanelView(launcher: LauncherModel(registry: reg, store: store), panel: PanelModel(),
                          openSettings: {}, collapse: {}, quit: {})
     }
+    struct DemoChecker: PermissionChecker {
+        func status(of p: Permission) async -> PermissionStatus { p == .screenRecording ? .granted : p == .fullDiskAccess ? .granted : .notGranted }
+    }
+    let permStore = DemoStore(); permStore.ids = [.readQR]
+    let permReg = FeatureRegistry(store: permStore)
+    for id in FeatureID.allCases { permReg.register(id) { DemoTool() } }
+    let permModel = PermissionsModel(checker: DemoChecker(), registry: permReg)
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
+    Task { await permModel.refresh() }
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
     for dark in [false, true] {
         let tag = dark ? "dark" : "light"
         render(name: "t003-features-\(tag)", size: NSSize(width: 480, height: 760),
                dark: dark, view: FeaturesSettingsView(registry: registry), outDir: out)
+        render(name: "t005-permissions-\(tag)", size: NSSize(width: 560, height: 600), dark: dark,
+               view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

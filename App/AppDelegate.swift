@@ -46,7 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 styleMask: [.titled, .closable, .resizable],
                 backing: .buffered, defer: false)
             window.title = "Features"
-            window.contentView = NSHostingView(rootView: FeaturesSettingsView(registry: registry))
+            window.contentView = NSHostingView(rootView: SettingsView(
+                registry: registry,
+                permissions: PermissionsModel(checker: SystemPermissionChecker(), registry: registry),
+                open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
             window.center()
             settingsWindow = window
