@@ -1,5 +1,5 @@
 feature,area,priority,original,clone,notes
-One menu bar icon opening a tabbed panel; sections reorder or hide; compact mode,foundation,must,yes,no,panel stays open while clicking inside it
+One menu bar icon opening a launcher of tool tiles with search; each tool opens into its own tile view; tiles reorder or hide,foundation,must,yes,no,panel stays open while clicking inside it
 Every tool off by default and fully unloaded when off,foundation,must,yes,no,no CPU or memory use from tools that are off
 Permission asked only when the tool needing it is enabled; Settings maps tools to permissions and offers to drop unused ones,foundation,must,yes,no,
 Notarized direct download with built-in auto-updates and launch at login,foundation,must,yes,no,App Store sandbox ruled out by 20 picked tools

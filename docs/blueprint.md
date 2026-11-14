@@ -7,7 +7,7 @@ Status: APPROVED by owner 2026-11-14 (Phase 3, Opus). Minimum OS: macOS 26+, App
 | Layer | Choice | Why | Rejected |
 | --- | --- | --- | --- |
 | Language / UI | Swift 6, SwiftUI for views, AppKit for the menu bar item and panel | Native look and behavior, best energy profile, owner's chosen stack | Electron/Tauri (heavier, not native), Catalyst (no menu bar control) |
-| Menu bar | `NSStatusItem` plus a custom non-activating `NSPanel` | Panel stays open while clicking inside (fixes a source complaint); `MenuBarExtra` closes on interaction and can't host tabs well | `MenuBarExtra(.window)` |
+| Menu bar | `NSStatusItem` plus a custom non-activating `NSPanel` | Panel stays open while clicking inside (fixes a source complaint); `MenuBarExtra` closes on interaction and can't host a launcher plus tool views well | `MenuBarExtra(.window)` |
 | Project | XcodeGen `project.yml` plus one local Swift package `AppleCartKit` holding all logic | Project file is generated and diffable; logic is testable with `swift test` without UI | Hand-edited `.xcodeproj`, Tuist |
 | Persistence | `UserDefaults` for settings; SwiftData store in Application Support for clipboard history, battery samples, schedule history | Built in, no dependency, local only | GRDB/SQLite (extra dependency), Core Data (more boilerplate) |
 | Privileged work | One launchd daemon registered with `SMAppService.daemon`, talking over `NSXPCConnection` with a code-signing requirement on both ends | Apple's supported way to ship a root helper; only the signed app can talk to it | `SMJobBless` (deprecated), shelling out with `sudo` |
@@ -25,7 +25,7 @@ All stores live under `~/Library/Application Support/AppleCart/` or `UserDefault
 
 | Entity | Fields (type) | Key / index | Who reads / writes | Retention |
 | --- | --- | --- | --- | --- |
-| FeatureState | id (String, enum `FeatureID`), enabled (Bool), tab (enum), order (Int), hidden (Bool) | id | app | until changed |
+| FeatureState | id (String, enum `FeatureID`), enabled (Bool), family (enum), order (Int), hidden (Bool) | id | app | until changed |
 | BatteryPolicy | limitPercent (Int 20-100), sailingRange (Int 0-15), heatPauseC (Double 30-45), stopInSleep (Bool), keepAfterQuit (Bool), magsafeMode (enum off/indicate/system), dischargeTarget (Int?), autoDischarge (Bool), topUpUntilUnplug (Bool) | singleton | app writes; helper receives the effective command, never the whole policy | until changed; removing the app resets the battery to 100% |
 | ScheduleTask | id (UUID), action (enum setLimit/topUp/calibrate/pauseCharging/dischargeTo/lowPower), value (Int?), recurrence (enum once/daily/weekly/monthly/yearly + weekday/day), nextRun (Date, UTC), lastRun (Date?), catchUp (Bool), enabled (Bool) | id; index nextRun | app | until deleted |
 | ScheduleRun | taskID (UUID), ranAt (Date), result (enum ok/skipped/failed), note (String) | index ranAt | app | 30 days |
@@ -79,7 +79,7 @@ apple-cart/
 
 ## 5. State management
 
-- **App-owned**: all settings and stores in section 2; UI state in `@Observable` models per tab.
+- **App-owned**: all settings and stores in section 2; UI state in `@Observable` models per tool view; the panel navigation stack (launcher, tool view) is app-owned and resets to the launcher when the panel closes unless Keep open is on.
 - **Helper-owned**: only the hardware state it last applied; it never stores user data.
 - **System-owned**: battery, fans, power assertions, clipboard. The app reads them and reconciles; the panel always shows the effective state plus the reason it differs from the setting (e.g. "Paused: battery at 41 °C", "macOS is calibrating the battery").
 - **Unload rule**: turning a tool off cancels its timers, observers and samplers and releases anything it changed (fans, assertions, LED).

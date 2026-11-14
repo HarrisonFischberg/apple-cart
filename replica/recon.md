@@ -9,11 +9,12 @@ Platform: native macOS menu bar app (SwiftUI + AppKit), notarized direct downloa
 | ID | Screen | How you get there | Purpose | Key components | States |
 | --- | --- | --- | --- | --- | --- |
 | S01 | Menu bar item | always | icon plus optional live readouts | status item, readout text | normal, charging, paused (with reason), on battery, helper broken |
-| S02 | Panel: Battery tab | click S01 | limit slider, current state, why charging is paused, top up, discharge, power flow, details | slider, state pill, flow diagram, graphs | helper missing, limit active, paused by heat, sailing, discharging, unsupported Mac |
-| S03 | Panel: System tab | panel tab | stats, keep awake, fan safe mode, quick toggles, volume guard, Bluetooth-in-sleep | gauges, toggle rows, timer menu | tool off (empty state with Turn on) |
-| S04 | Panel: Clean tab | panel tab | uninstaller drop zone, cleaner, disk map, update checks, DNS flush | drop zone, scan list, treemap | needs Full Disk Access, scanning, results, nothing found, error |
-| S05 | Panel: Clipboard & Tools tab | panel tab | history, OCR, QR, break reminders, cleaning mode, clear notifications | searchable list, action buttons | empty history, paused, permission needed |
-| S06 | Settings: Features | panel gear or Cmd-, | switch each tool on/off; reorder or hide tabs; compact mode | switch list grouped by tab | all off (first run) |
+| S16 | Panel: Launcher (home) | click S01 | grid of the tools switched on, each tile with icon, name and shortcut hint; search; Add tools tile; tools that are off show dimmed with an Off mark | tool tile, search field, pager dots | no tools on (empty with Add tools), search no match |
+| S02 | Panel: Battery view | launcher tile or shortcut | limit slider, current state, why charging is paused, top up, discharge, power flow, details | slider, state pill, flow diagram, graphs | helper missing, limit active, paused by heat, sailing, discharging, unsupported Mac |
+| S03 | Panel: System view | launcher tile | stats, keep awake, fan safe mode, quick toggles, volume guard, Bluetooth-in-sleep | gauges, toggle rows, timer menu | tool off (empty state with Turn on) |
+| S04 | Panel: Clean views (Uninstaller, Cleaner, Disk map, Updates) | launcher tiles | uninstaller drop zone, cleaner, disk map, update checks, DNS flush | drop zone, scan list, treemap | needs Full Disk Access, scanning, results, nothing found, error |
+| S05 | Panel: Clipboard and tool views (Clipboard, Copy text, QR, Breaks, Cleaning mode, Notifications) | launcher tiles | history, OCR, QR, break reminders, cleaning mode, clear notifications | searchable list, action buttons | empty history, paused, permission needed |
+| S06 | Settings: Features | panel gear or Cmd-, | switch each tool on/off; reorder or hide launcher tiles | switch list grouped by tool family | all off (first run) |
 | S07 | Settings: Permissions | Settings | which tool uses which permission; drop unused | table, Open System Settings buttons | granted, missing, unused |
 | S08 | Settings: Battery | Settings | heat threshold, sailing range, calibration, schedule, MagSafe light, sleep behavior | steppers, schedule list | no tasks (empty with Add task) |
 | S09 | Settings: General | Settings | launch at login, updates, export/import not picked, about, debug log | toggles | update available |
@@ -38,7 +39,7 @@ Platform: native macOS menu bar app (SwiftUI + AppKit), notarized direct downloa
 
 ## Components
 
-Status item with readouts; tabbed panel; section header with reorder/hide; toggle row (title, description, permission chip, switch); state pill (active, paused-with-reason, warning); slider with value field; stepper; gauge; sparkline/graph; flow diagram; drop zone; scan result checklist; treemap; searchable list with pin; toast with Undo; explainer sheet; full-screen overlay; permission table.
+Status item with readouts; launcher grid; tile (icon, label, large value, thin bar; wide and narrow); panel header (back, title, search, overflow menu); toggle row (title, description, permission chip, switch); state pill (active, paused-with-reason, warning); slider with value field; stepper; gauge; sparkline/graph; flow diagram; drop zone; scan result checklist; treemap; searchable list with pin; toast with Undo; explainer sheet; full-screen overlay; permission table.
 
 ## Inferred data model (all local)
 

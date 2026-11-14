@@ -1,6 +1,6 @@
 # Design directions (Phase 3B)
 
-Status: concepts being built, 2026-11-14. Nothing here is approved. Do not write `DESIGN.md` until the owner picks one.
+Status: C4 Tiles approved by the owner 2026-11-14 (C1-C3 not chosen). DESIGN.md follows in Phase 3C.
 
 Mode: Operate. Platform: native macOS menu bar panel (SwiftUI + AppKit). The core screen is S02 (Battery tab), with S03 (System tab) to show the tab pattern holds. Seed: `seed:a6ed928998647bf4` (Impeccable concept-seed, direction scope, operate mode).
 

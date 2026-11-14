@@ -20,7 +20,7 @@ Full list with priorities: `replica/features.csv`. Groups: Foundation (panel, sw
 
 ## Core screen and user flow (Phase 3B design directions cover this)
 
-Screen S02, the panel's Battery tab, opened from the menu bar item (S01): current charge, effective state with the reason charging is paused, the limit control, Top up, power flow, and battery details. Flow F01: first run -> turn on Battery -> set limit -> install helper -> limit active. Directions also show the System tab (S03) to prove the tab pattern holds.
+Screen S02, the Battery tool view, opened from the launcher (S16) that the menu bar item (S01) shows: current charge, effective state with the reason charging is paused, the limit control, Top up, power flow, and battery details. Flow F01: first run -> turn on Battery -> set limit -> install helper -> limit active. Directions also show the System tab (S03) to prove the tab pattern holds.
 
 ## REA and Replica findings
 
@@ -38,7 +38,7 @@ Verification commands (from the repo root):
 | T001 | Project skeleton: `project.yml` (app, helper), `AppleCartKit` package with module targets, status item showing an icon | — | builds clean with zero warnings in new code; app launches as menu bar only (no Dock icon) | V1, V2 | pending |
 | T002 | Spike: charge-control backend on macOS 26/27 Apple silicon; write `docs/spikes/charge-control.md` with mechanism, sources, what works below 80%, calibration behavior, go/no-go | — | doc names a working mechanism or records NO-GO with evidence; any write to the owner's battery happens only with the owner present | doc review (Opus) | pending |
 | T003 | FeatureRegistry + SettingsStore + Settings > Features (S06): switches, off by default, unload on off | T001 | turning a tool off cancels its timers/observers (unit test with a fake tool); state survives relaunch | V2, S | pending |
-| T004 | Panel (S02 frame): non-activating panel, stays open while clicking inside, closes on outside click/Esc, tabs, reorder/hide, compact mode, empty states | T003 | click inside never closes it; Esc closes; tab order persists; keyboard reaches every control | V1, S | pending |
+| T004 | Panel shell and launcher (S16, S02 frame): non-activating panel, stays open while clicking inside, closes on outside click/Esc, header with back, title, search and overflow menu (Keep open, Settings, Collapse), launcher grid of tool tiles with shortcut hints, reorder/hide, empty states | T003 | click inside never closes it; Esc closes; tile order persists; keyboard reaches every control | V1, S | pending |
 | T005 | PermissionsService + Settings > Permissions (S07): status per permission, which tools use it, open the right System Settings pane, unused prompt | T003 | no permission requested at first launch; each request names its tool | V2, S | pending |
 | T006 | Battery readings: details, 24 h samples, true %, power flow, energy-hungry apps (read-only, no helper) | T004 | values match `pmset -g batt` and `ioreg` within rounding; sampler stops when panel closed and no readout uses it | V2, S | pending |
 | T007 | Menu bar readouts (S01) + first run (S11, 2 screens, skippable) | T006 | readout updates within 5 s of a power change; first run skippable in one click | S | pending |
@@ -86,7 +86,7 @@ Verification commands (from the repo root):
 | 19 | Asset and code licenses | yes: Sparkle MIT, SF Symbols terms | T025 |
 | 20 | Data deletion | yes: Delete all app data; helper removal resets hardware | T022, T009 |
 
-UX baseline (`docs/ux-baseline.md`, Phase 5B): undo toasts for cleanup, empty/error states per tab, search in clipboard history, keyboard shortcuts and menu commands, dark mode, text size, Reduce Motion, 44 pt-equivalent targets where possible in a menu bar panel. Drag-to-reorder applies to tabs and sections; swipe, pull-to-refresh and pinch zoom are NOT APPLICABLE (desktop panel).
+UX baseline (`docs/ux-baseline.md`, Phase 5B): undo toasts for cleanup, empty/error states per tool view, search in clipboard history, keyboard shortcuts and menu commands, dark mode, text size, Reduce Motion, 44 pt-equivalent targets where possible in a menu bar panel. Drag-to-reorder applies to tabs and sections; swipe, pull-to-refresh and pinch zoom are NOT APPLICABLE (desktop panel).
 
 ## Human review and launch blockers
 

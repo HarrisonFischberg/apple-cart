@@ -1,6 +1,6 @@
 # Design comparison (Phase 3B)
 
-Status: awaiting the owner's approval of C4, 2026-11-14. The owner saw C1-C3 and asked for the panel to closely mimic the reference app's display; C4 was added for that. Written by Sonnet from the rendered screenshots; Opus has not reviewed it (the workflow gives the recommendation to Opus; the owner can ask for that pass).
+Status: C4 Tiles approved 2026-11-14 and merged to main. The owner saw C1-C3 and asked for the panel to closely mimic the reference app's display; C4 was added for that. Written by Sonnet from the rendered screenshots; Opus has not reviewed it (the workflow gives the recommendation to Opus; the owner can ask for that pass).
 
 Screenshots: `docs/design/screenshots/`, macOS 26, 2x, light and dark, mock desktop with menu bar. Tool: the `Shots` executable in each concept (SwiftUI through an NSWindow), not the browser preview. All three use the same demo data and show the same state: charging paused because the battery is 41.2 °C against a 40 °C limit. Branches: `ui-1`, `ui-2`, `ui-3` in worktrees `../apple-cart-ui-N`, local only.
 
