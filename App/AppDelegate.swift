@@ -8,14 +8,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var panelController: PanelController?
-    // No tools are registered yet (they arrive with their tasks), so every switch shows "Not built yet".
     private let store = UserDefaultsSettingsStore()
     private lazy var registry: FeatureRegistry = {
         let r = FeatureRegistry(store: store)
         r.register(.battery) { BatteryTool() } // the readout only runs while a view holds the sampler
+        r.register(.system) { SystemTool() }
+        r.register(.keepAwake) { [keepAwake] in KeepAwakeTool(keepAwake) }
         return r
     }()
     private let battery = BatterySampler()
+    private let systemSampler = SystemSampler()
+    private let keepAwake = KeepAwake()
     private lazy var readoutSettings = ReadoutSettings(store: store)
     private var statusReadout: StatusReadout?
 
@@ -30,8 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [battery] id, panel in
-            id == .battery ? AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery)) : nil
+                                          toolView: { [battery, systemSampler, keepAwake] id, panel in
+            switch id {
+            case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
+            case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
+            case .keepAwake: AnyView(KeepAwakeView(keepAwake: keepAwake))
+            default: nil
+            }
         })
     }
 

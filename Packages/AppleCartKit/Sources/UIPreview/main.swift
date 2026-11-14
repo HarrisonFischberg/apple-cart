@@ -84,6 +84,10 @@ MainActor.assumeIsolated {
         return PanelView(launcher: LauncherModel(registry: reg, store: st), panel: PanelModel(), openSettings: {},
                          collapse: {}, quit: {}, firstRun: fr, readout: ReadoutSettings(store: st))
     }
+    let sysSampler = SystemSampler(interval: .seconds(1))
+    sysSampler.hold("preview")
+    let awake = KeepAwake()
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 2.5))
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
@@ -97,6 +101,10 @@ MainActor.assumeIsolated {
         render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
                view: BatteryView(sampler: sampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         for step in 0...1 { render(name: "t007-firstrun\(step + 1)-\(tag)", size: PanelView.size, dark: dark, view: firstRunPanel(step: step), outDir: out) }
+        render(name: "t008-system-\(tag)", size: PanelView.size, dark: dark,
+               view: SystemView(sampler: sysSampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t008-keepawake-\(tag)", size: PanelView.size, dark: dark,
+               view: KeepAwakeView(keepAwake: awake).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

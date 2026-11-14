@@ -78,3 +78,10 @@
 - UI: first-run overlay in the panel (Skip on both screens, one click), Settings > Menu bar tab. App: StatusReadout updates the status item from the sampler and holds it only while the Battery tool is on and a text readout is chosen; otherwise the icon is static and nothing samples.
 - Timing: the sampler polls every 5 s, so a power change shows within 5 s plus read time. Not measured live.
 - Not seen live: the real status item text (no screen or accessibility access); first-run renders checked light and dark. First-run Choose tools opens Settings and leaves the panel on screen 1.
+
+## 2026-11-14 T008 (Sonnet)
+
+- Core: KeepAwake (IOKit power assertion; timer, stop at a battery level only while unplugged, optional display on; replaces rather than stacks; refusal is reported), SystemSampler (CPU from tick deltas, memory used = active + wired + compressed, thermal, uptime; samples only while held). 9 new tests, 39 total pass, including one that runs `pmset -g assertions` and sees the assertion appear on start and vanish on stop.
+- UI: Keep awake view (presets 15 min to until I stop, display toggle, battery level stepper, live countdown, last stop reason) and System view. Turning the Keep awake tool off ends the session. Last-used choices are remembered.
+- Not seen live: the running app's click path (no screen or accessibility access). System readings looked plausible in the preview (CPU 20%, 19.0 of 32.0 GB).
+- Limit: the level rule polls the battery every 30 s, so it can overshoot by up to 30 s of drain.
