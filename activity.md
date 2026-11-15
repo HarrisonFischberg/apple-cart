@@ -102,3 +102,9 @@
 - Data flow to record: `softwareupdate --list` contacts Apple's update service on user request.
 - 11-14 live check (owner at Mac): Flush DNS showed the macOS password dialog then Done. Updates tile not reported on. No system log entry for the flush.
 - 11-14 live check: owner's screenshot of the Updates tile in the running app (dark mode, checked 17:35) shows macOS none and the same 8 Homebrew formulae.
+
+## 2026-11-14 T016 uninstaller
+- Core/Uninstaller.swift (UninstallPolicy allowlist, UninstallerModel, Trasher/RunningApps protocols), UI/UninstallerView (drop zone, Choose an app button, preview with per-item tick, Trash, Undo). Leftovers match the exact bundle ID only (no name matching), in 11 fixed ~/Library folders; LaunchAgents deliberately skipped (loaded agents need bootout).
+- Refuses com.apple.* apps, Apple Cart itself, apps outside /Applications and ~/Applications. Running app must be quit first. App is trashed first; if that fails its files are left alone. Undo stays until next action.
+- 56 tests pass, build clean. Previews t016. Fixed a stacked-label layout bug seen in the first render.
+- Not done: a real Trash move, drag-drop, the file chooser, and the Full Disk Access prompt flow were not exercised on the Mac.

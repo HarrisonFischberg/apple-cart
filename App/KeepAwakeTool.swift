@@ -1,3 +1,4 @@
+import AppKit
 import Core
 
 /// Turning the tool off ends any session and releases the assertion.
@@ -28,4 +29,10 @@ final class QuickTogglesTool: Tool {
 final class OnDemandTool: Tool {
     func start() {}
     func stop() {}
+}
+
+@MainActor
+final class WorkspaceRunningApps: RunningApps {
+    func isRunning(_ bundleID: String) -> Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty }
+    func quit(_ bundleID: String) { NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).forEach { $0.terminate() } }
 }

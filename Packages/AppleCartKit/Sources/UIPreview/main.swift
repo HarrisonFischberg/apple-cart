@@ -94,11 +94,15 @@ MainActor.assumeIsolated {
     let checker = UpdateChecker(runner: ProcessRunner())
     Task { await checker.check() }
     let flush = FlushDNS(runner: AdminPromptRunner())
+    @MainActor final class NoApps: RunningApps { func isRunning(_ b: String) -> Bool { false }; func quit(_ b: String) {} }
+    let unin = UninstallerModel(running: NoApps(), hasFullDiskAccess: { false })
+    Task { await unin.choose(URL(fileURLWithPath: "/Applications/Itsycal.app")) } // read-only scan, nothing is moved
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 8))
+    if case .preview(let pl) = unin.phase { print("UNINSTALL plan:", pl.items.map { $0.url.path + " " + String($0.bytes) }.joined(separator: " | ")) } else { print("UNINSTALL phase", unin.phase) }
     print("UPDATES brew=\(checker.homebrew) macOS=\(checker.macOS)")
     for dark in [false, true] {
         let tag = dark ? "dark" : "light"
@@ -117,6 +121,8 @@ MainActor.assumeIsolated {
                view: QuickTogglesView(toggles: realToggles).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t013-volume-\(tag)", size: PanelView.size, dark: dark,
                view: VolumeGuardView(guardTool: guardTool).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t016-uninstaller-\(tag)", size: PanelView.size, dark: dark,
+               view: UninstallerView(model: unin, openFullDiskAccess: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
                view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,
