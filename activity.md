@@ -113,3 +113,10 @@
 - Core/Cleaner.swift (CleanerPolicy, CleanerModel, DiskMapModel), UI/CleanerView.swift (CleanerView, DiskMapView). Cleaner covers direct children of ~/Library/Caches, ~/Library/Logs, Xcode DerivedData; skips com.apple.* caches; preview, Trash, Undo (reuses Trasher/UninstallReport). Disk map is read-only (drill down, Show in Finder), progressive and stoppable.
 - Bug fixed: detached work ignored cancellation; now forwarded with withTaskCancellationHandler (test covers cancel).
 - Real read-only scans: cleaner 370 items, matches du; disk map top level matched. Nothing moved. 60 tests, build clean.
+
+## 2026-11-14 T021 break reminders + cleaning mode
+- Core/Breaks.swift (BreakReminders: one sleep to the next due time, snooze 10 min, pause/resume on sleep/wake, settings in UserDefaults), Core/CleaningMode.swift (InputBlocker protocol, 5 min cap, always ends), UI/BreaksView.swift (BreaksView, CleaningModeView, CleaningOverlayView), App/BreaksSupport.swift (UNUserNotificationCenter banners with Snooze, CGEventTap blocker where holding Esc 3 s exits, overlay windows).
+- Permission: Notifications asked when a reminder is first switched on; Accessibility needed for cleaning mode (added to Permission.usedBy).
+- Not built: Clear all notifications (blocker logged).
+- Fixed a layout bug: switch rows were centered; now label left, switch right (also fixed in Quick toggles).
+- 67 tests, build clean. NOT run live: banners, event tap, overlay. Risk to remember when testing: cleaning mode locks the keyboard; the way out is Esc held 3 s or the timer (max 5 min).

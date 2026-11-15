@@ -12,10 +12,12 @@ public struct QuickTogglesView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(QuickToggle.allCases.enumerated()), id: \.element) { i, t in
                         if i > 0 { Divider() }
-                        Toggle(isOn: Binding(get: { toggles.states[t] ?? false }, set: { toggles.set(t, on: $0) })) {
+                        HStack {
                             Label(t.title, systemImage: t.symbol)
+                            Spacer()
+                            Toggle(t.title, isOn: Binding(get: { toggles.states[t] ?? false }, set: { toggles.set(t, on: $0) }))
+                                .toggleStyle(.switch).labelsHidden()
                         }
-                        .toggleStyle(.switch)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .padding(.horizontal, 14)
                     }

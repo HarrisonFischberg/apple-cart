@@ -47,3 +47,4 @@ Never infer these from a reference app. Never invent them.
 - Retention or deletion exceptions: UNKNOWN
 
 - **Bluetooth off in sleep (T013, 2026-11-14):** macOS has no public API to switch Bluetooth power; the known routes are a private IOBluetooth call or the external `blueutil` tool. Neither is allowed here (no private APIs, no bundled third-party binaries without a license review). Not built. **Resolved 2026-11-14: owner chose to drop it for v1.** May return later as an off-by-default experimental toggle, tested on the owner's Mac first.
+- **Clear all notifications (T021, 2026-11-14):** macOS has no API to clear other apps' notifications. The only way is scripting Notification Center's own interface through Accessibility, which changes between macOS releases and breaks silently. Not built; `.notifications` stays unregistered so it cannot be switched on. Owner decision needed: drop it, or build the Accessibility-scripting version as an experimental toggle.

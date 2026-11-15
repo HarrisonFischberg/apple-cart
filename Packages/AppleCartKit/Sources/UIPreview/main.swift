@@ -99,6 +99,13 @@ MainActor.assumeIsolated {
     Task { await unin.choose(URL(fileURLWithPath: "/Applications/Itsycal.app")) } // read-only scan, nothing is moved
     let cleaner = CleanerModel(); cleaner.scan() // read-only scan, nothing is moved
     let diskMap = DiskMapModel(); diskMap.scan()
+    @MainActor final class PrevNotifier: BreakNotifier { func prepare() async {}; func send(_ k: BreakKind) async {} }
+    @MainActor final class PrevBlocker: InputBlocker { var canBlock = false; func start(onExitHeld: @escaping @MainActor () -> Void) -> Bool { true }; func stop() {} }
+    let breaks = BreakReminders(defaults: UserDefaults(suiteName: "preview-breaks")!, notifier: PrevNotifier())
+    breaks.start(); breaks.setEnabled(.eyes, true); breaks.setEnabled(.water, true)
+    let blocker = PrevBlocker(); let cleaning = CleaningMode(blocker: blocker)
+    cleaning.start(seconds: 120) // no Accessibility in preview: shows the permission message
+    let cleaningLive = CleaningMode(blocker: { let b = PrevBlocker(); b.canBlock = true; return b }()); cleaningLive.start(seconds: 120)
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
@@ -131,6 +138,11 @@ MainActor.assumeIsolated {
                view: CleanerView(model: cleaner).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t017-diskmap-\(tag)", size: PanelView.size, dark: dark,
                view: DiskMapView(model: diskMap).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t021-breaks-\(tag)", size: PanelView.size, dark: dark,
+               view: BreaksView(reminders: breaks).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t021-cleaning-\(tag)", size: PanelView.size, dark: dark,
+               view: CleaningModeView(mode: cleaning, openAccessibility: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t021-overlay-\(tag)", size: NSSize(width: 900, height: 560), dark: dark, view: CleaningOverlayView(mode: cleaningLive), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
                view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,
