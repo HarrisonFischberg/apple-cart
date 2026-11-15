@@ -135,3 +135,10 @@
 - Image is captured in memory only and never saved. QR results are copied, never opened. Nothing is sent anywhere (Vision is on-device).
 - First run of the Vision tests took about 28 s (model load); later runs 0.6 s.
 - NOT run live: area picker, capture, permission prompt, toast, shortcuts.
+
+## 2026-11-14 T022 Sparkle, launch at login, debug info, delete data
+- Core/General.swift (LaunchAtLogin, DebugReport, AppDataEraser) + tests, UI/GeneralSettingsView (new General tab), App/Updater.swift (Sparkle controller that starts only when SUPublicEDKey exists; SMAppService login item).
+- Sparkle 2.10.1 is vendored through scripts/fetch-sparkle.sh (checksum 4c2e48a3...) into Vendor/ (git-ignored) because SwiftPM's binary-artifact download stalled in this environment (curl worked). project.yml embeds it. App launches fine with it (ad-hoc debug build). A Developer ID build must sign the framework with the same identity (T026).
+- Feed URL: https://github.com/HarrisonFischberg/apple-cart/releases/latest/download/appcast.xml (provisional). Automatic checks default off.
+- New blockers: 10 (update signing key), 11 (support address provisional). Sparkle recorded in docs/asset-licenses.md.
+- Not built: Mail "Send Debug Logs" includes no log files by design.

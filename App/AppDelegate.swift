@@ -38,6 +38,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker(runner: ProcessRunner())
     private let uninstaller = UninstallerModel(running: WorkspaceRunningApps(),
                                                 hasFullDiskAccess: { await SystemPermissionChecker().status(of: .fullDiskAccess) == .granted })
+    private let updater = Updater()
+    private let launchAtLogin = LaunchAtLogin(item: SMLoginItem())
+    /// Provisional until the public name and support inbox are chosen (launch blockers).
+    private static let supportAddress = "support@rarecreatures.app"
     private let hotKeys = HotKeyCenter()
     private let toast = Toast()
     private lazy var screenReader = ScreenReader(picker: RegionPicker(), capturer: ScreenCapturer(), pasteboard: SystemPasteboard(),
@@ -107,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController?.close()
             let menu = NSMenu()
             menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+            if updater.isConfigured { menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self }
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit Apple Cart", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
@@ -115,6 +120,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             panelController?.toggle()
         }
+    }
+
+    @objc private func checkForUpdates() { updater.checkForUpdates() }
+
+    private func sendDebugLogs() {
+        Task {
+            let checker = SystemPermissionChecker()
+            var perms: [String: String] = [:]
+            for p in Permission.allCases { perms[p.title] = await checker.status(of: p) == .granted ? "granted" : "not granted" }
+            let info = Bundle.main.infoDictionary
+            var size = 0; sysctlbyname("hw.model", nil, &size, nil, 0)
+            var model = [CChar](repeating: 0, count: max(size, 1)); sysctlbyname("hw.model", &model, &size, nil, 0)
+            let report = DebugReport(appVersion: info?["CFBundleShortVersionString"] as? String ?? "?", build: info?["CFBundleVersion"] as? String ?? "?",
+                                     macOS: ProcessInfo.processInfo.operatingSystemVersionString, model: String(decoding: model.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self),
+                                     enabledTools: registry.enabled.map(\.title), permissions: perms)
+            if let url = report.mailto(Self.supportAddress) { NSWorkspace.shared.open(url) }
+        }
+    }
+
+    private func deleteAllData() {
+        let alert = NSAlert()
+        alert.messageText = "Delete all Apple Cart data?"
+        alert.informativeText = "This removes every setting and saved item, such as clipboard history and battery history, from this Mac. It cannot be undone, and Apple Cart will quit."
+        alert.addButton(withTitle: "Delete and Quit"); alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .critical
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        for id in registry.enabled { registry.setEnabled(false, for: id) } // stop every tool first so nothing rewrites its data
+        let fm = FileManager.default
+        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart")
+        let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart")
+        AppDataEraser(defaultsDomain: Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart", folders: [support, caches]).eraseAll()
+        NSApp.terminate(nil)
     }
 
     @objc private func openSettings() {
@@ -128,6 +165,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 registry: registry,
                 permissions: PermissionsModel(checker: SystemPermissionChecker(), registry: registry),
                 readout: readoutSettings,
+                login: launchAtLogin,
+                general: GeneralActions(updatesConfigured: updater.isConfigured, checkForUpdates: { [updater] in updater.checkForUpdates() },
+                                        automaticChecks: { [updater] in updater.automaticChecks }, setAutomaticChecks: { [updater] in updater.automaticChecks = $0 },
+                                        sendDebugLogs: { [weak self] in self?.sendDebugLogs() }, deleteAllData: { [weak self] in self?.deleteAllData() }),
                 open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
             window.center()

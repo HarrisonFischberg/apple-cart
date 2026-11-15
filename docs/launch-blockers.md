@@ -11,6 +11,8 @@
 | 7 | Developer ID Application certificate needed for notarized builds; not yet confirmed on this Mac. | missing fact | Harold | T026 / release | OPEN |
 | 8 | Minimum OS / chip: macOS 26+, Apple silicon only (approved 2026-11-14). | decision | Harold | — | CLOSED |
 | 5 | Each chosen feature needing a macOS permission (Accessibility, Screen Recording, Full Disk Access, etc.) must be listed in the data inventory. | approval | Harold | Blueprint | OPEN |
+| 10 | Sparkle update signing key (EdDSA) does not exist yet. Until `SUPublicEDKey` is in the app, the updater stays off and Settings says so. Generating the key makes a private key in your Keychain, so it needs you. The appcast URL points at this repo's Releases and changes if the repo is renamed. | missing fact | Harold | T022 live updates, T026 | OPEN |
+| 11 | Support address for Send Debug Logs is provisional (`support@rarecreatures.app`); confirm it exists and is read. | missing fact | Harold | any shipped build | OPEN |
 
 ## Intake answers (2026-11-14)
 

@@ -14,3 +14,5 @@ ralph/logs/
 ralph/STOP
 .claude/settings.local.json
 .claude/worktrees/
+Vendor/Sparkle.xcframework
+Vendor/Sparkle-LICENSE

@@ -57,8 +57,13 @@ public struct SettingsView: View {
     let permissions: PermissionsModel
     let readout: ReadoutSettings
     let open: (URL) -> Void
+    let login: LaunchAtLogin
+    let general: GeneralActions
 
-    public init(registry: FeatureRegistry, permissions: PermissionsModel, readout: ReadoutSettings, open: @escaping (URL) -> Void) {
+    public init(registry: FeatureRegistry, permissions: PermissionsModel, readout: ReadoutSettings, login: LaunchAtLogin,
+                general: GeneralActions, open: @escaping (URL) -> Void) {
+        self.login = login
+        self.general = general
         self.registry = registry
         self.readout = readout
         self.permissions = permissions
@@ -67,6 +72,7 @@ public struct SettingsView: View {
 
     public var body: some View {
         TabView {
+            GeneralSettingsView(login: login, actions: general).tabItem { Label("General", systemImage: "gearshape") }
             FeaturesSettingsView(registry: registry).tabItem { Label("Features", systemImage: "square.grid.2x2") }
             Form { ReadoutPicker(readout: readout) }.formStyle(.grouped)
                 .tabItem { Label("Menu bar", systemImage: "menubar.rectangle") }

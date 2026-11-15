@@ -24,12 +24,20 @@ targets:
         product: Core
       - package: AppleCartKit
         product: UI
+      # Sparkle 2.10.1, fetched by scripts/fetch-sparkle.sh (the SwiftPM binary download stalls here).
+      - framework: Vendor/Sparkle.xcframework
+        embed: true
+        codeSign: true
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Apple Cart
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
+        # Appcast lives on the public repo's Releases. Provisional until the public name is chosen.
+        SUFeedURL: https://github.com/HarrisonFischberg/apple-cart/releases/latest/download/appcast.xml
+        SUEnableAutomaticChecks: false
+        # SUPublicEDKey is added when the update signing key exists (launch blocker). Without it the updater stays off.
     settings:
       base:
         # Provisional until the public name is chosen (launch blocker 9).
