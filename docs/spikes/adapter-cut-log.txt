@@ -1,24 +1,24 @@
-== Sun Nov 15 14:32:01 MST 2026 before
- -InternalBattery-0 (id=23724131)	82%; charging; 0:47 remaining present: true
+== Sun Nov 15 14:56:07 MST 2026 before
+ -InternalBattery-0 (id=23724131)	97%; charging; (no estimate) present: true
 CHIE type=hex_ size=1 attrs=0xd4 infoResult=0 readResult=0 value=00
 SMC reports 2906 keys
 write CHIE=08: io=0x0 smcResult=0
 readback: 08
-t=10s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=20s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=30s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=40s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=50s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=60s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=70s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=80s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=90s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=100s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=110s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
-t=120s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	82%; discharging; (no estimate) present: true 
+t=10s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=20s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=30s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=40s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=50s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=60s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=70s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=80s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=90s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=100s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=110s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
+t=120s Now drawing from 'Battery Power'  -InternalBattery-0 (id=23724131)	97%; discharging; (no estimate) present: true 
 SMC reports 2906 keys
 write CHIE=00: io=0x0 smcResult=0
 readback: 00
-== Sun Nov 15 14:34:16 MST 2026 after restore
- -InternalBattery-0 (id=23724131)	82%; AC attached; not charging present: true
+== Sun Nov 15 14:58:22 MST 2026 after restore
+ -InternalBattery-0 (id=23724131)	97%; AC attached; not charging present: true
 CHIE type=hex_ size=1 attrs=0xd4 infoResult=0 readResult=0 value=00

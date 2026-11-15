@@ -1,0 +1,5 @@
+0s  -InternalBattery-0 (id=23724131) 97%; AC attached; not charging present: true
+15s  -InternalBattery-0 (id=23724131) 97%; AC attached; not charging present: true
+30s  -InternalBattery-0 (id=23724131) 97%; AC attached; not charging present: true
+45s  -InternalBattery-0 (id=23724131) 97%; charging; (no estimate) present: true
+RESUMED

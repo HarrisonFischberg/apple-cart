@@ -56,3 +56,7 @@ AlDente's and Battery-Toolkit's own issue trackers; exact SMC key names beyond w
 - **Charge limit:** still conditional. A limit below 80% can be built as hold-by-cutting-the-adapter-and-restoring, awake only. Apple's native limit (80-100%) stays the baseline.
 - **MagSafe LED, fan safe mode:** unchanged, no write probe run yet.
 - **Still to test before T010:** whether the restore resumes by itself given more time (wait 10 min, no replug); sleep with the adapter cut; reboot with the adapter cut; helper killed mid-cut.
+
+### Second restore test 2026-11-15 14:56 (no replug; `resume-watch.txt`, `adapter-cut-log.txt`)
+
+Same 120 s cut, this time at 97%. After `CHIE=00`, macOS said "not charging" for about 30 s and then "charging" at 45 s, with no replug. Run 1 (at 82%) did not resume for 3+ minutes. So auto-resume works sometimes and not others; the battery level, a macOS hold, or timing may matter and is not understood. Keep the rule: after any restore the helper checks that charging resumed, retries, and shows a warning if it does not. Not enough data for a number (2 runs).
