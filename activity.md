@@ -142,3 +142,11 @@
 - Feed URL: https://github.com/HarrisonFischberg/apple-cart/releases/latest/download/appcast.xml (provisional). Automatic checks default off.
 - New blockers: 10 (update signing key), 11 (support address provisional). Sparkle recorded in docs/asset-licenses.md.
 - Not built: Mail "Send Debug Logs" includes no log files by design.
+
+## T023 energy check (2026-11-15)
+
+Release build, ad-hoc re-signed copy (hardened runtime dropped so Sparkle loads; Developer ID signing in T026 should not need this). `scripts/energy-check.sh`: own-process CPU time over 5 windows of 300 s, 30 s settle, M5 MacBook Pro, macOS 27.2.1, on AC. Raw output: `docs/spikes/energy-results-2026-11-15.txt`.
+
+- All tools off: 0.033, 0.003, 0.020, 0.020, 0.020% → median 0.020%. Target < 0.1%: PASS.
+- All 15 available tools on: 0.547, 0.503, 0.470, 0.497, 0.480% → median 0.497%. No target in the spec; recorded. Run 1 overlapped a 2-minute adapter-cut test (T002) and was not an outlier.
+- Not measured: which tool costs most when on, window open vs closed, other Macs, energy impact in Activity Monitor. Own-process CPU only (helpers excluded; none exist yet).

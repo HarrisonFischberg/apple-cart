@@ -1,0 +1,13 @@
+== all tools off ==
+run 1: 0.033% (cpu 0.10s over 300s)
+run 2: 0.003% (cpu 0.01s over 300s)
+run 3: 0.020% (cpu 0.06s over 300s)
+run 4: 0.020% (cpu 0.06s over 300s)
+run 5: 0.020% (cpu 0.06s over 300s)
+== all tools on ==
+run 1: 0.547% (cpu 1.64s over 300s)
+run 2: 0.503% (cpu 1.51s over 300s)
+run 3: 0.470% (cpu 1.41s over 300s)
+run 4: 0.497% (cpu 1.49s over 300s)
+run 5: 0.480% (cpu 1.44s over 300s)
+FINISHED
