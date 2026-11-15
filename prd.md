@@ -47,7 +47,7 @@ Verification commands (from the repo root):
 | T010 | Policy engine (pure) + charge limit, heat protection, sailing, top up, discharge, stop in sleep, keep after quit; paused-reason display incl. "macOS is calibrating" | T009 | unit tests cover every rule combination and the reason text; one writer to the helper | V2, S | pending |
 | T011 | Calibration cycle + battery schedule (S08) with catch-up and run history | T010 | DST and missed-while-asleep cases tested | V2 | pending |
 | T012 | MagSafe light modes | T009 | mode restored to system on tool off | S | pending |
-| T013 | Quick toggles, volume guard, Bluetooth off in sleep | T004 | each toggle reflects real system state after change | S | partial: toggles and volume guard built; Bluetooth off in sleep NOT built (no public API, see launch-blockers); writes never run on the owner Mac |
+| T013 | Quick toggles, volume guard, Bluetooth off in sleep | T004 | each toggle reflects real system state after change | S | done: toggles and volume guard built; Bluetooth off in sleep dropped for v1 by owner (2026-11-14); writes never run on the owner Mac |
 | T014 | Fan safe mode (raise above system curve only) | T009 | helper clamps any lower value (test); fans released on off/quit | V2, S | pending |
 | T015 | Flush DNS via helper | T009 | succeeds without a password prompt after helper install | S | pending |
 | T016 | Uninstaller + cleanup preview (S12): bundle-ID leftovers, Trash only, Undo toast, refuse system apps | T005 | path allowlist tested; nothing outside user Library and the app is touched | V2, S | pending |

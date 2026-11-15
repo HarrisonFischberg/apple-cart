@@ -21,7 +21,7 @@ Keep awake: timer; until a charge level; display on; lid closed,system,must,yes,
 System monitor: CPU; GPU; memory; network; disk; temperature,system,must,yes,no,
 Fan control in safe mode: raise fans above the system curve but never below,system,could,yes,no,changed at final review; admin helper
 Quick toggles: dark mode; Night Shift; Low Power; hidden files; desktop icons; empty Trash; eject all,system,should,yes,no,
-Turn Bluetooth off during sleep,system,could,yes,no,
+Turn Bluetooth off during sleep,system,could,yes,skip,dropped for v1 (no public API); owner decision 2026-11-14
 Volume guard: cap volume on wake; lower it when headphones disconnect,system,should,yes,no,
 Flush DNS cache,system,could,yes,no,admin prompt
 Uninstaller: remove apps with leftovers; preview first; move to Trash,clean,should,yes,no,Full Disk Access asked on enable

@@ -46,4 +46,4 @@ Never infer these from a reference app. Never invent them.
 - Vendors, SDKs, analytics, AI providers, processors: none planned
 - Retention or deletion exceptions: UNKNOWN
 
-- **Bluetooth off in sleep (T013, 2026-11-14):** macOS has no public API to switch Bluetooth power; the known routes are a private IOBluetooth call or the external `blueutil` tool. Neither is allowed here (no private APIs, no bundled third-party binaries without a license review). Not built. Owner decision needed: drop it, or accept a private-API call with the risk that a macOS update breaks it.
+- **Bluetooth off in sleep (T013, 2026-11-14):** macOS has no public API to switch Bluetooth power; the known routes are a private IOBluetooth call or the external `blueutil` tool. Neither is allowed here (no private APIs, no bundled third-party binaries without a license review). Not built. **Resolved 2026-11-14: owner chose to drop it for v1.** May return later as an off-by-default experimental toggle, tested on the owner's Mac first.

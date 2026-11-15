@@ -93,3 +93,4 @@
 - Volume read worked (0.69 on this Mac). Volume lowering on a real device change not exercised.
 - Bluetooth off in sleep not built: no public API. Recorded in docs/launch-blockers.md.
 - Not seen live: the running app (owner is away from the Mac; no screen access here).
+- Owner decision 2026-11-14: Bluetooth off in sleep dropped for v1 (option 1). T013 marked done without it.
