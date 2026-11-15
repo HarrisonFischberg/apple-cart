@@ -25,9 +25,10 @@ extension FeatureID {
     }
 }
 
-/// Fixed-size panel: header plus either the launcher grid or one tool's view.
+/// Fixed-size panel: brand header, a strip of icons for the tools that are on, the chosen tool, a footer.
 public struct PanelView: View {
-    public static let size = CGSize(width: 420, height: 560)
+    public static let size = CGSize(width: 380, height: 540)
+    public static let appName = "Apple Cart"
 
     let launcher: LauncherModel
     let panel: PanelModel
@@ -38,8 +39,7 @@ public struct PanelView: View {
     let firstRun: FirstRunModel?
     let readout: ReadoutSettings?
 
-    @State private var searching = false
-    @FocusState private var searchFocused: Bool
+    @FocusState private var focused: FeatureID?
 
     public init(launcher: LauncherModel, panel: PanelModel,
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
@@ -56,73 +56,137 @@ public struct PanelView: View {
     }
 
     public var body: some View {
+        let tiles = launcher.allTiles
         VStack(spacing: 0) {
             header
-            if searching && panel.route == nil { searchField }
-            Group {
-                if let firstRun, let readout, !firstRun.isDone {
-                    FirstRunView(model: firstRun, readout: readout, openSettings: openSettings)
-                } else if let route = panel.route {
-                    toolView(route) ?? AnyView(ToolPlaceholder(id: route))
+            if let firstRun, let readout, !firstRun.isDone {
+                FirstRunView(model: firstRun, readout: readout, openSettings: openSettings)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if tiles.isEmpty {
+                EmptyLauncher(hiddenCount: launcher.hiddenCount, openSettings: openSettings, showHidden: launcher.showAllHidden)
+            } else {
+                strip(tiles)
+                if let route = panel.route {
+                    Text(route.title.uppercased())
+                        .font(.system(size: 12, weight: .semibold)).tracking(0.6)
+                        .foregroundStyle(Palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20).padding(.top, 14)
+                        .accessibilityAddTraits(.isHeader)
+                    (toolView(route) ?? AnyView(ToolPlaceholder(id: route)))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    LauncherGrid(launcher: launcher, panel: panel, openSettings: openSettings)
+                    Spacer()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            footer
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(Palette.ground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .onExitCommand { if searching { closeSearch() } else { collapse() } }
+        .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
+        .onChange(of: launcher.allTiles) { selectFirstIfNone() }
+        .onExitCommand { collapse() }
+    }
+
+    /// A tool is always chosen while any tool is on; closing the panel clears it, so reselect.
+    private func selectFirstIfNone() {
+        let tiles = launcher.allTiles
+        if let r = panel.route, tiles.contains(r) { return }
+        if let first = tiles.first { panel.open(first) }
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            if panel.route != nil {
-                Button { panel.back() } label: { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Back")
-                    .keyboardShortcut("[", modifiers: .command)
+        ZStack {
+            Text(Self.appName).font(.system(size: 15, weight: .semibold))
+            HStack {
+                Spacer()
+                Button { panel.keepOpen.toggle() } label: { Image(systemName: panel.keepOpen ? "pin.fill" : "pin") }
+                    .buttonStyle(HeaderButtonStyle())
+                    .accessibilityLabel("Keep open")
+                    .accessibilityValue(panel.keepOpen ? "On" : "Off")
+                    .help("Keep the panel open when you click elsewhere")
             }
-            Text(panel.route?.title ?? "Apple Cart").font(.headline)
-            Spacer()
-            if panel.route == nil {
-                Button { searching ? closeSearch() : openSearch() } label: { Image(systemName: "magnifyingglass") }
-                    .accessibilityLabel("Search tools")
-                    .keyboardShortcut("f", modifiers: .command)
-            }
-            Menu {
-                Toggle("Keep open", isOn: Binding(get: { panel.keepOpen }, set: { panel.keepOpen = $0 }))
-                Button("Settings…", action: openSettings)
-                Button("Collapse", action: collapse)
-                Divider()
-                Button("Quit Apple Cart", action: quit)
-            } label: { Image(systemName: "ellipsis.circle") }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("More")
         }
-        .buttonStyle(HeaderButtonStyle())
+        .padding(.horizontal, 8)
+        .frame(height: 48)
+    }
+
+    private func strip(_ tiles: [FeatureID]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(tiles, id: \.self) { id in
+                    Button { panel.open(id) } label: {
+                        Image(systemName: id.symbol).font(.system(size: 17))
+                            .frame(width: 44, height: 44)
+                            .foregroundStyle(panel.route == id ? Palette.accent : Palette.secondary)
+                            .background(panel.route == id ? Palette.accent.opacity(0.16) : .clear,
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .focused($focused, equals: id)
+                    .onKeyPress(.leftArrow) { step(id, -1, tiles) }
+                    .onKeyPress(.rightArrow) { step(id, 1, tiles) }
+                    .help(id.title)
+                    .accessibilityLabel(id.title)
+                    .accessibilityAddTraits(panel.route == id ? [.isButton, .isSelected] : .isButton)
+                    .draggable(id.rawValue)
+                    .dropDestination(for: String.self) { items, _ in
+                        guard let raw = items.first, let dragged = FeatureID(rawValue: raw) else { return false }
+                        launcher.move(dragged, before: id)
+                        return true
+                    }
+                    .contextMenu {
+                        Button("Hide from the strip") { launcher.hide(id) }
+                    }
+                }
+                Button(action: openSettings) {
+                    Image(systemName: "plus").font(.system(size: 15))
+                        .frame(width: 44, height: 44).foregroundStyle(Palette.secondary).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Add tools")
+                .accessibilityLabel("Add tools")
+            }
+            .padding(4)
+        }
+        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.primary.opacity(0.06)))
         .padding(.horizontal, 16)
-        .frame(height: 52)
     }
 
-    private var searchField: some View {
-        TextField("Search tools", text: Bindable(launcher).searchText)
-            .textFieldStyle(.roundedBorder)
-            .focused($searchFocused)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+    private func step(_ id: FeatureID, _ by: Int, _ tiles: [FeatureID]) -> KeyPress.Result {
+        guard let i = tiles.firstIndex(of: id), tiles.indices.contains(i + by) else { return .handled }
+        focused = tiles[i + by]
+        panel.open(tiles[i + by])
+        return .handled
     }
 
-    private func openSearch() { searching = true; searchFocused = true }
-    private func closeSearch() { searching = false; launcher.searchText = "" }
+    private var footer: some View {
+        HStack(spacing: 12) {
+            footerButton("Settings", symbol: "gearshape", action: openSettings)
+            footerButton("Quit", symbol: "power", action: quit)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private func footerButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol).font(.system(size: 14, weight: .medium))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private struct HeaderButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(Palette.secondary)
             .frame(width: 44, height: 44) // 44 pt target
             .contentShape(Rectangle())
@@ -140,99 +204,6 @@ struct ToolPlaceholder: View {
         }
         .multilineTextAlignment(.center)
         .padding(32)
-    }
-}
-
-struct LauncherGrid: View {
-    let launcher: LauncherModel
-    let panel: PanelModel
-    let openSettings: () -> Void
-
-    private static let columns = 4
-    private let grid = Array(repeating: GridItem(.flexible(), spacing: 12), count: columns)
-    @FocusState private var focused: FeatureID?
-
-    var body: some View {
-        let tiles = launcher.tiles
-        if launcher.allTiles.isEmpty {
-            EmptyLauncher(hiddenCount: launcher.hiddenCount, openSettings: openSettings, showHidden: launcher.showAllHidden)
-        } else if tiles.isEmpty {
-            VStack(spacing: 6) {
-                Text("No tool matches “\(launcher.searchText)”").font(.body)
-                Button("Clear search") { launcher.searchText = "" }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollView {
-                LazyVGrid(columns: grid, spacing: 12) {
-                    ForEach(tiles, id: \.self) { id in
-                        ToolTile(id: id)
-                            .focusable()
-                            .focused($focused, equals: id)
-                            .onTapGesture { panel.open(id) }
-                            .onKeyPress(.return) { panel.open(id); return .handled }
-                            .onKeyPress(.space) { panel.open(id); return .handled }
-                            .onKeyPress(.leftArrow) { move(id, .left) }
-                            .onKeyPress(.rightArrow) { move(id, .right) }
-                            .onKeyPress(.upArrow) { move(id, .up) }
-                            .onKeyPress(.downArrow) { move(id, .down) }
-                            .draggable(id.rawValue)
-                            .dropDestination(for: String.self) { items, _ in
-                                guard let raw = items.first, let dragged = FeatureID(rawValue: raw) else { return false }
-                                launcher.move(dragged, before: id)
-                                return true
-                            }
-                            .contextMenu {
-                                Button("Open") { panel.open(id) }
-                                Button("Hide from launcher") { launcher.hide(id) }
-                            }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction(named: "Hide from launcher") { launcher.hide(id) }
-                    }
-                    AddToolsTile(action: openSettings)
-                }
-                .padding(16)
-            }
-        }
-    }
-
-    private func move(_ id: FeatureID, _ dir: GridDirection) -> KeyPress.Result {
-        if let next = launcher.neighbor(of: id, columns: Self.columns, dir) { focused = next }
-        return .handled
-    }
-}
-
-struct ToolTile: View {
-    let id: FeatureID
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: id.symbol).font(.system(size: 22)).foregroundStyle(Palette.accent)
-            Text(id.title).font(.caption).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
-        }
-        .frame(maxWidth: .infinity, minHeight: 96)
-        .padding(.horizontal, 4)
-        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-struct AddToolsTile: View {
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: "plus").font(.system(size: 22))
-                Text("Add tools").font(.caption)
-            }
-            .foregroundStyle(Palette.secondary)
-            .frame(maxWidth: .infinity, minHeight: 84)
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Palette.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 }
 

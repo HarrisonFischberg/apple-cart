@@ -67,6 +67,15 @@ MainActor.assumeIsolated {
         return PanelView(launcher: LauncherModel(registry: reg, store: store), panel: PanelModel(),
                          openSettings: {}, collapse: {}, quit: {})
     }
+    /// The whole panel (header, icon strip, footer) with one tool chosen.
+    @MainActor func fullPanel(_ route: FeatureID, _ content: AnyView) -> PanelView {
+        let st = DemoStore(); st.ids = [.battery, .system, .keepAwake, .clipboard, .quickToggles, .volumeGuard, .updates, .cleaner]
+        let reg = FeatureRegistry(store: st)
+        for id in FeatureID.allCases { reg.register(id) { DemoTool() } }
+        let p = PanelModel(); p.open(route)
+        return PanelView(launcher: LauncherModel(registry: reg, store: st), panel: p, openSettings: {}, collapse: {}, quit: {},
+                         toolView: { _ in content })
+    }
     struct DemoChecker: PermissionChecker {
         func status(of p: Permission) async -> PermissionStatus { p == .screenRecording ? .granted : p == .fullDiskAccess ? .granted : .notGranted }
     }
@@ -145,6 +154,8 @@ MainActor.assumeIsolated {
                view: SystemView(sampler: sysSampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t008-keepawake-\(tag)", size: PanelView.size, dark: dark,
                view: KeepAwakeView(keepAwake: awake).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t024-panel-keepawake-\(tag)", size: PanelView.size, dark: dark,
+               view: fullPanel(.keepAwake, AnyView(KeepAwakeView(keepAwake: awake))), outDir: out)
         render(name: "t013-toggles-\(tag)", size: PanelView.size, dark: dark,
                view: QuickTogglesView(toggles: realToggles).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t013-volume-\(tag)", size: PanelView.size, dark: dark,

@@ -1,8 +1,9 @@
 import Core
 import SwiftUI
 
-private let presets: [(label: String, seconds: TimeInterval?)] = [
-    ("15 min", 900), ("30 min", 1800), ("1 hour", 3600), ("2 hours", 7200), ("4 hours", 14400), ("Until I stop", nil),
+private let presets: [(label: String, spoken: String, seconds: TimeInterval?)] = [
+    ("15m", "15 minutes", 900), ("30m", "30 minutes", 1800), ("1h", "1 hour", 3600), ("2h", "2 hours", 7200),
+    ("4h", "4 hours", 14400), ("8h", "8 hours", 28800), ("\u{221E}", "until I stop", nil),
 ]
 
 public struct KeepAwakeView: View {
@@ -10,58 +11,74 @@ public struct KeepAwakeView: View {
     @AppStorage("keepAwake.displayOn") private var displayOn = false
     @AppStorage("keepAwake.useLevel") private var useLevel = false
     @AppStorage("keepAwake.level") private var level = 20
+    @State private var showOptions = false
 
     public init(keepAwake: KeepAwake) { self.keepAwake = keepAwake }
 
     public var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
-                status
-                card {
-                    Toggle("Keep the display on too", isOn: $displayOn)
-                    Toggle("Stop when the battery reaches", isOn: $useLevel)
-                    if useLevel {
-                        Stepper("\(level)% (only on battery)", value: $level, in: 5...80, step: 5)
-                            .font(.callout)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        statusText
+                        Spacer()
+                        Toggle("Keep awake", isOn: Binding(get: { keepAwake.isActive }, set: { $0 ? start(nil) : keepAwake.stop() }))
+                            .toggleStyle(.switch).labelsHidden()
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                        ForEach(presets, id: \.label) { p in
+                            Button(p.label) { chipTapped(p.seconds) }
+                                .buttonStyle(ChipStyle(selected: isSelected(p.seconds)))
+                                .accessibilityLabel(p.spoken)
+                                .accessibilityAddTraits(isSelected(p.seconds) ? .isSelected : [])
+                        }
+                    }
+                    Text("Click a time to start. Click it again to stop.").font(.callout).foregroundStyle(Palette.secondary)
+                    DisclosureGroup("Options", isExpanded: $showOptions) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle("Keep the display on too", isOn: $displayOn)
+                            Toggle("Stop when the battery reaches", isOn: $useLevel)
+                            if useLevel {
+                                Stepper("\(level)% (only on battery)", value: $level, in: 5...80, step: 5).font(.callout)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    if keepAwake.failed {
+                        Text("macOS refused to keep this Mac awake. Try again.").font(.callout).foregroundStyle(.red)
                     }
                 }
-                Text("Start for").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    ForEach(presets, id: \.label) { p in
-                        Button(p.label) { start(p.seconds) }
-                            .buttonStyle(PresetStyle())
-                    }
-                }
-                if keepAwake.failed {
-                    Text("macOS refused to keep this Mac awake. Try again.").font(.callout).foregroundStyle(.red)
-                }
+                .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .padding(16)
+            .padding(.horizontal, 16).padding(.vertical, 12)
         }
     }
 
-    private var status: some View {
-        card {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(keepAwake.isActive ? "Staying awake" : "Sleeps as usual").font(.headline)
-                    if keepAwake.isActive {
-                        if let end = keepAwake.endDate {
-                            TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                                Text(remaining(end, ctx.date)).font(.callout).monospacedDigit().foregroundStyle(Palette.secondary)
-                            }
-                        } else {
-                            Text("Until you stop it").font(.callout).foregroundStyle(Palette.secondary)
-                        }
-                    } else if let why = keepAwake.lastStopReason {
-                        Text(why).font(.callout).foregroundStyle(Palette.secondary)
+    private var statusText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if keepAwake.isActive {
+                if let end = keepAwake.endDate {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text(remaining(end, ctx.date)).font(.system(size: 15, weight: .medium)).monospacedDigit()
                     }
+                } else {
+                    Text("Active until you turn it off").font(.system(size: 15, weight: .medium))
                 }
-                Spacer()
-                if keepAwake.isActive { Button("Stop") { keepAwake.stop() }.buttonStyle(.borderedProminent) }
+            } else {
+                Text("Sleeps as usual").font(.system(size: 15, weight: .medium))
+                if let why = keepAwake.lastStopReason { Text(why).font(.callout).foregroundStyle(Palette.secondary) }
             }
         }
-        .accessibilityElement(children: .contain)
+    }
+
+    private func isSelected(_ seconds: TimeInterval?) -> Bool {
+        guard let o = keepAwake.options else { return false }
+        return o.duration == seconds
+    }
+
+    private func chipTapped(_ seconds: TimeInterval?) {
+        if isSelected(seconds) { keepAwake.stop() } else { start(seconds) }
     }
 
     private func start(_ seconds: TimeInterval?) {
@@ -72,19 +89,17 @@ public struct KeepAwakeView: View {
         let s = max(0, Int(end.timeIntervalSince(now)))
         return String(format: "%d:%02d:%02d left", s / 3600, s % 3600 / 60, s % 60)
     }
-
-    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 10, content: content).padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
 }
 
-private struct PresetStyle: ButtonStyle {
+/// Compact pill for a choice in a row of choices; the chosen one is filled.
+struct ChipStyle: ButtonStyle {
+    var selected = false
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.callout).frame(maxWidth: .infinity, minHeight: 44)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .foregroundStyle(Palette.accent)
+        configuration.label.font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+            .background(selected ? Palette.accent : Palette.ground, in: Capsule())
+            .foregroundStyle(selected ? Color.white : Color.primary)
             .opacity(configuration.isPressed ? 0.6 : 1)
+            .contentShape(Capsule())
     }
 }
 
