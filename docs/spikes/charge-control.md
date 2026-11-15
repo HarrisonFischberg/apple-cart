@@ -1,6 +1,6 @@
 # Spike T002: charge control on macOS 26 and 27 (Apple silicon)
 
-Date: 2026-11-14. Status: **PARTIAL, no go/no-go yet.** Public research and read-only probes are done. Every write test needs the owner at the Mac, and one blocker below must be cleared first.
+Date: 2026-11-14, updated 2026-11-15. Status: **PARTIAL.** Adapter cut is a confirmed GO on this Mac (macOS 27.2.1, M5). Charge limit below 80%, sleep, reboot and helper-crash behavior are not tested yet.
 
 ## This Mac (read-only probes; nothing was written)
 
@@ -41,3 +41,18 @@ Also seen in earlier public reports: while macOS runs its battery gauging (calib
 ## Not verified
 
 AlDente's and Battery-Toolkit's own issue trackers; exact SMC key names beyond what the batt threads mention; whether `pmset` or a public power API has any write option; the private entitlement one reporter suspects; fan control on 27; anything about notarizing a daemon; Apple's 27 release notes.
+
+
+## Results 2026-11-15 (owner at the Mac, AlDente quit, Apple Charge Limit = 100%)
+
+1. **AlDente was the 80% hold.** After quitting its app (its helper stays installed but idle), charging resumed within a minute. `pmset` went from "not charging" to "charging". Vorssaint (fan helper) was left running; it did not interfere.
+2. **Read-only key list** (`spikes/smc-probe`, no root, no writes; output in `smc-keys-readonly.txt`): 2,906 SMC keys. Absent here: `CH0B`, `CH0C`, `CHTE` (the keys older tools use). Present and flagged writable: `CHIE` (1 byte, adapter disable), plus many other `CH*`/`AC*`/`BC*` keys not yet understood.
+3. **Adapter cut write: PASS.** `sudo adapter-cut-test.sh 120` wrote `CHIE=08`: no error, readback 08. Within 10 s macOS reported "Battery Power, discharging" with the charger still plugged in; stayed that way for 120 s at 82%, Mac stayed up. Log: `adapter-cut-log.txt`.
+4. **Restore: key PASS, charging resume NOT automatic within about 3 minutes.** Writing `CHIE=00` read back 00 and macOS showed "AC Power" again, but charging stayed off ("not charging", reason code 4096) until the owner unplugged and replugged the charger; then charging resumed (reason 0). I cannot tell whether the replug or just more time fixed it. **Design consequence for T009/T010:** after restoring, the helper must verify charging actually resumes and keep a visible warning if it does not; never assume the key write alone is enough.
+
+## Updated recommendation
+
+- **Pause charging and discharge via the adapter route:** GO on this Mac and OS, with the restore caveat above.
+- **Charge limit:** still conditional. A limit below 80% can be built as hold-by-cutting-the-adapter-and-restoring, awake only. Apple's native limit (80-100%) stays the baseline.
+- **MagSafe LED, fan safe mode:** unchanged, no write probe run yet.
+- **Still to test before T010:** whether the restore resumes by itself given more time (wait 10 min, no replug); sleep with the adapter cut; reboot with the adapter cut; helper killed mid-cut.
