@@ -120,3 +120,4 @@
 - Not built: Clear all notifications (blocker logged).
 - Fixed a layout bug: switch rows were centered; now label left, switch right (also fixed in Quick toggles).
 - 67 tests, build clean. NOT run live: banners, event tap, overlay. Risk to remember when testing: cleaning mode locks the keyboard; the way out is Esc held 3 s or the timer (max 5 min).
+- Owner decision 2026-11-14: Clear all notifications dropped for v1. T021 marked done without it.

@@ -36,7 +36,7 @@ Copy text from any screen region (on-device recognition),clipboard,should,yes,no
 Read QR codes and barcodes from screen or a copied image,clipboard,should,yes,no,Screen Recording
 Break reminders: eyes; stretch; water,tools,should,yes,no,
 Cleaning mode: lock keyboard and trackpad for wiping,tools,could,yes,no,Input Monitoring
-Clear all notifications by shortcut,tools,could,yes,no,Accessibility
+Clear all notifications by shortcut,tools,could,yes,skip,dropped for v1 (no API; owner decision 2026-11-14)
 Outgoing connection list and map,later,could,yes,later,moved to Later at final review; map needs a licensed location database
 On-device dictation into any app,later,could,yes,later,moved to Later at final review; system dictation exists
 Mouse jiggler,dropped,could,yes,skip,owner dropped; keep awake covers it
