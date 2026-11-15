@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Core
 import SwiftUI
 import UI
@@ -17,7 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.quickToggles) { QuickTogglesTool() }
         r.register(.volumeGuard) { [volumeGuard] in volumeGuard }
         r.register(.uninstaller) { OnDemandTool() }
-        r.register(.clipboard) { [clipboard, plainPasteKey] in ClipboardTool(clipboard, hotKey: plainPasteKey) }
+        r.register(.clipboard) { [clipboard, hotKeys] in ClipboardTool(clipboard, keys: hotKeys) }
+        r.register(.copyText) { [screenReader, hotKeys] in ScreenReadTool(screenReader, keys: hotKeys, id: 2, key: kVK_ANSI_T, mode: .text) }
+        r.register(.readQR) { [screenReader, hotKeys] in ScreenReadTool(screenReader, keys: hotKeys, id: 3, key: kVK_ANSI_Q, mode: .qr) }
         r.register(.breakReminders) { [breaks] in breaks }
         r.register(.cleaningMode) { OnDemandTool() }
         r.register(.cleaner) { OnDemandTool() }
@@ -35,7 +38,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker(runner: ProcessRunner())
     private let uninstaller = UninstallerModel(running: WorkspaceRunningApps(),
                                                 hasFullDiskAccess: { await SystemPermissionChecker().status(of: .fullDiskAccess) == .granted })
-    private let plainPasteKey = PlainPasteHotKey()
+    private let hotKeys = HotKeyCenter()
+    private let toast = Toast()
+    private lazy var screenReader = ScreenReader(picker: RegionPicker(), capturer: ScreenCapturer(), pasteboard: SystemPasteboard(),
+                                                 toast: { [toast] in toast.show($0) })
     private lazy var clipboard = ClipboardHistory(
         pasteboard: SystemPasteboard(),
         folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart/Clipboard"))
@@ -71,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [weak self, battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard] id, panel in
+                                          toolView: { [weak self, battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
@@ -86,6 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .breakReminders: AnyView(BreaksView(reminders: breaks))
             case .cleaningMode: AnyView(CleaningModeView(mode: cleaningMode, openAccessibility: { NSWorkspace.shared.open(Permission.accessibility.settingsURL) }))
             case .clipboard: AnyView(ClipboardView(history: clipboard, close: { [weak self] in self?.panelController?.close() }))
+            case .copyText: AnyView(ScreenReadView(reader: screenReader, mode: .text, start: { [weak self] in self?.panelController?.close(); Task { await self?.screenReader.run(.text) } },
+                                                   openSettings: { NSWorkspace.shared.open(Permission.screenRecording.settingsURL) }))
+            case .readQR: AnyView(ScreenReadView(reader: screenReader, mode: .qr, start: { [weak self] in self?.panelController?.close(); Task { await self?.screenReader.run(.qr) } },
+                                                 openSettings: { NSWorkspace.shared.open(Permission.screenRecording.settingsURL) }))
             default: nil
             }
         })

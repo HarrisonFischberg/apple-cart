@@ -32,27 +32,37 @@ final class SystemPasteboard: PasteboardAccess {
     }
 }
 
-/// One global shortcut, ⌃⌥⌘V: paste what is on the clipboard as plain text.
+/// Global shortcuts (⌃⌥⌘ + a letter). Each tool adds its own and removes it when it is turned off.
 @MainActor
-final class PlainPasteHotKey {
-    private var ref: EventHotKeyRef?
+final class HotKeyCenter {
+    private var refs: [UInt32: EventHotKeyRef] = [:]
+    private var actions: [UInt32: @MainActor () -> Void] = [:]
     private var handler: EventHandlerRef?
-    private static var action: (@MainActor () -> Void)?
 
-    func register(_ action: @escaping @MainActor () -> Void) {
-        Self.action = action
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { PlainPasteHotKey.action?() } }
-            return noErr
-        }, 1, &spec, nil, &handler)
-        RegisterEventHotKey(UInt32(kVK_ANSI_V), UInt32(controlKey | optionKey | cmdKey), EventHotKeyID(signature: OSType(0x41434152), id: 1),
+    func add(id: UInt32, key: Int, _ action: @escaping @MainActor () -> Void) {
+        install()
+        remove(id: id)
+        var ref: EventHotKeyRef?
+        RegisterEventHotKey(UInt32(key), UInt32(controlKey | optionKey | cmdKey), EventHotKeyID(signature: OSType(0x41434152), id: id),
                             GetApplicationEventTarget(), 0, &ref)
+        if let ref { refs[id] = ref; actions[id] = action }
     }
 
-    func unregister() {
-        if let ref { UnregisterEventHotKey(ref) }
-        if let handler { RemoveEventHandler(handler) }
-        ref = nil; handler = nil; Self.action = nil
+    func remove(id: UInt32) {
+        if let r = refs.removeValue(forKey: id) { UnregisterEventHotKey(r) }
+        actions[id] = nil
+    }
+
+    private func install() {
+        guard handler == nil else { return }
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
+            var hk = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
+            guard let userData else { return noErr }
+            let center = Unmanaged<HotKeyCenter>.fromOpaque(userData).takeUnretainedValue()
+            DispatchQueue.main.async { MainActor.assumeIsolated { center.actions[hk.id]?() } }
+            return noErr
+        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
     }
 }

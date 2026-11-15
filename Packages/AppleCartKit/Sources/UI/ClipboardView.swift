@@ -117,3 +117,56 @@ public struct ClipboardView: View {
         if p.runModal() == .OK, let u = p.url, let id = Bundle(url: u)?.bundleIdentifier { history.neverStore(from: id) }
     }
 }
+
+public struct ScreenReadView: View {
+    let reader: ScreenReader
+    let mode: ScreenReader.Mode
+    let start: () -> Void
+    let openSettings: () -> Void
+
+    public init(reader: ScreenReader, mode: ScreenReader.Mode, start: @escaping () -> Void, openSettings: @escaping () -> Void) {
+        self.reader = reader; self.mode = mode; self.start = start; self.openSettings = openSettings
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(mode == .text ? "Copy text from the screen" : "Read a QR code").font(.headline)
+                    Text(mode == .text ? "Drag a box around any text, even in an image or a video. It is read on this Mac and copied."
+                                       : "Drag a box around a QR code or barcode. The result is copied. Links are never opened for you.")
+                        .font(.callout).foregroundStyle(Palette.secondary)
+                    Button("Select an area") { start() }.buttonStyle(.borderedProminent)
+                    Text("Shortcut: ⌃⌥⌘\(mode == .text ? "T" : "Q")").font(.callout).foregroundStyle(Palette.secondary)
+                    if reader.phase == .needsPermission {
+                        Text("Screen Recording is off for Apple Cart. It is only used for the area you pick; nothing is recorded or saved.").foregroundStyle(Palette.secondary)
+                        Button("Open Screen Recording settings", action: openSettings)
+                    }
+                    if reader.phase == .failed { Text("The screen could not be read. Try again.").foregroundStyle(Palette.secondary) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                result
+            }
+            .padding(16)
+        }
+    }
+
+    @ViewBuilder private var result: some View {
+        switch reader.last {
+        case .text(let t) where mode == .text: card("Copied", t)
+        case .codes(let c) where mode == .qr: card("Copied", c.joined(separator: "\n"))
+        case .nothing(let m) where m == mode: Text(mode == .text ? "No text found in that area." : "No code found in that area.").foregroundStyle(Palette.secondary)
+        default: EmptyView()
+        }
+    }
+
+    private func card(_ title: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: "checkmark.circle").font(.headline)
+            Text(body).lineLimit(8).textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}

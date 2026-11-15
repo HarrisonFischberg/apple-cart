@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Core
 
 /// Turning the tool off ends any session and releases the assertion.
@@ -40,8 +41,19 @@ final class WorkspaceRunningApps: RunningApps {
 /// Starts the clipboard poll and the plain-paste shortcut together; stopping removes both.
 @MainActor
 final class ClipboardTool: Tool {
-    private let history: ClipboardHistory, hotKey: PlainPasteHotKey
-    init(_ history: ClipboardHistory, hotKey: PlainPasteHotKey) { self.history = history; self.hotKey = hotKey }
-    func start() { history.start(); hotKey.register { [history] in if !history.pastePlainCurrent() { NSSound.beep() } } }
-    func stop() { history.stop(); hotKey.unregister() }
+    private let history: ClipboardHistory, keys: HotKeyCenter
+    init(_ history: ClipboardHistory, keys: HotKeyCenter) { self.history = history; self.keys = keys }
+    func start() { history.start(); keys.add(id: 1, key: kVK_ANSI_V) { [history] in if !history.pastePlainCurrent() { NSSound.beep() } } }
+    func stop() { history.stop(); keys.remove(id: 1) }
+}
+
+/// Screen text (⌃⌥⌘T) and QR (⌃⌥⌘Q) readers: the shortcut exists only while the tool is on.
+@MainActor
+final class ScreenReadTool: Tool {
+    private let reader: ScreenReader, keys: HotKeyCenter, id: UInt32, key: Int, mode: ScreenReader.Mode
+    init(_ reader: ScreenReader, keys: HotKeyCenter, id: UInt32, key: Int, mode: ScreenReader.Mode) {
+        self.reader = reader; self.keys = keys; self.id = id; self.key = key; self.mode = mode
+    }
+    func start() { keys.add(id: id, key: key) { [reader, mode] in Task { await reader.run(mode) } } }
+    func stop() { keys.remove(id: id) }
 }

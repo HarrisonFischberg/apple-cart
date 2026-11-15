@@ -117,6 +117,12 @@ MainActor.assumeIsolated {
     let clip = ClipboardHistory(pasteboard: board, folder: clipDir, defaults: UserDefaults(suiteName: "preview-clip-" + UUID().uuidString)!)
     for t in ["https://developer.apple.com/documentation/swiftui", "Meeting notes: ship the uninstaller preview first, then the cleaner.", "brew upgrade gh gradle helm", "+1 (800) 626-8695"] { board.text = t; board.changeCount += 1; clip.check() }
     clip.togglePin(clip.items.last!)
+    @MainActor final class PrevPicker: RegionSelecting { func pickRegion() async -> ScreenRegion? { ScreenRegion(displayID: 1, rect: .init(x: 0, y: 0, width: 20, height: 20)) } }
+    @MainActor final class PrevCapture: ScreenCapturing { func capture(_ r: ScreenRegion) async throws -> CGImage { CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()! } }
+    struct PrevRec: ImageRecognizing { func text(in i: CGImage) async -> String { "Invoice 2026-114\nTotal due: $48.20" }; func codes(in i: CGImage) async -> [String] { [] } }
+    let reader = ScreenReader(picker: PrevPicker(), capturer: PrevCapture(), recognizer: PrevRec(), pasteboard: board, toast: { _ in })
+    Task { await reader.run(.text) }
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 1))
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
@@ -156,6 +162,8 @@ MainActor.assumeIsolated {
         render(name: "t021-overlay-\(tag)", size: NSSize(width: 900, height: 560), dark: dark, view: CleaningOverlayView(mode: cleaningLive), outDir: out)
         render(name: "t019-clipboard-\(tag)", size: PanelView.size, dark: dark,
                view: ClipboardView(history: clip, close: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t020-copytext-\(tag)", size: PanelView.size, dark: dark,
+               view: ScreenReadView(reader: reader, mode: .text, start: {}, openSettings: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
                view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,
