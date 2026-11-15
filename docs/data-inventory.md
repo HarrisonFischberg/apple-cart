@@ -15,3 +15,5 @@ Planned (blueprint 2026-11-14). Everything stays on the Mac unless a row says ot
 | Hardware state applied by the root helper | charge control, fans, LED | helper commands | helper memory only; no files | until reset | removal runs resetAll (battery to 100%, fans to system) |
 
 No analytics, crash reporting, advertising or AI providers.
+
+| macOS update service (via `softwareupdate --list`) | update check, only when the user presses Check now | Mac contacts Apple as macOS does; the app sends nothing itself | no |

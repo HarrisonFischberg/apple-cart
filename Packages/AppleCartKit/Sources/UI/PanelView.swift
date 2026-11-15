@@ -20,6 +20,7 @@ extension FeatureID {
         case .fanSafeMode: "fan"
         case .cleaningMode: "keyboard"
         case .notifications: "bell"
+        case .flushDNS: "network"
         }
     }
 }

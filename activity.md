@@ -94,3 +94,9 @@
 - Bluetooth off in sleep not built: no public API. Recorded in docs/launch-blockers.md.
 - Not seen live: the running app (owner is away from the Mac; no screen access here).
 - Owner decision 2026-11-14: Bluetooth off in sleep dropped for v1 (option 1). T013 marked done without it.
+
+## 2026-11-14 T018 updates, T015 flush DNS
+- T018: Core/Updates.swift (parsers, UpdateChecker, ProcessRunner), UI/UpdatesView. Runs only on "Check now". Homebrew uses HOMEBREW_NO_AUTO_UPDATE=1 (local list only). Real run matched brew; softwareupdate said none.
+- T015: Core/FlushDNS.swift + FlushDNSView. New FeatureID flushDNS (17th tool; count test updated). Interim AdminPromptRunner (osascript admin dialog) because the T009 helper does not exist yet. Real flush not run.
+- 50 tests pass, build clean, previews t015/t018 in docs/design/screenshots/build.
+- Data flow to record: `softwareupdate --list` contacts Apple's update service on user request.

@@ -19,7 +19,7 @@ public extension FeatureID {
     var family: FeatureFamily {
         switch self {
         case .battery: .battery
-        case .system, .keepAwake, .quickToggles, .volumeGuard, .fanSafeMode: .system
+        case .system, .keepAwake, .quickToggles, .volumeGuard, .fanSafeMode, .flushDNS: .system
         case .uninstaller, .cleaner, .diskMap, .updates: .clean
         case .clipboard, .copyText, .readQR: .clipboard
         case .breakReminders, .cleaningMode, .notifications: .tools

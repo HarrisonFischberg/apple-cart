@@ -91,11 +91,15 @@ MainActor.assumeIsolated {
     let realToggles = QuickToggles(prefs: SystemPreferences())
     print("TOGGLES", QuickToggle.allCases.map { "\($0.rawValue)=\(realToggles.states[$0] ?? false)" }.joined(separator: " "))
     print("VOLUME", CoreAudioOutput().volume() as Any)
+    let checker = UpdateChecker(runner: ProcessRunner())
+    Task { await checker.check() }
+    let flush = FlushDNS(runner: AdminPromptRunner())
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
-    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 8))
+    print("UPDATES brew=\(checker.homebrew) macOS=\(checker.macOS)")
     for dark in [false, true] {
         let tag = dark ? "dark" : "light"
         render(name: "t003-features-\(tag)", size: NSSize(width: 480, height: 760),
@@ -113,6 +117,10 @@ MainActor.assumeIsolated {
                view: QuickTogglesView(toggles: realToggles).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t013-volume-\(tag)", size: PanelView.size, dark: dark,
                view: VolumeGuardView(guardTool: guardTool).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
+               view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,
+               view: UpdatesView(checker: checker).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

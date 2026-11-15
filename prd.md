@@ -49,10 +49,10 @@ Verification commands (from the repo root):
 | T012 | MagSafe light modes | T009 | mode restored to system on tool off | S | pending |
 | T013 | Quick toggles, volume guard, Bluetooth off in sleep | T004 | each toggle reflects real system state after change | S | done: toggles and volume guard built; Bluetooth off in sleep dropped for v1 by owner (2026-11-14); writes never run on the owner Mac |
 | T014 | Fan safe mode (raise above system curve only) | T009 | helper clamps any lower value (test); fans released on off/quit | V2, S | pending |
-| T015 | Flush DNS via helper | T009 | succeeds without a password prompt after helper install | S | pending |
+| T015 | Flush DNS via helper | T009 | succeeds without a password prompt after helper install | S | partial 11-14: built with an interim admin-password dialog (macOS asks, app never sees it); swap to the helper when T009 lands; real flush not run, owner to click it |
 | T016 | Uninstaller + cleanup preview (S12): bundle-ID leftovers, Trash only, Undo toast, refuse system apps | T005 | path allowlist tested; nothing outside user Library and the app is touched | V2, S | pending |
 | T017 | Cache cleaner + disk usage map | T016 | same Trash-only and preview rules; scan cancellable | V2, S | pending |
-| T018 | Update checks: Homebrew outdated (if installed), `softwareupdate --list` | T004 | absent Homebrew shows an empty state, not an error | S | pending |
+| T018 | Update checks: Homebrew outdated (if installed), `softwareupdate --list` | T004 | absent Homebrew shows an empty state, not an error | S | done 11-14: real check matched `brew outdated` (8 formulae) and `softwareupdate --list` (none); only runs on button press |
 | T019 | Clipboard history (search, pins, previews, sensitive types skipped, per-app exclusions), auto-clear, plain paste, clean links | T005 | concealed/transient/auto-generated items never stored (test); poll stops when off | V2, S | pending |
 | T020 | OCR + QR region capture (S13) with toast | T005 | works offline; denied permission shows the fix | S | pending |
 | T021 | Break reminders (S14), cleaning mode (S15), clear notifications | T004 | cleaning mode always shows how to exit; Reduce Motion respected | S | pending |

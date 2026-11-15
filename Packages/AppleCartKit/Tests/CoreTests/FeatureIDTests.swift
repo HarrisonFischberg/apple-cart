@@ -8,7 +8,7 @@ import Testing
         #expect(FeatureID.allCases.allSatisfy { !$0.title.isEmpty })
     }
 
-    @Test func sixteenToolsPicked() {
-        #expect(FeatureID.allCases.count == 16)
+    @Test func seventeenToolsPicked() {
+        #expect(FeatureID.allCases.count == 17)
     }
 }

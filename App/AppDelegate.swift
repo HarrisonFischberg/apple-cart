@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.keepAwake) { [keepAwake] in KeepAwakeTool(keepAwake) }
         r.register(.quickToggles) { QuickTogglesTool() }
         r.register(.volumeGuard) { [volumeGuard] in volumeGuard }
+        r.register(.updates) { OnDemandTool() }
+        r.register(.flushDNS) { OnDemandTool() }
         return r
     }()
     private let battery = BatterySampler()
@@ -24,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickToggles = QuickToggles(prefs: SystemPreferences())
     private let volumeGuard = VolumeGuard(audio: CoreAudioOutput(),
                                           maxPercent: { UserDefaults.standard.object(forKey: "volumeGuard.max") as? Int ?? 70 })
+    private let updateChecker = UpdateChecker(runner: ProcessRunner())
+    private let flushDNS = FlushDNS(runner: AdminPromptRunner())
     private lazy var readoutSettings = ReadoutSettings(store: store)
     private var statusReadout: StatusReadout?
 
@@ -38,13 +42,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard] id, panel in
+                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
             case .keepAwake: AnyView(KeepAwakeView(keepAwake: keepAwake))
             case .quickToggles: AnyView(QuickTogglesView(toggles: quickToggles))
             case .volumeGuard: AnyView(VolumeGuardView(guardTool: volumeGuard))
+            case .updates: AnyView(UpdatesView(checker: updateChecker))
+            case .flushDNS: AnyView(FlushDNSView(tool: flushDNS))
             default: nil
             }
         })

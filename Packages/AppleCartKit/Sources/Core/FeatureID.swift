@@ -2,7 +2,7 @@
 public enum FeatureID: String, CaseIterable, Sendable, Codable {
     case battery, system, keepAwake, clipboard, copyText, readQR, breakReminders
     case uninstaller, cleaner, diskMap, updates, quickToggles, volumeGuard
-    case fanSafeMode, cleaningMode, notifications
+    case fanSafeMode, cleaningMode, notifications, flushDNS
 
     public var title: String {
         switch self {
@@ -22,6 +22,7 @@ public enum FeatureID: String, CaseIterable, Sendable, Codable {
         case .fanSafeMode: "Fan safe mode"
         case .cleaningMode: "Cleaning mode"
         case .notifications: "Notifications"
+        case .flushDNS: "Flush DNS"
         }
     }
 }

@@ -22,3 +22,10 @@ final class QuickTogglesTool: Tool {
     func start() {}
     func stop() {}
 }
+
+/// Update checks and DNS flush run only when the user presses a button.
+@MainActor
+final class OnDemandTool: Tool {
+    func start() {}
+    func stop() {}
+}
