@@ -100,3 +100,4 @@
 - T015: Core/FlushDNS.swift + FlushDNSView. New FeatureID flushDNS (17th tool; count test updated). Interim AdminPromptRunner (osascript admin dialog) because the T009 helper does not exist yet. Real flush not run.
 - 50 tests pass, build clean, previews t015/t018 in docs/design/screenshots/build.
 - Data flow to record: `softwareupdate --list` contacts Apple's update service on user request.
+- 11-14 live check (owner at Mac): Flush DNS showed the macOS password dialog then Done. Updates tile not reported on. No system log entry for the flush.
