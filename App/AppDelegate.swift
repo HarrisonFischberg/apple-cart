@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.quickToggles) { QuickTogglesTool() }
         r.register(.volumeGuard) { [volumeGuard] in volumeGuard }
         r.register(.uninstaller) { OnDemandTool() }
+        r.register(.cleaner) { OnDemandTool() }
+        r.register(.diskMap) { OnDemandTool() }
         r.register(.updates) { OnDemandTool() }
         r.register(.flushDNS) { OnDemandTool() }
         return r
@@ -30,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker(runner: ProcessRunner())
     private let uninstaller = UninstallerModel(running: WorkspaceRunningApps(),
                                                 hasFullDiskAccess: { await SystemPermissionChecker().status(of: .fullDiskAccess) == .granted })
+    private let cleaner = CleanerModel()
+    private let diskMap = DiskMapModel()
     private let flushDNS = FlushDNS(runner: AdminPromptRunner())
     private lazy var readoutSettings = ReadoutSettings(store: store)
     private var statusReadout: StatusReadout?
@@ -45,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller] id, panel in
+                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
@@ -55,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .updates: AnyView(UpdatesView(checker: updateChecker))
             case .flushDNS: AnyView(FlushDNSView(tool: flushDNS))
             case .uninstaller: AnyView(UninstallerView(model: uninstaller, openFullDiskAccess: { NSWorkspace.shared.open(Permission.fullDiskAccess.settingsURL) }))
+            case .cleaner: AnyView(CleanerView(model: cleaner))
+            case .diskMap: AnyView(DiskMapView(model: diskMap))
             default: nil
             }
         })

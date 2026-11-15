@@ -97,12 +97,16 @@ MainActor.assumeIsolated {
     @MainActor final class NoApps: RunningApps { func isRunning(_ b: String) -> Bool { false }; func quit(_ b: String) {} }
     let unin = UninstallerModel(running: NoApps(), hasFullDiskAccess: { false })
     Task { await unin.choose(URL(fileURLWithPath: "/Applications/Itsycal.app")) } // read-only scan, nothing is moved
+    let cleaner = CleanerModel(); cleaner.scan() // read-only scan, nothing is moved
+    let diskMap = DiskMapModel(); diskMap.scan()
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
     Task { await permModel.refresh() }
-    RunLoop.main.run(until: Date(timeIntervalSinceNow: 8))
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 45))
     if case .preview(let pl) = unin.phase { print("UNINSTALL plan:", pl.items.map { $0.url.path + " " + String($0.bytes) }.joined(separator: " | ")) } else { print("UNINSTALL phase", unin.phase) }
+    if case .preview(let ci) = cleaner.phase { print("CLEANER", ci.count, "items", ci.reduce(Int64(0)) { $0 + $1.bytes }, "bytes") } else { print("CLEANER phase", cleaner.phase) }
+    print("DISKMAP scanning=\(diskMap.scanning)", diskMap.entries.prefix(4).map { $0.url.lastPathComponent + " " + String($0.bytes) })
     print("UPDATES brew=\(checker.homebrew) macOS=\(checker.macOS)")
     for dark in [false, true] {
         let tag = dark ? "dark" : "light"
@@ -123,6 +127,10 @@ MainActor.assumeIsolated {
                view: VolumeGuardView(guardTool: guardTool).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t016-uninstaller-\(tag)", size: PanelView.size, dark: dark,
                view: UninstallerView(model: unin, openFullDiskAccess: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t017-cleaner-\(tag)", size: PanelView.size, dark: dark,
+               view: CleanerView(model: cleaner).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+        render(name: "t017-diskmap-\(tag)", size: PanelView.size, dark: dark,
+               view: DiskMapView(model: diskMap).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
                view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,

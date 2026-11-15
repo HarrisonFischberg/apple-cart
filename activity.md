@@ -108,3 +108,8 @@
 - Refuses com.apple.* apps, Apple Cart itself, apps outside /Applications and ~/Applications. Running app must be quit first. App is trashed first; if that fails its files are left alone. Undo stays until next action.
 - 56 tests pass, build clean. Previews t016. Fixed a stacked-label layout bug seen in the first render.
 - Not done: a real Trash move, drag-drop, the file chooser, and the Full Disk Access prompt flow were not exercised on the Mac.
+
+## 2026-11-14 T017 cleaner + disk map
+- Core/Cleaner.swift (CleanerPolicy, CleanerModel, DiskMapModel), UI/CleanerView.swift (CleanerView, DiskMapView). Cleaner covers direct children of ~/Library/Caches, ~/Library/Logs, Xcode DerivedData; skips com.apple.* caches; preview, Trash, Undo (reuses Trasher/UninstallReport). Disk map is read-only (drill down, Show in Finder), progressive and stoppable.
+- Bug fixed: detached work ignored cancellation; now forwarded with withTaskCancellationHandler (test covers cancel).
+- Real read-only scans: cleaner 370 items, matches du; disk map top level matched. Nothing moved. 60 tests, build clean.

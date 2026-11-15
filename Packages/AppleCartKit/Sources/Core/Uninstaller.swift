@@ -88,11 +88,12 @@ public struct UninstallPolicy: Sendable {
 }
 
 public enum DiskSize {
-    public static func bytes(at url: URL) -> Int64 {
+    public static func bytes(at url: URL, isCancelled: () -> Bool = { false }) -> Int64 {
         let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
         var total = Int64((try? url.resourceValues(forKeys: keys).totalFileAllocatedSize) ?? 0)
         let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys))
         while let f = e?.nextObject() as? URL {
+            if isCancelled() { break }
             if let v = try? f.resourceValues(forKeys: keys), v.isRegularFile == true { total += Int64(v.totalFileAllocatedSize ?? 0) }
         }
         return total
