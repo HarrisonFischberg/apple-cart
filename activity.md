@@ -101,3 +101,4 @@
 - 50 tests pass, build clean, previews t015/t018 in docs/design/screenshots/build.
 - Data flow to record: `softwareupdate --list` contacts Apple's update service on user request.
 - 11-14 live check (owner at Mac): Flush DNS showed the macOS password dialog then Done. Updates tile not reported on. No system log entry for the flush.
+- 11-14 live check: owner's screenshot of the Updates tile in the running app (dark mode, checked 17:35) shows macOS none and the same 8 Homebrew formulae.
