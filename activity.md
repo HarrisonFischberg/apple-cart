@@ -121,3 +121,11 @@
 - Fixed a layout bug: switch rows were centered; now label left, switch right (also fixed in Quick toggles).
 - 67 tests, build clean. NOT run live: banners, event tap, overlay. Risk to remember when testing: cleaning mode locks the keyboard; the way out is Esc held 3 s or the timer (max 5 min).
 - Owner decision 2026-11-14: Clear all notifications dropped for v1. T021 marked done without it.
+
+## 2026-11-14 T019 clipboard history
+- Core/Clipboard.swift (ClipboardHistory tool, LinkCleaner, PasteboardAccess), UI/ClipboardView.swift, App/ClipboardSupport.swift (NSPasteboard access, ⌘V via CGEvent, ⌃⌥⌘V plain-paste hotkey via Carbon).
+- Stores text, links and images (images as PNG files). Never stores items marked concealed/transient/auto-generated or from 1Password; per-app "never store"; 7-day default retention (1-90), pinned kept, 200 unpinned cap, 100k-char text cap, 10 MB image cap. Search, pin, delete with Undo, paste, paste as plain text, tracking-parameter stripping (off by default), clear after a minute and on lock (off by default).
+- History is a JSON file in Application Support (blueprint said SwiftData; JSON is smaller and has no dependency).
+- Source app is the frontmost app when the change is noticed (up to 0.5 s late), so it can be wrong right after an app switch.
+- Not built: "offer to clear when the tool is turned off" (use Clear history for now).
+- 78 tests, build clean. NOT run live: pasteboard watching, pasting, shortcut, lock clear.

@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.quickToggles) { QuickTogglesTool() }
         r.register(.volumeGuard) { [volumeGuard] in volumeGuard }
         r.register(.uninstaller) { OnDemandTool() }
+        r.register(.clipboard) { [clipboard, plainPasteKey] in ClipboardTool(clipboard, hotKey: plainPasteKey) }
         r.register(.breakReminders) { [breaks] in breaks }
         r.register(.cleaningMode) { OnDemandTool() }
         r.register(.cleaner) { OnDemandTool() }
@@ -34,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker(runner: ProcessRunner())
     private let uninstaller = UninstallerModel(running: WorkspaceRunningApps(),
                                                 hasFullDiskAccess: { await SystemPermissionChecker().status(of: .fullDiskAccess) == .granted })
+    private let plainPasteKey = PlainPasteHotKey()
+    private lazy var clipboard = ClipboardHistory(
+        pasteboard: SystemPasteboard(),
+        folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart/Clipboard"))
     private let breakBanners = BreakBanners()
     private lazy var breaks = BreakReminders(notifier: breakBanners)
     private let cleaningMode = CleaningMode(blocker: EventTapBlocker())
@@ -55,6 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.pause() } }
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.resume() } }
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [clipboard] _ in
+            MainActor.assumeIsolated { clipboard.screenLocked() }
+        }
         cleaningMode.onChange = { [weak self] on in
             guard let self else { return }
             if on { self.panelController?.close(); self.cleaningOverlay.show(mode: self.cleaningMode) } else { self.cleaningOverlay.hide() }
@@ -63,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          toolView: { [battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode] id, panel in
+                                          toolView: { [weak self, battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
@@ -77,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .diskMap: AnyView(DiskMapView(model: diskMap))
             case .breakReminders: AnyView(BreaksView(reminders: breaks))
             case .cleaningMode: AnyView(CleaningModeView(mode: cleaningMode, openAccessibility: { NSWorkspace.shared.open(Permission.accessibility.settingsURL) }))
+            case .clipboard: AnyView(ClipboardView(history: clipboard, close: { [weak self] in self?.panelController?.close() }))
             default: nil
             }
         })

@@ -106,6 +106,17 @@ MainActor.assumeIsolated {
     let blocker = PrevBlocker(); let cleaning = CleaningMode(blocker: blocker)
     cleaning.start(seconds: 120) // no Accessibility in preview: shows the permission message
     let cleaningLive = CleaningMode(blocker: { let b = PrevBlocker(); b.canBlock = true; return b }()); cleaningLive.start(seconds: 120)
+    @MainActor final class PrevBoard: PasteboardAccess {
+        var changeCount = 1; var text: String?
+        func snapshot() -> PasteboardSnapshot { .init(changeCount: changeCount, types: [], text: text, imageData: nil, sourceBundleID: "com.example.notes") }
+        func write(text: String) { self.text = text; changeCount += 1 }
+        func write(imageData: Data) {}; func clear() {}; func paste() -> Bool { true }
+    }
+    let board = PrevBoard()
+    let clipDir = FileManager.default.temporaryDirectory.appendingPathComponent("prev-clip-" + UUID().uuidString)
+    let clip = ClipboardHistory(pasteboard: board, folder: clipDir, defaults: UserDefaults(suiteName: "preview-clip-" + UUID().uuidString)!)
+    for t in ["https://developer.apple.com/documentation/swiftui", "Meeting notes: ship the uninstaller preview first, then the cleaner.", "brew upgrade gh gradle helm", "+1 (800) 626-8695"] { board.text = t; board.changeCount += 1; clip.check() }
+    clip.togglePin(clip.items.last!)
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
@@ -143,6 +154,8 @@ MainActor.assumeIsolated {
         render(name: "t021-cleaning-\(tag)", size: PanelView.size, dark: dark,
                view: CleaningModeView(mode: cleaning, openAccessibility: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t021-overlay-\(tag)", size: NSSize(width: 900, height: 560), dark: dark, view: CleaningOverlayView(mode: cleaningLive), outDir: out)
+        render(name: "t019-clipboard-\(tag)", size: PanelView.size, dark: dark,
+               view: ClipboardView(history: clip, close: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
                view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,

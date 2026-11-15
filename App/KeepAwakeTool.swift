@@ -36,3 +36,12 @@ final class WorkspaceRunningApps: RunningApps {
     func isRunning(_ bundleID: String) -> Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty }
     func quit(_ bundleID: String) { NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).forEach { $0.terminate() } }
 }
+
+/// Starts the clipboard poll and the plain-paste shortcut together; stopping removes both.
+@MainActor
+final class ClipboardTool: Tool {
+    private let history: ClipboardHistory, hotKey: PlainPasteHotKey
+    init(_ history: ClipboardHistory, hotKey: PlainPasteHotKey) { self.history = history; self.hotKey = hotKey }
+    func start() { history.start(); hotKey.register { [history] in if !history.pastePlainCurrent() { NSSound.beep() } } }
+    func stop() { history.stop(); hotKey.unregister() }
+}
