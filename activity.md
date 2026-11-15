@@ -133,5 +133,5 @@
 ## 2026-11-14 T020 copy text + read QR
 - Core/ScreenReading.swift (ScreenReader flow, VisionRecognizer, protocols), UI ScreenReadView (in ClipboardView.swift), App/ScreenSupport.swift (RegionPicker overlay, ScreenCaptureKit ScreenCapturer, Toast). Hotkeys now go through one HotKeyCenter (fixes the earlier single handler that fired on any shortcut): ⌃⌥⌘V plain paste, ⌃⌥⌘T copy text, ⌃⌥⌘Q read QR; each exists only while its tool is on.
 - Image is captured in memory only and never saved. QR results are copied, never opened. Nothing is sent anywhere (Vision is on-device).
-- Vision tests make the suite take about 28 s.
+- First run of the Vision tests took about 28 s (model load); later runs 0.6 s.
 - NOT run live: area picker, capture, permission prompt, toast, shortcuts.
