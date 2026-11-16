@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BatteryBadge: Equatable, Sendable { case none, plug, bolt, paused }
+public enum BatteryBadge: Equatable, Sendable { case none, plug, bolt, paused, discharge }
 
 /// What the menu bar battery glyph shows: fill level plus one badge inside the outline.
 public struct BatteryGlyph: Equatable, Sendable {
@@ -15,7 +15,7 @@ extension MenuBarReadout {
     /// No reading gives an empty outline: nothing is invented.
     public static func glyph(for r: BatteryReading?, chargeHeld: Bool = false) -> BatteryGlyph {
         guard let r else { return BatteryGlyph(level: 0, badge: .none) }
-        let badge: BatteryBadge = !r.isPluggedIn ? .none : chargeHeld ? .paused : r.isCharging ? .bolt : .plug
+        let badge: BatteryBadge = !r.isPluggedIn ? .discharge : chargeHeld ? .paused : r.isCharging ? .bolt : .plug
         return BatteryGlyph(level: Double(min(max(r.percent, 0), 100)) / 100, badge: badge)
     }
 }

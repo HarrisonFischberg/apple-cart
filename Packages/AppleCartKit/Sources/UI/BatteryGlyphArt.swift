@@ -17,6 +17,8 @@ enum BadgeShape {
             p.addLines(between: [CGPoint(x: 6.0, y: 10), CGPoint(x: 2.4, y: 5.4), CGPoint(x: 4.6, y: 5.4),
                                  CGPoint(x: 4.0, y: 0), CGPoint(x: 7.6, y: 5), CGPoint(x: 5.4, y: 5)])
             p.closeSubpath()
+        case .discharge: // a plain dash: running on the battery
+            p.addRoundedRect(in: CGRect(x: 1.6, y: 4, width: 6.8, height: 2), cornerWidth: 1, cornerHeight: 1)
         case .paused:
             p.addRect(CGRect(x: 2, y: 1, width: 2.2, height: 8))
             p.addRect(CGRect(x: 5.8, y: 1, width: 2.2, height: 8))
