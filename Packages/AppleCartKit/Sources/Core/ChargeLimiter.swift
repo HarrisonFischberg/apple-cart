@@ -17,10 +17,23 @@ public struct ChargeLimitState: Equatable, Sendable {
     public var waitingForWake = false
     /// The limit the runner is working towards (100 while Top Up is on).
     public var target = 100
+    /// Lower edge of the sailing range while a confirmed hold sails; nil without Sailing.
+    public var sailFloor: Int?
+    /// The confirmed cut is a heat pause (the limit alone would let it charge); the battery temperature that caused it.
+    public var heatPausedAtC: Double?
 
     public init() {}
 
     public static let notResumedText = "Charging has not resumed. Unplug and replug the charger."
+
+    /// The confirmed hold in words, with its reason: heat, discharge, sailing range or the limit. Nil when nothing is held.
+    public var holdText: String? {
+        guard let n = holdingAt else { return nil }
+        if let t = heatPausedAtC { return "Paused: battery is \(SystemText.temperature(t))" }
+        if discharging { return "Discharging to \(n)%" }
+        if let f = sailFloor, f < n { return "Sailing \(f)–\(n)%" }
+        return "Holding at \(n)%"
+    }
 
     public var reasonText: String {
         if chargingNotResumed { return Self.notResumedText }
@@ -31,7 +44,7 @@ public struct ChargeLimitState: Equatable, Sendable {
         case .unreachable: return "The charging helper is not answering. Repair it in Settings."
         case .unsupported: return "Not supported on this Mac."
         case .ready:
-            if let n = holdingAt { return discharging ? "Discharging to \(n)%" : "Holding at \(n)%" }
+            if let h = holdText { return h }
             if waitingForWake { return "Waiting for the Mac to wake." }
             if commandFailed { return "Could not reach the charging helper. Trying again." }
             return "Charging up to \(target)%"
@@ -83,6 +96,7 @@ public final class ChargeLimiter {
     @ObservationIgnored private var lastReading: BatteryReading?
     @ObservationIgnored private var busy = false
     @ObservationIgnored private var again = false
+    @ObservationIgnored private var heat = HeatGuard()
 
     public init(settings: ChargeLimitSettings, controller: ChargeController, now: @escaping () -> Date = Date.init) {
         self.settings = settings
@@ -92,7 +106,7 @@ public final class ChargeLimiter {
 
     /// Whether the app should keep the battery sampler running for this runner.
     public var wantsReadings: Bool {
-        toolEnabled && (settings.limit < 100 || settings.topUpActive || lastCut != nil || cutMayBeLive || restoredAt != nil)
+        toolEnabled && (settings.limit < 100 || settings.topUpActive || settings.heatProtection || lastCut != nil || cutMayBeLive || restoredAt != nil)
     }
 
     private var cutMayBeLive: Bool { maybeCutUntil.map { now() < $0 } ?? false }
@@ -179,9 +193,14 @@ public final class ChargeLimiter {
         var decision = ChargePolicy.decide(reading: seen, settings: settings)
         // Charging takes a while to start after a restore; "not charging" in that wait must not re-cut below the limit.
         if case .holdCharging = decision, restoredAt != nil, let seen, seen.limitLevel < settings.effectiveLimit { decision = .allowCharging }
+        let hot = heat.update(temperatureC: seen?.temperatureC, maxC: settings.heatMaxC, enabled: settings.heatProtection,
+                              pluggedIn: seen?.isPluggedIn ?? false, now: now())
+        let limitDecision = decision
+        decision = ChargePolicy.applyingHeat(decision, paused: hot, reading: seen, limit: settings.effectiveLimit)
+        let heatC = decision != limitDecision ? seen?.temperatureC : nil
         switch decision {
         case .holdCharging(let at), .discharge(to: let at):
-            await hold(decision, at: at, reading: r)
+            await hold(decision, at: at, reading: r, heatC: heatC)
         case .allowCharging:
             await allow(r)
         }
@@ -219,16 +238,17 @@ public final class ChargeLimiter {
         return r
     }
 
-    private func hold(_ decision: ChargeDecision, at: Int, reading r: BatteryReading?) async {
+    private func hold(_ decision: ChargeDecision, at: Int, reading r: BatteryReading?, heatC: Double?) async {
         // On this Mac hold and discharge are the same adapter cut; only the wording differs.
         let discharging = decision != .holdCharging(at: at)
+        let sailFloor = settings.effectiveSailing ? settings.sailFloor : nil
         guard let r, abs(now().timeIntervalSince(r.date)) <= Self.freshReading else {
             // Never start or renew a cut from a stale reading; let the lease lapse instead.
             if let last = lastCut, now().timeIntervalSince(last) >= Self.leaseSeconds { lastCut = nil; state.holdingAt = nil }
             return
         }
         if let last = lastCut, now().timeIntervalSince(last) < Self.renewEvery {
-            state.holdingAt = at; state.discharging = discharging; return
+            state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC; return
         }
         let wasCut = lastCut != nil
         maybeCutUntil = now().addingTimeInterval(Self.leaseSeconds)
@@ -236,7 +256,8 @@ public final class ChargeLimiter {
         guard toolEnabled else { if await controller.resetAll() == .applied { maybeCutUntil = nil }; return }
         if result == .applied {
             lastCut = now(); restoredAt = nil
-            state.holdingAt = at; state.discharging = discharging; state.chargingNotResumed = false
+            state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC
+            state.chargingNotResumed = false
             state.commandFailed = false; state.waitingForWake = false
         } else if result == .sleeping {
             // Refused before anything was written: the helper restored for sleep and blocks cuts until power-on.

@@ -77,7 +77,7 @@ private final class Rig {
         await rig.feed(reading(80), after: 5)
         await rig.feed(reading(80), after: 10)
         #expect(rig.controller.calls.isEmpty)
-        await rig.feed(reading(79), after: 15) // 30 s since the cut
+        await rig.feed(reading(80), after: 15) // 30 s since the cut
         #expect(rig.controller.calls == [.hold(80)])
         #expect(rig.limiter.state.holdingAt == 80)
     }
@@ -98,6 +98,7 @@ private final class Rig {
 
     @Test func inTheBandKeepsHoldingUntilLimitMinusThree() async {
         let rig = Rig()
+        rig.settings.setSailing(true); rig.settings.setSailingDifference(3) // band 3 (was the default before 2026-11-15)
         await rig.holding()
         await rig.feed(reading(78, plugged: false), after: 30)
         #expect(rig.controller.calls == [.hold(80)])
@@ -460,4 +461,94 @@ private final class Rig {
         #expect(await !c.isAvailable)
         #expect(await c.apply(.holdCharging(at: 80)) == .unavailable)
     }
+
+    @Test func sailingHoldSaysTheRangeAndPlainHoldSaysTheLevel() async {
+        let rig = Rig()
+        await rig.holding()
+        #expect(rig.limiter.state.reasonText == "Holding at 80%")
+        rig.settings.setSailing(true); rig.settings.setSailingDifference(5)
+        await rig.feed(reading(80), after: 30)
+        #expect(rig.limiter.state.reasonText == "Sailing 75–80%")
+        rig.settings.setTopUp(true) // Sailing is off during Top Up; at 80 it now charges
+        await rig.feed(reading(80), after: 30)
+        #expect(rig.limiter.state.holdingAt == nil)
+    }
+
+    @Test func heatPausesChargingBelowTheLimitWithTheSameCutAndSaysWhy() async {
+        let rig = Rig()
+        rig.settings.setHeatProtection(true); rig.settings.setHeatMaxC(35)
+        await rig.on()
+        await rig.feed(warm(60, 36))
+        #expect(rig.controller.calls == [.hold(80)])
+        #expect(rig.limiter.state.heatPausedAtC == 36)
+        #expect(rig.limiter.state.reasonText.hasPrefix("Paused: battery is "))
+        rig.controller.clear()
+        await rig.feed(warm(60, 34), after: 120)  // cooled, but the 5 minute pause is not over: renewed, still paused
+        #expect(rig.controller.calls == [.hold(80)])
+        rig.controller.clear()
+        await rig.feed(warm(60, 34), after: 181)  // past 5 minutes and cool: charging resumes
+        #expect(rig.controller.calls == [.allow])
+        #expect(rig.limiter.state.holdingAt == nil)
+        rig.controller.clear()
+        await rig.feed(warm(60, 37, charging: true), after: 30) // hot again inside the 5 minute minimum charge: no cut
+        await rig.feed(warm(61, 37, charging: true), after: 240)
+        #expect(rig.controller.calls.isEmpty)
+        #expect(rig.limiter.state.reasonText == "Charging up to 80%")
+        await rig.feed(warm(62, 37, charging: true), after: 31) // minimum charge over and still hot: paused again
+        #expect(rig.controller.calls == [.hold(80)])
+    }
+
+    @Test func heatStaysPausedAnotherFiveMinutesIfStillHot() async {
+        let rig = Rig()
+        rig.settings.setHeatProtection(true)
+        await rig.on()
+        await rig.feed(warm(60, 36))
+        for _ in 0..<10 { await rig.feed(warm(60, 36), after: 30) } // 300 s: still hot, so a fresh 5 minutes
+        rig.controller.clear()
+        for _ in 0..<9 { await rig.feed(warm(60, 34), after: 30) }  // cool now, but inside the second pause
+        #expect(!rig.controller.calls.contains(.allow))
+        #expect(rig.limiter.state.heatPausedAtC != nil)
+        await rig.feed(warm(60, 34), after: 31)
+        #expect(rig.controller.calls.last == .allow)
+    }
+
+    @Test func heatAppliesDuringTopUpButNotWhenOffUnknownOrAtTheFloor() async {
+        let rig = Rig()
+        rig.settings.setHeatProtection(true)
+        rig.settings.setTopUp(true)
+        await rig.on()
+        await rig.feed(warm(90, 36))
+        #expect(rig.controller.calls == [.hold(100)]) // protects the battery, also while topping up
+        #expect(rig.limiter.state.reasonText.hasPrefix("Paused: battery is "))
+
+        let off = Rig()
+        await off.on()
+        await off.feed(warm(60, 44)) // setting off
+        let unknown = Rig()
+        unknown.settings.setHeatProtection(true)
+        await unknown.on()
+        await unknown.feed(reading(60)) // no temperature
+        let floor = Rig()
+        floor.settings.setHeatProtection(true)
+        await floor.on()
+        await floor.feed(warm(ChargePolicy.emergencyFloor, 40))
+        #expect(off.controller.calls.isEmpty && unknown.controller.calls.isEmpty && floor.controller.calls.isEmpty)
+    }
+
+    @Test func heatAtTheLimitKeepsTheLimitWordingAndWantsReadingsAtOneHundred() async {
+        let rig = Rig()
+        rig.settings.setHeatProtection(true)
+        await rig.on()
+        await rig.feed(warm(80, 36)) // the limit holds anyway; heat did not change the decision
+        #expect(rig.limiter.state.reasonText == "Holding at 80%")
+        let full = Rig(limit: 100)
+        await full.on()
+        #expect(!full.limiter.wantsReadings)
+        full.settings.setHeatProtection(true)
+        #expect(full.limiter.wantsReadings)
+    }
+}
+
+private func warm(_ percent: Int, _ c: Double, charging: Bool = false) -> BatteryReading {
+    BatteryReading(properties: ["CurrentCapacity": percent, "ExternalConnected": 1, "IsCharging": charging ? 1 : 0, "Temperature": Int(c * 100)])!
 }

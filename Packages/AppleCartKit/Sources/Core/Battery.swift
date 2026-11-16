@@ -41,7 +41,8 @@ public struct BatteryReading: Sendable, Equatable {
     public var isPluggedIn: Bool
     public var isCharging: Bool
     public var cycleCount: Int?
-    public var temperatureC: Double?     // nil when the OS does not expose it
+    public var temperatureC: Double?     // nil when neither the battery entry nor the SMC gives it
+    public var magSafeLight: MagSafeLight = .notAvailable // read only, from the SMC (readWithSensors)
     public var capacityVsDesign: Double? // measured full charge / design capacity, 0...1
     public var batteryWatts: Double      // + charging, - discharging
     public var systemWatts: Double?      // what the Mac is using
@@ -101,6 +102,16 @@ public enum BatteryReader {
         guard IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
               let dict = props?.takeRetainedValue() as? [String: Any] else { return nil }
         return BatteryReading(properties: dict)
+    }
+
+    /// `read()` plus the SMC battery temperature (when the battery entry has none, as on Apple silicon) and the MagSafe light.
+    /// The sampler uses it, and it runs only while something on the Battery tool shows or uses readings.
+    public static func readWithSensors() -> BatteryReading? {
+        guard var r = read() else { return nil }
+        let s = BatterySensors.read()
+        if r.temperatureC == nil { r.temperatureC = s.temperatureC }
+        r.magSafeLight = s.light
+        return r
     }
 }
 
@@ -178,7 +189,7 @@ public final class BatterySampler {
     @ObservationIgnored public var interval: Duration
     @ObservationIgnored private let read: @Sendable () -> BatteryReading?
 
-    public init(interval: Duration = .seconds(5), read: @escaping @Sendable () -> BatteryReading? = BatteryReader.read) {
+    public init(interval: Duration = .seconds(5), read: @escaping @Sendable () -> BatteryReading? = BatteryReader.readWithSensors) {
         self.interval = interval
         self.read = read
     }

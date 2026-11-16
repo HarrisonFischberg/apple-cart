@@ -56,7 +56,13 @@ public struct BatteryView: View {
 
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
         switch w {
-        case .charge: VStack(alignment: .leading, spacing: 14) { summary(r); chargeBar(r) }
+        case .charge:
+            VStack(alignment: .leading, spacing: 14) {
+                summary(r); chargeBar(r)
+                if let note = MagSafeLight.note(light: r.magSafeLight, pluggedIn: r.isPluggedIn, held: limiter?.state.holdingAt != nil, charging: r.isCharging, percent: r.percent) {
+                    Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
         case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt, resuming: limiter?.state.resuming == true)
         case .details: details(r)
         case .history: graph
@@ -92,8 +98,7 @@ public struct BatteryView: View {
     }
 
     private func summary(_ r: BatteryReading) -> some View {
-        let held = limiter?.state.holdingAt
-        let floor = chargeLimit.map { min($0.sailFloor, held ?? $0.limit) } // the battery drifts down to here before charging resumes
+        let held = limiter?.state.holdText
         return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Battery").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
@@ -110,7 +115,7 @@ public struct BatteryView: View {
                 HStack(spacing: 7) {
                     Circle().fill(dot(r)).frame(width: 8, height: 8).shadow(color: dot(r).opacity(0.8), radius: 4).accessibilityHidden(true)
                     if let held {
-                        Text("Holding \(floor ?? held)–\(held)%").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.amberText)
+                        Text(held).font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.amberText)
                             .padding(.horizontal, 10).frame(height: 24)
                             .background(Palette.amberFill, in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.amber.opacity(0.55)))
@@ -177,7 +182,8 @@ public struct BatteryView: View {
             row("True charge", r.measuredPercent.map { String(format: "%.1f%%", $0) })
             row("Capacity vs new", r.capacityVsDesign.map { String(format: "%.0f%%", $0 * 100) })
             row("Cycles", r.cycleCount.map(String.init))
-            row("Temperature", r.temperatureC.map { String(format: "%.1f °C", $0) } ?? "Not provided by macOS")
+            row("Temperature", r.temperatureC.map { SystemText.temperature($0) } ?? "Not reported on this Mac")
+            if r.magSafeLight != .notAvailable { magSafeRow(r) }
             row("Charger", r.isPluggedIn ? r.adapterWatts.map { "\($0) W" } ?? "Connected" : "Not connected")
             row("Time left", r.minutesRemaining.map { "\($0 / 60) h \($0 % 60) min" })
         }
@@ -223,13 +229,28 @@ public struct BatteryView: View {
 
     private func state(_ r: BatteryReading) -> String {
         // Only the runner's confirmed hold says "Paused"; while it holds macOS reports battery power.
-        if let n = limiter?.state.holdingAt { return "Holding \(min(chargeLimit?.sailFloor ?? n, n))–\(n)%" }
+        if let h = limiter?.state.holdText { return h }
         if limiter?.state.resuming == true, !r.isCharging { return "Waiting to charge" }
         return r.stateText
     }
 
     private func flow(_ r: BatteryReading) -> String {
         abs(r.batteryWatts) < 0.05 ? "Battery idle" : String(format: "%@%.1f W %@", r.batteryWatts > 0 ? "+" : "−", abs(r.batteryWatts), r.batteryWatts > 0 ? "into battery" : "from battery")
+    }
+
+    /// What the MagSafe light shows (read only; it follows macOS, Apple Cart does not set it).
+    private func magSafeRow(_ r: BatteryReading) -> some View {
+        let text = r.magSafeLight.text(pluggedIn: r.isPluggedIn)
+        let color: Color? = !r.isPluggedIn ? nil : r.magSafeLight == .green ? Palette.green : r.magSafeLight == .orange ? .orange : nil
+        return HStack {
+            Text("MagSafe light"); Spacer()
+            if let color { Circle().fill(color).frame(width: 8, height: 8).accessibilityHidden(true) }
+            Text(text).foregroundStyle(Palette.secondary)
+        }
+        .font(.callout)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("MagSafe light")
+        .accessibilityValue(text)
     }
 
     private func row(_ title: String, _ value: String?) -> some View {
@@ -250,7 +271,7 @@ private struct LimitHandle: View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             let x = { (p: Int) in w * CGFloat(p) / 100 }
-            if settings.limit < 100 {
+            if settings.limit < 100, settings.effectiveSailing {
                 Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h - 3)) }
                     .stroke(Color.primary.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .accessibilityHidden(true)

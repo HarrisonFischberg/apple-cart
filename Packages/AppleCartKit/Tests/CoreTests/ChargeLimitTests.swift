@@ -23,11 +23,22 @@ private func settings(limit: Int = 100) -> ChargeLimitSettings {
 
     @Test func allowsWellBelowTheLimit() {
         #expect(ChargePolicy.decide(reading: reading(60), settings: settings(limit: 80)) == .allowCharging)
-        #expect(ChargePolicy.decide(reading: reading(77), settings: settings(limit: 80)) == .allowCharging) // limit - 3
+        #expect(ChargePolicy.decide(reading: reading(77), settings: settings(limit: 80)) == .allowCharging)
+        #expect(ChargePolicy.decide(reading: reading(79), settings: settings(limit: 80)) == .allowCharging) // limit - 1
+    }
+
+    @Test func withoutSailingTheLevelIsHeldAtTheLimitNotARange() {
+        let s = settings(limit: 80)
+        #expect(ChargePolicy.hysteresis == 1 && s.resumeBand == 1)
+        #expect(ChargePolicy.decide(reading: reading(80), settings: s) == .holdCharging(at: 80))
+        #expect(ChargePolicy.decide(reading: reading(79, charging: false), settings: s) == .allowCharging) // resumes 1 point below
+        #expect(ChargePolicy.decide(reading: reading(79, charging: true), settings: s) == .allowCharging)  // charges back up to 80
+        #expect(ChargePolicy.decide(reading: reading(80, charging: true), settings: s) == .holdCharging(at: 80))
     }
 
     @Test func hysteresisKeepsTheCurrentStateInTheBand() {
         let s = settings(limit: 80)
+        s.setSailing(true); s.setSailingDifference(3) // band 3 (was the default before 2026-11-15)
         #expect(ChargePolicy.decide(reading: reading(78, charging: true), settings: s) == .allowCharging)
         #expect(ChargePolicy.decide(reading: reading(78, charging: false), settings: s) == .holdCharging(at: 80))
     }
@@ -100,7 +111,7 @@ private func settings(limit: Int = 100) -> ChargeLimitSettings {
 
     @Test func sailingWidensTheResumeBand() {
         let s = settings(limit: 80)
-        #expect(s.resumeBand == 3 && s.sailFloor == 77)
+        #expect(s.resumeBand == 1 && s.sailFloor == 79)
         s.setSailing(true); s.setSailingDifference(10)
         #expect(s.sailFloor == 70)
         #expect(ChargePolicy.decide(reading: reading(75), settings: s) == .holdCharging(at: 80)) // in the sail range, not charging
@@ -108,6 +119,7 @@ private func settings(limit: Int = 100) -> ChargeLimitSettings {
         #expect(ChargePolicy.decide(reading: reading(70), settings: s) == .allowCharging)
         s.setSailingDifference(99); #expect(s.sailingDifference == 15)
         s.setSailingDifference(-1); #expect(s.sailingDifference == 0)
+        #expect(s.resumeBand == 1) // a difference of 0 still keeps the 1 point edge band
         #expect(ChargePolicy.decide(reading: reading(79), settings: s) == .allowCharging) // difference 0: charge right below the limit
     }
 
@@ -126,5 +138,27 @@ private func settings(limit: Int = 100) -> ChargeLimitSettings {
         let s = settings()
         s.setHeatMaxC(60); #expect(s.heatMaxC == 45)
         s.setHeatMaxC(10); #expect(s.heatMaxC == 30)
+    }
+
+    @Test func sailingIsOffWhileTopUpRuns() {
+        let s = settings(limit: 80)
+        s.setSailing(true); s.setSailingDifference(10)
+        #expect(s.effectiveSailing && s.resumeBand == 10)
+        s.setTopUp(true)
+        #expect(!s.effectiveSailing && s.resumeBand == ChargePolicy.hysteresis)
+        #expect(ChargePolicy.decide(reading: reading(98), settings: s) == .allowCharging)
+        #expect(ChargePolicy.decide(reading: reading(99, charging: false), settings: s) == .allowCharging) // plain 1 point band at 100
+        s.setTopUp(false)
+        #expect(s.effectiveSailing && s.sailFloor == 70)
+    }
+
+    @Test func heatTurnsChargeIntoAHoldButNeverOnBatteryOrAtTheFloor() {
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: true, reading: reading(50), limit: 80) == .holdCharging(at: 80))
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: true, reading: reading(50), limit: 100) == .holdCharging(at: 100)) // Top Up too
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: false, reading: reading(50), limit: 80) == .allowCharging)
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: true, reading: reading(50, plugged: false), limit: 80) == .allowCharging)
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: true, reading: reading(ChargePolicy.emergencyFloor), limit: 80) == .allowCharging)
+        #expect(ChargePolicy.applyingHeat(.allowCharging, paused: true, reading: nil, limit: 80) == .allowCharging)
+        #expect(ChargePolicy.applyingHeat(.discharge(to: 80), paused: true, reading: reading(90), limit: 80) == .discharge(to: 80))
     }
 }

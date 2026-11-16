@@ -133,7 +133,7 @@ struct ToolSettingsPage: View {
     }
 }
 
-/// Charge Control: typed limit, below-80 rule, Automatic Discharge, Sailing Mode and Heat Protection (stored only).
+/// Charge Control: typed limit, below-80 rule, Automatic Discharge, Sailing Mode, Heat Protection and the MagSafe light (read only).
 struct ChargeControlOptions: View {
     let settings: ChargeLimitSettings
     let limiter: ChargeLimiter?
@@ -158,12 +158,18 @@ struct ChargeControlOptions: View {
                     .toggleStyle(.switch).labelsHidden()
             }
             if settings.sailing {
-                SettingsRow("Difference", detail: "Will sail to \(settings.sailFloor)%") {
+                SettingsRow("Difference", detail: settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(settings.sailFloor)%") {
                     Stepper("\(settings.sailingDifference) %", value: Binding(get: { settings.sailingDifference }, set: { settings.setSailingDifference($0); changed() }),
                             in: ChargeLimitSettings.sailingRange).fixedSize()
                 }
             }
             heat
+            if let r = battery?.latest, r.magSafeLight != .notAvailable {
+                SettingsRow("MagSafe light", detail: "Apple Cart shows the light but does not control it: it follows macOS, orange below 100% and green when full.") {
+                    Text(r.magSafeLight.text(pluggedIn: r.isPluggedIn)).foregroundStyle(Palette.secondary)
+                        .accessibilityLabel("MagSafe light")
+                }
+            }
         }
         .task {
             battery?.hold("chargeSettings") // for the current temperature
@@ -173,13 +179,13 @@ struct ChargeControlOptions: View {
 
     @ViewBuilder private var heat: some View {
         if let t = battery?.latest?.temperatureC {
-            SettingsRow("Heat protection", detail: "Now \(Self.temp(t)). Saved only: pausing for heat is not built yet.") {
-                Toggle("Heat protection", isOn: Binding(get: { settings.heatProtection }, set: { settings.setHeatProtection($0) }))
+            SettingsRow("Heat protection", detail: "Pause charging while the battery is warmer than the max, for at least 5 minutes at a time. Battery now \(Self.temp(t)).") {
+                Toggle("Heat protection", isOn: Binding(get: { settings.heatProtection }, set: { settings.setHeatProtection($0); changed() }))
                     .toggleStyle(.switch).labelsHidden()
             }
             if settings.heatProtection {
                 SettingsRow("Max temperature") {
-                    Stepper(Self.temp(settings.heatMaxC), value: Binding(get: { settings.heatMaxC }, set: { settings.setHeatMaxC($0) }),
+                    Stepper(Self.temp(settings.heatMaxC), value: Binding(get: { settings.heatMaxC }, set: { settings.setHeatMaxC($0); changed() }),
                             in: ChargeLimitSettings.heatRangeC, step: 1).fixedSize()
                 }
             }

@@ -156,6 +156,32 @@ struct SMCReader {
         guard let out = call(d) else { return nil }
         return Double(Float(bitPattern: UInt32(truncatingIfNeeded: out.bytes.0)))
     }
+
+    /// A key's SMC type, e.g. "flt " or "ui8 "; nil when this Mac has no such key.
+    func type(_ key: String) -> String? { info(Self.fourCC(key)).map { Self.name($0.dataType) } }
+
+    /// A one-byte unsigned key, or nil when the key is missing or has another type.
+    func uint8(_ key: String) -> UInt8? {
+        guard type(key) == "ui8 " else { return nil }
+        var d = KeyData(); d.key = Self.fourCC(key); d.info.dataSize = 1; d.data8 = Self.readBytes
+        return call(d).map { UInt8(truncatingIfNeeded: $0.bytes.0) }
+    }
+}
+
+/// Battery temperature and the MagSafe light from the SMC, read only and unprivileged. Measured on an M5 (Mac17,2, macOS 27.2):
+/// TB0T, TB1T, TB2T are float degrees C and equal B0AT (ui16, 0.1 K), B1AT and B2AT (ui16, 0.1 C); they sat 8 C above the
+/// ambient sensor (TAOL) and moved only 33.0 to 33.6 C in five minutes while the CPU went from 45 to 100 C, as a battery pack should.
+public enum BatterySensors {
+    static let temperatureKeys = ["TB0T", "TB1T", "TB2T"]
+
+    /// The warmest plausible sensor (protection should follow the hottest cell); a sensor that is off reads 0 and is left out.
+    public static func temperature(_ readings: [Double]) -> Double? { readings.filter { (1...90).contains($0) }.max() }
+
+    public static func read() -> (temperatureC: Double?, light: MagSafeLight) {
+        guard let smc = SMCReader() else { return (nil, .notAvailable) }
+        let temps = temperatureKeys.compactMap { smc.type($0) == "flt " ? smc.float($0) : nil }
+        return (temperature(temps), MagSafeLight(smcValue: smc.uint8("ACLC")))
+    }
 }
 
 /// GPU load and per-app GPU time from the IORegistry (IOAccelerator and its user clients), no privileges needed.

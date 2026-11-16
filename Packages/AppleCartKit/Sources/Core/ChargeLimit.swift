@@ -19,7 +19,7 @@ public final class ChargeLimitSettings {
     public private(set) var dischargeActive: Bool
     public private(set) var sailing: Bool
     public private(set) var sailingDifference: Int
-    /// Stored only; heat protection logic is not built yet.
+    /// Pause charging while the battery is above `heatMaxC` (see HeatGuard; the limiter applies it).
     public private(set) var heatProtection: Bool
     public private(set) var heatMaxC: Double
     @ObservationIgnored private let defaults: UserDefaults
@@ -65,8 +65,10 @@ public final class ChargeLimitSettings {
         defaults.set(heatMaxC, forKey: "chargeHeatMaxC")
     }
 
-    /// Charging resumes this many percent below the limit: the sailing difference, or the small default band.
-    public var resumeBand: Int { sailing ? sailingDifference : ChargePolicy.hysteresis }
+    /// Sailing is off while Top Up runs (and, once built, during calibration).
+    public var effectiveSailing: Bool { sailing && !topUpActive }
+    /// Charging resumes this many percent below the limit: the sailing difference, or the 1 point hold band.
+    public var resumeBand: Int { effectiveSailing ? max(sailingDifference, ChargePolicy.hysteresis) : ChargePolicy.hysteresis }
     /// The lower edge of the range the battery drifts in ("Will sail to X%").
     public var sailFloor: Int { max(limit - resumeBand, 0) }
 
@@ -94,8 +96,9 @@ public enum ChargeDecision: Equatable, Sendable {
 }
 
 public enum ChargePolicy {
-    /// Default band: charging resumes this many percent below the limit, so it does not flap at the edge.
-    public static let hysteresis = 3
+    /// Without Sailing the level is held at the limit: charging resumes as soon as it is this many points below,
+    /// so it never sags further but does not flap at the edge either.
+    public static let hysteresis = 1
     /// Never hold the charger off at or below this level, whatever the limit says: a dead battery shuts the Mac down.
     public static let emergencyFloor = 5
 
@@ -112,6 +115,14 @@ public enum ChargePolicy {
         if r.limitLevel >= limit { return .holdCharging(at: limit) }
         if r.limitLevel <= limit - band { return .allowCharging }
         return r.isCharging ? .allowCharging : .holdCharging(at: limit)
+    }
+
+    /// Heat protection turns "charge" into the same cut a limit hold uses. It protects the battery, so it applies during
+    /// Top Up too, but never on battery and never at or below the emergency floor (it cannot keep a battery from charging forever:
+    /// HeatGuard always lets it charge again once it cools). A hold or discharge the limit already wants is left as it is.
+    public static func applyingHeat(_ d: ChargeDecision, paused: Bool, reading: BatteryReading?, limit: Int) -> ChargeDecision {
+        guard paused, d == .allowCharging, let r = reading, r.isPluggedIn, r.limitLevel > emergencyFloor else { return d }
+        return .holdCharging(at: limit)
     }
 }
 

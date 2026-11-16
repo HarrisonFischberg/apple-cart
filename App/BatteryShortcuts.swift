@@ -36,8 +36,8 @@ struct GetBatteryTemperature: AppIntent {
     static let description = IntentDescription("The battery temperature in degrees Celsius, when macOS provides it.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<Double?> & ProvidesDialog {
-        guard let r = BatteryReader.read() else { throw BatteryShortcutError.noBattery }
-        guard let t = r.temperatureC else { return .result(value: nil, dialog: "macOS does not provide a battery temperature on this Mac.") }
+        guard let r = BatteryReader.readWithSensors() else { throw BatteryShortcutError.noBattery }
+        guard let t = r.temperatureC else { return .result(value: nil, dialog: "This Mac does not report a battery temperature.") }
         return .result(value: t, dialog: "\(Int(t.rounded())) degrees Celsius")
     }
 }

@@ -90,7 +90,7 @@ private struct PressFade: ButtonStyle {
     }
 }
 
-/// Chips for the upper charge limit plus one honest caption from the runner's confirmed state.
+/// Chips for the upper charge limit, Sailing mode, plus one honest caption from the runner's confirmed state.
 struct LimitPopover: View {
     let settings: ChargeLimitSettings
     let limiter: ChargeLimiter?
@@ -110,6 +110,17 @@ struct LimitPopover: View {
             let state = limiter?.state ?? ChargeLimitState()
             Toggle("Automatic discharge", isOn: Binding(get: { settings.autoDischarge }, set: { settings.setAutoDischarge($0); Task { await limiter?.reevaluate() } }))
                 .toggleStyle(.switch).font(.system(size: 13))
+            Toggle("Sailing mode", isOn: Binding(get: { settings.sailing }, set: { settings.setSailing($0); Task { await limiter?.reevaluate() } }))
+                .toggleStyle(.switch).font(.system(size: 13))
+                .help("After reaching the limit, let the battery drop by the difference before charging again")
+            if settings.sailing {
+                Stepper(value: Binding(get: { settings.sailingDifference }, set: { settings.setSailingDifference($0); Task { await limiter?.reevaluate() } }),
+                        in: ChargeLimitSettings.sailingRange) {
+                    Text("Difference \(settings.sailingDifference)%").font(.system(size: 13)).monospacedDigit()
+                }
+                .accessibilityValue("\(settings.sailingDifference) percent")
+                Text(settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(settings.sailFloor)%").hint()
+            }
             // Reference behavior: the Discharge button is hidden while Automatic Discharge is on.
             if !settings.autoDischarge, state.helperStatus == .ready, settings.dischargeActive || (state.level ?? 0) > settings.effectiveLimit {
                 Button(settings.dischargeActive ? "Stop discharging" : "Discharge to \(settings.limit)%") {
