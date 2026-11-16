@@ -87,6 +87,17 @@ private final class Counter: @unchecked Sendable {
         #expect(k2.isActive); k2.stop()
     }
 
+    @Test func heldChargeLimitStillCountsAsPlugged() async {
+        // With the charger cut macOS reports battery power, but adapter details stay.
+        let held = BatteryReading(properties: ["CurrentCapacity": 80, "ExternalConnected": 0, "AdapterDetails": ["Watts": 96]])!
+        let (k, _) = await run(.init(stopOnUnplug: true), [battery(percent: 80, plugged: true), held])
+        #expect(k.isActive); k.stop()
+        let (k2, _) = await run(.init(stopAtChargeLimit: true), limit: 80, [held])
+        #expect(!k2.isActive && k2.lastStopReason == "Charge limit reached")
+        let (k3, _) = await run(.init(stopBelowPercent: 90), [held])
+        #expect(k3.isActive); k3.stop()
+    }
+
     @Test func levelRangeUpTo95OnlyOnBattery() async {
         let (k, _) = await run(.init(stopBelowPercent: 95), [battery(percent: 90, plugged: false)])
         #expect(!k.isActive && k.lastStopReason == "Battery reached 95%")
@@ -139,7 +150,9 @@ private final class Counter: @unchecked Sendable {
             let pipe = Pipe(); p.standardOutput = pipe
             try p.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-            return String(decoding: data, as: UTF8.self)
+            // Only this process's lines: a running Apple Cart app holds the same assertion name.
+            let mine = "pid \(ProcessInfo.processInfo.processIdentifier)("
+            return String(decoding: data, as: UTF8.self).split(separator: "\n").filter { $0.contains(mine) }.joined(separator: "\n")
         }
         let k = KeepAwake()
         #expect(!(try pmset()).contains(KeepAwake.assertionName))

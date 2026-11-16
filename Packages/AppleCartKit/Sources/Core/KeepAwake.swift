@@ -126,12 +126,14 @@ public final class KeepAwake {
     private func shouldStop() -> Bool {
         if let end = endDate, now() >= end { stop(reason: "Timer finished"); return true }
         guard let o = options, let r = readBattery() else { return false }
-        if r.isPluggedIn { sawCharger = true }
-        if let level = o.stopBelowPercent, !r.isPluggedIn, r.percent <= level {
+        // A held charge limit reads as battery power while the charger is in; adapter details still show it.
+        let plugged = r.isPluggedIn || r.adapterWatts != nil
+        if plugged { sawCharger = true }
+        if let level = o.stopBelowPercent, !plugged, r.percent <= level {
             stop(reason: "Battery reached \(level)%"); return true
         }
-        if o.stopOnUnplug, sawCharger, !r.isPluggedIn { stop(reason: "Charger unplugged"); return true }
-        if o.stopAtChargeLimit, r.isPluggedIn, r.percent >= chargeLimit() { stop(reason: "Charge limit reached"); return true }
+        if o.stopOnUnplug, sawCharger, !plugged { stop(reason: "Charger unplugged"); return true }
+        if o.stopAtChargeLimit, plugged, r.percent >= chargeLimit() { stop(reason: "Charge limit reached"); return true }
         return false
     }
 
