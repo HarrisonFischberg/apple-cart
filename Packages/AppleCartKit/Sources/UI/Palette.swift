@@ -23,6 +23,10 @@ public enum Palette {
     public static let amber = adaptive(light: 0xC77700, dark: 0xF5A524)
     public static let green = adaptive(light: 0x177A3C, dark: 0x4ADE80)
     public static let drain = adaptive(light: 0xD9480F, dark: 0xFF8A4C)
+    /// Line of the memory graph on the System view, kept apart from the CPU and GPU blues.
+    public static let teal = adaptive(light: 0x0B7A80, dark: 0x5EE6D8)
+    /// Critical memory pressure.
+    public static let critical = adaptive(light: 0xC0262D, dark: 0xFF6B6B)
 
     static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
