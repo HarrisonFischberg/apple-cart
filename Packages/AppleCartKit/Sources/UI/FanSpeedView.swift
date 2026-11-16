@@ -49,7 +49,7 @@ public struct FanSpeedView: View {
 
     private var scrollContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 header
                 if state.noFan {
                     Label("This Mac has no fan. macOS cools it without one, so there is nothing to set.", systemImage: "wind")
@@ -66,8 +66,8 @@ public struct FanSpeedView: View {
                     case .manual: manualEditor
                     }
                     if tab != .system { resumeRow }
-                    Text("Control stays on until you return to System. macOS takes the fans back by itself if Apple Cart disconnects, the Mac sleeps (unless Resume is on), a temperature cannot be read, the chip reaches 90 °C or macOS reports thermal pressure.")
-                        .font(.system(size: 13)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("macOS takes the fans back by itself if Apple Cart disconnects, the Mac sleeps (unless Resume is on), a temperature cannot be read, or the chip reaches 90 °C.")
+                        .font(.system(size: 12)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -163,7 +163,6 @@ public struct FanSpeedView: View {
                 .frame(minHeight: 44)
                 .accessibilityLabel("Fan speed")
                 .accessibilityValue("\(draftPercent) percent" + (range.map { ", about \(FanText.rpm($0.rpm(percent: Double(draftPercent))))" } ?? ""))
-            Text("0% is the slowest speed the fan runs at, 100% its maximum.").font(.system(size: 12)).foregroundStyle(Palette.secondary)
         }
     }
 
