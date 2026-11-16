@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var panelController: PanelController?
+    private var dataErased = false // after Delete all data, quitting must not write anything back
     private let store = UserDefaultsSettingsStore()
     private lazy var registry: FeatureRegistry = {
         let r = FeatureRegistry(store: store)
@@ -161,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Put the charger back on and the fans back to macOS before quitting instead of waiting for the helper's lease to run out.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if dataErased { return .terminateNow } // deleteAllData already shut both down
         Task {
             await chargeLimiter.shutdown()
             await fanRunner.shutdown()
@@ -187,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func deleteAllData() {
         let alert = NSAlert()
         alert.messageText = "Delete all Apple Cart data?"
-        alert.informativeText = "This removes every setting and saved item, such as clipboard history and battery history, from this Mac. It cannot be undone, and Apple Cart will quit."
+        alert.informativeText = "This removes every setting and saved item, such as clipboard history and battery history, from this Mac. It cannot be undone, and Apple Cart will quit. The helper stays installed until you remove it in Settings."
         alert.addButton(withTitle: "Delete and Quit"); alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .critical
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -195,10 +197,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await chargeLimiter.shutdown() // charger back to normal (resetAll) before the data goes
             await fanRunner.shutdown() // fans back to macOS
+            settingsWindow?.setFrameAutosaveName("") // or the window frame is written back into the erased preferences
             let fm = FileManager.default
             let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart")
             let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart")
             AppDataEraser(defaultsDomain: Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart", folders: [support, caches]).eraseAll()
+            dataErased = true
             NSApp.terminate(nil)
         }
     }

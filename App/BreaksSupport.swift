@@ -74,7 +74,7 @@ final class EventTapBlocker: InputBlocker {
 
     func stop() {
         holdTimer?.cancel(); holdTimer = nil
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         tap = nil; source = nil; onExit = nil
     }
