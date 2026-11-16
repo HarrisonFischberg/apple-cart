@@ -57,7 +57,7 @@ public struct BatteryView: View {
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
         switch w {
         case .charge: VStack(alignment: .leading, spacing: 14) { summary(r); chargeBar(r) }
-        case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt)
+        case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt, resuming: limiter?.state.resuming == true)
         case .details: details(r)
         case .history: graph
         case .energyApps: apps
@@ -93,6 +93,7 @@ public struct BatteryView: View {
 
     private func summary(_ r: BatteryReading) -> some View {
         let held = limiter?.state.holdingAt
+        let floor = chargeLimit.map { min($0.sailFloor, held ?? $0.limit) } // the battery drifts down to here before charging resumes
         return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Battery").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
@@ -109,7 +110,7 @@ public struct BatteryView: View {
                 HStack(spacing: 7) {
                     Circle().fill(dot(r)).frame(width: 8, height: 8).shadow(color: dot(r).opacity(0.8), radius: 4).accessibilityHidden(true)
                     if let held {
-                        Text("Held at \(held)%").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.amberText)
+                        Text("Holding \(floor ?? held)–\(held)%").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.amberText)
                             .padding(.horizontal, 10).frame(height: 24)
                             .background(Palette.amberFill, in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.amber.opacity(0.55)))
@@ -222,7 +223,8 @@ public struct BatteryView: View {
 
     private func state(_ r: BatteryReading) -> String {
         // Only the runner's confirmed hold says "Paused"; while it holds macOS reports battery power.
-        if let n = limiter?.state.holdingAt { return "Paused at \(n)%" }
+        if let n = limiter?.state.holdingAt { return "Holding \(min(chargeLimit?.sailFloor ?? n, n))–\(n)%" }
+        if limiter?.state.resuming == true, !r.isCharging { return "Waiting to charge" }
         return r.stateText
     }
 

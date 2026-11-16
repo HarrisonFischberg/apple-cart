@@ -7,6 +7,8 @@ struct PowerFlowMap: View {
     var active = true
     /// The charge limit is deliberately holding the charger off (the percent), so a low charger reading is not a weak charger.
     var pausedAt: Int?
+    /// The charger was just given back and macOS has not started charging yet.
+    var resuming = false
     @State private var selected: FlowNodeID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -33,16 +35,18 @@ struct PowerFlowMap: View {
             PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(shown, streams: streams, rest: PowerFlows.rest(shown, streams: streams))
-                    .replacingOccurrences(of: "the charger is too weak", with: pausedAt == nil ? "the charger is too weak" : "charging is paused"))
+                    .replacingOccurrences(of: "the charger is too weak", with: pausedAt != nil ? "charging is paused" : resuming ? "charging has not started yet" : "the charger is too weak"))
             if let selected, let reading {
                 detail(FlowExplain.make(selected, reading: shown ?? reading, pausedAt: pausedAt, streams: streams))
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
             if PowerFlows.chargerTooWeak(shown) {
+                let waiting = pausedAt == nil && resuming
                 Label(pausedAt.map { "Charging is paused at \($0)%. The Mac is running on the battery." }
-                      ?? "The charger is too weak for what this Mac is doing. The battery is covering the rest.",
-                      systemImage: pausedAt == nil ? "exclamationmark.triangle.fill" : "pause.circle.fill")
-                    .font(.callout).foregroundStyle(pausedAt == nil ? Palette.drain : Palette.secondary)
+                      ?? (waiting ? "The charger is back. Waiting for macOS to start charging."
+                                  : "The charger is too weak for what this Mac is doing. The battery is covering the rest."),
+                      systemImage: pausedAt == nil && !waiting ? "exclamationmark.triangle.fill" : (waiting ? "bolt.horizontal.circle.fill" : "pause.circle.fill"))
+                    .font(.callout).foregroundStyle(pausedAt == nil && !waiting ? Palette.drain : Palette.secondary)
                     .accessibilityElement(children: .combine)
             }
         }

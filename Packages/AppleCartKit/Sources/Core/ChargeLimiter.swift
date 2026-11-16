@@ -9,6 +9,8 @@ public struct ChargeLimitState: Equatable, Sendable {
     /// The confirmed cut is a discharge down to `holdingAt` (Automatic Discharge, battery above the limit).
     public var discharging = false
     public var chargingNotResumed = false
+    /// The charger was just given back and macOS has not started charging yet (it can take a while).
+    public var resuming = false
     public var commandFailed = false
     /// The latest battery level the runner saw, so the panel can offer Discharge only when it applies.
     public var level: Int?
@@ -67,7 +69,7 @@ public final class ChargeLimiter {
     @ObservationIgnored private var toolEnabled = false
     @ObservationIgnored private var lastCut: Date?          // the helper confirmed a cut at this time
     @ObservationIgnored private var maybeCutUntil: Date?    // a cut was sent and may be live until then (even unconfirmed)
-    @ObservationIgnored private var restoredAt: Date?       // checking that charging resumed since then
+    @ObservationIgnored private var restoredAt: Date? { didSet { state.resuming = restoredAt != nil } } // checking that charging resumed since then
     @ObservationIgnored private var retries = 0
     @ObservationIgnored private var unpluggedInCutSince: Date?
     @ObservationIgnored private var releasedForUnplugAt: Date?
