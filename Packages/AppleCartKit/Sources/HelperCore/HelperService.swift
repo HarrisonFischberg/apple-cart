@@ -72,9 +72,19 @@ public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Senda
     }
 }
 
+/// Live app connections, so the helper restores only when the last one ends (a second copy quitting does not undo the first).
+final class LiveClients: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ids: Set<ObjectIdentifier> = []
+    func opened(_ id: ObjectIdentifier) { lock.withLock { _ = ids.insert(id) } }
+    /// Marks the connection ended; true when no app connection is left.
+    func ended(_ id: ObjectIdentifier) -> Bool { lock.withLock { ids.remove(id); return ids.isEmpty } }
+}
+
 public final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     let gate: ClientGate
     let service: HelperService
+    let clients = LiveClients()
 
     public init(gate: ClientGate, service: HelperService) {
         self.gate = gate
@@ -86,14 +96,23 @@ public final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unc
         connection.setCodeSigningRequirement(requirement) // the system re-checks on every message
         connection.exportedInterface = NSXPCInterface(with: AppleCartHelperXPC.self)
         connection.exportedObject = service
-        Self.attachRestore(to: connection, adapter: service.adapter, fan: service.fan)
+        Self.attachRestore(to: connection, adapter: service.adapter, fan: service.fan, clients: clients)
         connection.resume()
         return true
     }
 
-    /// The app went away (quit, crash, killed): put the adapter back and the fans to macOS now instead of waiting for the lease.
-    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard, fan: FanGuard? = nil) {
-        connection.invalidationHandler = { adapter.restore(reason: "connection invalidated"); fan?.restore(reason: "connection invalidated") }
-        connection.interruptionHandler = { adapter.restore(reason: "connection interrupted"); fan?.restore(reason: "connection interrupted") }
+    /// The app went away (quit, crash, killed): put the adapter back and the fans to macOS now instead of waiting for the lease,
+    /// unless another app connection is still live (its own lease still bounds any cut).
+    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard, fan: FanGuard? = nil, clients: LiveClients = LiveClients()) {
+        let id = ObjectIdentifier(connection)
+        clients.opened(id)
+        connection.invalidationHandler = {
+            guard clients.ended(id) else { return }
+            adapter.restore(reason: "connection invalidated"); fan?.restore(reason: "connection invalidated")
+        }
+        connection.interruptionHandler = {
+            guard clients.ended(id) else { return }
+            adapter.restore(reason: "connection interrupted"); fan?.restore(reason: "connection interrupted")
+        }
     }
 }

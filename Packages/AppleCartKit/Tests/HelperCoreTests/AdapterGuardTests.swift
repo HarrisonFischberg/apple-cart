@@ -13,6 +13,8 @@ final class FakeSMC: SMCWriting, @unchecked Sendable {
     /// A Mac without the CHIE key: the SMC answers the key-info call with 0x84, mapped as SMCConnection maps it.
     var missingKey = false
     var failReads = false
+    /// Accepts the cut with result 0 but keeps the old value, as an SMC that ignores the key would.
+    var ignoresCut = false
     private var missing: SMCError { SMCError.fromKeyInfo(.smc(SMCError.keyNotFound)) }
 
     func read(key: String) throws -> UInt8 {
@@ -29,7 +31,8 @@ final class FakeSMC: SMCWriting, @unchecked Sendable {
         attempts.append(v)
         if missingKey { throw missing }
         if failWrites { throw SMCError.smc(0x82) } // a generic failure, deliberately not 0x84
-        writes.append(v); value = v
+        writes.append(v)
+        if !(ignoresCut && v == SMCWhitelist.adapterOff) { value = v }
     }
 }
 
@@ -79,7 +82,16 @@ private func makeGuard() -> (AdapterGuard, FakeSMC, FakeTimers, Clock) {
         #expect(timers.live.isEmpty)
     }
 
-    @Test func repeatedCutRenewsTheLease() {
+    @Test func cutThatDoesNotStickIsRestoredAndNotApplied() {
+        let (g, smc, timers, _) = makeGuard()
+        smc.ignoresCut = true
+        #expect(g.setAdapter(enabled: false, leaseSeconds: 90) == .notApplied)
+        #expect(smc.writes == [0x08, 0x00] && smc.value == 0x00)
+        #expect(timers.live.isEmpty) // no lease left behind
+        #expect(g.status().adapterEnabled)
+    }
+
+        @Test func repeatedCutRenewsTheLease() {
         let (g, smc, timers, clock) = makeGuard()
         _ = g.setAdapter(enabled: false, leaseSeconds: 90)
         let first = timers.all[0]
@@ -300,6 +312,19 @@ private func makeGuard() -> (AdapterGuard, FakeSMC, FakeTimers, Clock) {
         #expect(timers.live.isEmpty)
         _ = g.setAdapter(enabled: false, leaseSeconds: 90)
         conn.interruptionHandler?()
+        #expect(smc.writes.last == 0x00)
+    }
+
+    @Test func restoresOnlyWhenTheLastConnectionEnds() {
+        let (g, smc, _, _) = makeGuard()
+        let clients = LiveClients()
+        let first = NSXPCConnection(serviceName: "test.first"), second = NSXPCConnection(serviceName: "test.second")
+        HelperListenerDelegate.attachRestore(to: first, adapter: g, clients: clients)
+        HelperListenerDelegate.attachRestore(to: second, adapter: g, clients: clients)
+        _ = g.setAdapter(enabled: false, leaseSeconds: 90)
+        second.invalidationHandler?() // a second copy quit
+        #expect(smc.writes == [0x08])
+        first.interruptionHandler?(); first.invalidationHandler?() // the last one goes: restore
         #expect(smc.writes.last == 0x00)
     }
 

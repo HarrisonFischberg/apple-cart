@@ -96,6 +96,12 @@ public final class AdapterGuard: @unchecked Sendable {
         mayBeCut = true
         do {
             try write(SMCWhitelist.adapterOff)
+            // An SMC that accepts the write but ignores it must not let the app claim a hold.
+            guard try read() == SMCWhitelist.adapterOff else {
+                log("adapter off did not stick; restoring")
+                _ = restoreLocked(reason: "cut not applied")
+                return .notApplied
+            }
             log("adapter off, lease \(seconds) s")
             return .ok
         } catch {
