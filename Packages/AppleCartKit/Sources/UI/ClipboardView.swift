@@ -11,12 +11,22 @@ public struct ClipboardView: View {
 
     public var body: some View {
         VStack(spacing: 8) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
-                TextField("Search", text: $query).textFieldStyle(.plain).accessibilityLabel("Search clipboard history")
+            HStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
+                    TextField("Search", text: $query).textFieldStyle(.plain).accessibilityLabel("Search clipboard history")
+                }
+                .padding(.leading, 14).padding(.trailing, 14).frame(minHeight: 44)
+                .background(Palette.tile, in: Capsule())
+                // Pinned items stay; the "Removed N. Undo" line below brings everything back.
+                if history.items.contains(where: { !$0.pinned }) {
+                    Button("Erase all") { history.clearAll() }
+                        .buttonStyle(.plain).font(.system(size: 14, weight: .semibold)).foregroundStyle(.red)
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(Palette.tile, in: Capsule())
+                        .accessibilityHint("Removes every unpinned item. You can undo it.")
+                }
             }
-            .padding(.leading, 14).padding(.trailing, 14).frame(minHeight: 44)
-            .background(Palette.tile, in: Capsule())
             ScrollView {
                 VStack(spacing: 8) {
                     if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
