@@ -43,3 +43,35 @@ TODO = not started.
 
 Screenshots of each Settings page and of the popover in its states (charging, held, discharging, calibrating, heat paused), plus a note of
 exactly what the MagSafe LED and menu bar icon show in each state. We use these only to match behavior. No license key or app files are needed.
+
+## Behavior notes from the owner's paid copy (screenshots, 2026-11-15; our wording, behavior only)
+
+Popover
+- The charge bar is also the limit control: a handle at its right end is dragged to set the limit; a dashed marker inside the bar shows the lower
+  edge of the sailing range; a small sailing glyph sits on the bar; the plug and pause bars show the state. Limit pill top left ("Limit: 100%"),
+  Top Up pill and a grid button top right (opens the full window).
+- Power flow: adapter -> Mac, then the Mac side forks into SoC, USB and Other ribbons with their watts; a "more" tile holds the rest.
+- "Using Significant Energy" card at the bottom lists app names with icons.
+- Popover settings: Show on Startup, Show Percentage, Open in Edit Mode.
+
+Full window (sidebar: Dashboard; Battery Care: Charge Control, Sleep Behavior, Energy Use; Automations: Schedule, Shortcuts; Appearance: Popover, Menu Bar, Other)
+- Dashboard: top strip of live watts (adapter, Mac, battery, SoC, USB, other); cards for Battery Specs (current, voltage, power, system load, low power
+  mode, charge in mAh), Battery Health (design and maximum capacity in mAh and %, macOS condition, cycles), Power Adapter Specs (current of max, voltage of
+  max, power of max, name, manufacturer, serial); charts for battery level (with the limit as a dashed line), temperature, power consumption with a
+  time-range chip and time remaining, maximum capacity over time, and battery cycles over time; right column: apps using energy, last calibration with a
+  Start button, manual sleep control with a Prevent button. Temperature shown in the user's unit.
+- Charge Control: limit as a typed number; "Allow charge limits below 80%" toggle with a warning icon; Automatic Discharge toggle; Sailing Mode toggle with a
+  "Difference: N %" field and the result line "Will sail to X%"; Heat Protection toggle with Max Temp field and the current temperature; Calibration
+  with a four-step strip (charge to 100%, discharge to 10%, charge to 100%, discharge back to the limit), an "After macOS calibration" choice, and the
+  last calibration date.
+- Sleep Behavior: "Prevent overcharging during sleep" choice (default: disable sleep until the charge limit, marked recommended); manual sleep control
+  with a "re-enable sleep at" slider (5-95%, default 20%, tick marks) and a "when unplugged" toggle; advanced settings folded away.
+- Energy Use: Low Power Mode choice; background dashboard updates toggle; "Show apps above" usage level (Medium = macOS default) and "include background processes".
+- Schedule: task list with add and templates, catch-up-on-missed-tasks toggle, task history.
+- Shortcuts: a table of actions with one-line descriptions plus an "Open Shortcuts" button: Top Up, Pause Charging (sets the limit to the current %),
+  Start Discharge, Start Calibration, Set Charge Limit, Get Battery Percentage, Get Charge Limit, Get State, Get Temperature, Set MagSafe LED,
+  Set Low Power Mode, Set High Power Mode.
+- Menu Bar: a preview of the selected items; a catalog in groups (main icon style, icon options such as show percentage and a low-power tint, battery
+  health, battery specs incl. hardware percentage and temperature, power adapter specs, status items) with Reset and Clear All; spacing slider 0-20.
+- Other: show Dock icon, reduce transparency, restore window layout, appearance (system, light, dark), MagSafe LED (setting, indicate charge limit,
+  blink orange during discharge).
