@@ -121,6 +121,12 @@ final class PanelController {
     }
 
     private func outsideClick() {
+        // A click on our own status item is handled by its button (it toggles). Closing here too made the
+        // button reopen the panel right after, which looked like a flash.
+        if let button = anchor, let bw = button.window {
+            let rect = bw.convertToScreen(button.convert(button.bounds, to: nil))
+            if rect.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation) { return }
+        }
         if !panel.keepOpen { close() }
     }
 }
