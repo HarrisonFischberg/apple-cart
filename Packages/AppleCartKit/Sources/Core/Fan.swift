@@ -17,13 +17,21 @@ public enum FanSensor: String, Codable, CaseIterable, Sendable {
 
 /// Temperatures in Celsius from the read-only readers; nil when a sensor could not be read.
 public struct FanTemperatures: Equatable, Sendable {
+    /// CPU and GPU averages (for display and for the CPU / GPU curve sensors).
     public var cpu: Double?
     public var gpu: Double?
     public var battery: Double?
-    public init(cpu: Double? = nil, gpu: Double? = nil, battery: Double? = nil) { self.cpu = cpu; self.gpu = gpu; self.battery = battery }
+    /// The hottest single plausible CPU or GPU sensor (ChipTemperatures.hottest). Every safety rule uses this.
+    public var hottestSensor: Double?
 
-    /// The hotter of the CPU and GPU readings.
-    public var hottestSoC: Double? { [cpu, gpu].compactMap { $0 }.max() }
+    /// `hottestSensor` defaults to the hotter average, for callers that only have averages (tests, previews).
+    public init(cpu: Double? = nil, gpu: Double? = nil, battery: Double? = nil, hottestSensor: Double? = nil) {
+        self.cpu = cpu; self.gpu = gpu; self.battery = battery
+        self.hottestSensor = hottestSensor ?? [cpu, gpu].compactMap { $0 }.max()
+    }
+
+    /// The "Hottest SoC" sensor: the hottest single CPU or GPU sensor.
+    public var hottestSoC: Double? { hottestSensor }
 
     public func value(_ s: FanSensor) -> Double? {
         switch s { case .hottestSoC: hottestSoC; case .cpu: cpu; case .gpu: gpu; case .battery: battery }
@@ -141,17 +149,22 @@ public enum FanDecision: Equatable, Sendable {
 /// What the policy remembers between passes: the safety lockout and the last target, for smoothing.
 public struct FanPolicyState: Equatable, Sendable {
     public var releasedUntil: Date?
+    /// Set by a heat or thermal-pressure release; cleared only once the hottest sensor is below `FanPolicy.resumeBelowC`.
+    public var heatLatched = false
     public var lastTarget: Int?        // nil = system
     public var lastChange: Date?
     public init() {}
 }
 
-/// Pure decision for one pass. Safety comes first and holds for every mode: no SoC temperature, 90 C or more, or serious
-/// thermal pressure all give the fans to macOS (the last two for 2 minutes). Manual and curve targets are smoothed so the
-/// fan does not hunt: a new target is taken when it differs by more than 100 rpm or 10 s after the last change; switching
-/// between macOS and a manual speed also waits the 10 s (except safety releases, which are immediate).
+/// Pure decision for one pass. Safety comes first and holds for every mode, always on the hottest single SoC sensor
+/// (never an average): no reading, 90 C or more, or serious thermal pressure all give the fans to macOS (the last two for
+/// at least 2 minutes, and then until the hottest sensor is below 80 C, so a Mac sitting at 89 C cannot flap between
+/// macOS and a manual speed). Manual and curve targets are smoothed so the fan does not hunt: a new target is taken when
+/// it differs by more than 100 rpm or 10 s after the last change; switching between macOS and a manual speed also waits
+/// the 10 s (except safety releases, which are immediate).
 public enum FanPolicy {
     public static let releaseAtC = 90.0
+    public static let resumeBelowC = 80.0
     public static let lockout: TimeInterval = 120
     public static let smoothingRPM = 100
     public static let smoothingSeconds: TimeInterval = 10
@@ -163,14 +176,19 @@ public enum FanPolicy {
             return .system(r)
         }
         guard mode != .system else { return release(.chosen) }
-        guard let soc = t.hottestSoC else { return release(.noTemperature) }
-        if soc >= releaseAtC || thermalPressure {
+        guard let hottest = t.hottestSensor else { return release(.noTemperature) }
+        if hottest >= releaseAtC || thermalPressure {
             state.releasedUntil = now.addingTimeInterval(lockout)
-            return release(thermalPressure ? .thermalPressure : .hot(soc))
+            state.heatLatched = true
+            return release(thermalPressure ? .thermalPressure : .hot(hottest))
         }
         if let until = state.releasedUntil {
             if now < until { return release(.coolingDown) }
             state.releasedUntil = nil
+        }
+        if state.heatLatched {
+            guard hottest < resumeBelowC else { return release(.coolingDown) }
+            state.heatLatched = false
         }
         guard let range else { return release(.noRange) }
         let wanted: Int?

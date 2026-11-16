@@ -13,6 +13,10 @@ final class FakeFanSMC: FanSMC, @unchecked Sendable {
     var failReads = false
     /// The SMC takes mode writes but keeps reading the old value.
     var ignoreModeWrites = false
+    /// Writes to this one key throw (half-success sequences).
+    var failWriteKey: String?
+    /// The target key reads back this rpm whatever was written.
+    var targetReadsBack: Double?
 
     init(fans: Int = 1, unlock: Bool = false) {
         keys = ["FNum": (.uint8, [UInt8(fans)])]
@@ -41,6 +45,7 @@ final class FakeFanSMC: FanSMC, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         if failReads { throw SMCError.io(-536870212) }
         guard let k = keys[key] else { throw SMCError.keyMissing }
+        if let t = targetReadsBack, key.hasSuffix("Tg") { return FanBytes.bytes(t) }
         return k.bytes
     }
 
@@ -49,7 +54,7 @@ final class FakeFanSMC: FanSMC, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         guard let k = keys[key] else { throw SMCError.keyMissing }
         guard k.type.size == bytes.count else { throw SMCError.typeMismatch }
-        if failWrites { throw SMCError.smc(0x82) }
+        if failWrites || key == failWriteKey { throw SMCError.smc(0x82) }
         let shown = k.type == .float ? "\(Int(FanBytes.float(bytes) ?? -1))" : "\(bytes[0])"
         writes.append("\(key)=\(shown)")
         if ignoreModeWrites && key.hasSuffix("md") { return }
@@ -66,7 +71,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func manualWritesModeThenClampedTargetUnderALease() {
         let (g, smc, timers, _) = makeFanGuard()
         #expect(g.setFan(rpm: 3500, leaseSeconds: 90) == .ok)
-        #expect(smc.writes == ["F0md=1", "F0Tg=3500"])
+        #expect(smc.writes == ["F0Tg=3500", "F0md=1"]) // target first, never manual at a stale target
         #expect(timers.live.count == 1 && timers.live[0].seconds == 90)
         let s = g.status()
         #expect(s.manual && s.targetRPM == 3500 && s.minimumRPM == 2317 && s.maximumRPM == 6550 && s.count == 1)
@@ -75,9 +80,9 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func rpmIsClampedIntoTheFansOwnRange() {
         let (g, smc, _, _) = makeFanGuard()
         _ = g.setFan(rpm: 1000, leaseSeconds: 90)
-        #expect(smc.writes.last == "F0Tg=2317") // never below the minimum running speed
+        #expect(smc.writes.first == "F0Tg=2317") // never below the minimum running speed
         _ = g.setFan(rpm: 99_999, leaseSeconds: 90)
-        #expect(smc.writes.last == "F0Tg=6550") // never above the maximum
+        #expect(smc.writes.last(where: { $0.hasPrefix("F0Tg") }) == "F0Tg=6550") // never above the maximum
     }
 
     @Test func zeroRpmMeansSystem() {
@@ -173,8 +178,40 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
         let (g, smc, _, _) = makeFanGuard()
         smc.ignoreModeWrites = true
         #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .notApplied)
-        #expect(!smc.writes.contains { $0.hasPrefix("F0Tg") }) // no target written once the mode did not switch
         #expect(smc.writes.last == "F0md=0")
+        #expect(g.status().code == .ok && !g.status().manual)
+    }
+
+    @Test func targetThatReadsBackWrongIsRestored() {
+        let (g, smc, timers, _) = makeFanGuard()
+        smc.targetReadsBack = 2000 // wrote 3000
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .notApplied)
+        #expect(smc.value("F0md") == [0] && smc.writes.last == "F0md=0")
+        #expect(timers.live.isEmpty) // restored and verified, nothing left armed
+        smc.targetReadsBack = 3010 // within 25 rpm: fine
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .ok)
+        #expect(FanGuard.targetMatches(5000, 5049) && !FanGuard.targetMatches(5000, 5060) && !FanGuard.targetMatches(.nan, 3000))
+    }
+
+    @Test func halfSuccessIsRestored() {
+        // The target lands and the mode write throws.
+        let (g, smc, _, _) = makeFanGuard(FakeFanSMC(fans: 2))
+        smc.failWriteKey = "F1md"
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .smcFailed)
+        #expect(smc.value("F0md") == [0]) // F0 had switched to manual: back to macOS
+        #expect(smc.writes.contains("F0md=1") && smc.writes.last(where: { $0.hasPrefix("F0md") }) == "F0md=0")
+        // The mode lands and a later target write throws (second fan's target).
+        let (g2, smc2, timers2, _) = makeFanGuard(FakeFanSMC(fans: 2))
+        smc2.keys["F0md"] = (.uint8, [0])
+        smc2.failWriteKey = "F1Tg"
+        #expect(g2.setFan(rpm: 3000, leaseSeconds: 90) == .smcFailed)
+        #expect(smc2.value("F0md") == [0] && smc2.value("F1md") == [0])
+        #expect(timers2.live.isEmpty)
+        // The mode lands and the target read-back fails outright.
+        let (g3, smc3, _, _) = makeFanGuard()
+        smc3.targetReadsBack = .nan
+        #expect(g3.setFan(rpm: 3000, leaseSeconds: 90) == .notApplied)
+        #expect(smc3.value("F0md") == [0])
     }
 
     @Test func typeMismatchRefusesWithoutWriting() {
@@ -205,7 +242,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func everyFanIsDrivenAndRestored() {
         let (g, smc, _, _) = makeFanGuard(FakeFanSMC(fans: 2))
         _ = g.setFan(rpm: 3000, leaseSeconds: 90)
-        #expect(smc.writes == ["F0md=1", "F1md=1", "F0Tg=3000", "F1Tg=3000"])
+        #expect(smc.writes == ["F0Tg=3000", "F1Tg=3000", "F0md=1", "F1md=1"])
         _ = g.restore(reason: "test")
         #expect(smc.writes.suffix(2) == ["F0md=0", "F1md=0"])
     }
@@ -213,7 +250,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func unlockKeyIsUsedOnlyWhenPresent() {
         let (g, smc, _, _) = makeFanGuard(FakeFanSMC(unlock: true))
         _ = g.setFan(rpm: 3000, leaseSeconds: 90)
-        #expect(smc.writes == ["Ftst=1", "F0md=1", "F0Tg=3000"])
+        #expect(smc.writes == ["Ftst=1", "F0Tg=3000", "F0md=1"])
         _ = g.restore(reason: "test")
         #expect(smc.writes.suffix(2) == ["F0md=0", "Ftst=0"])
     }
@@ -253,6 +290,16 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
         nonisolated(unsafe) var noFan = -1
         HelperService(adapter: adapter).setFan(rpm: 3000, leaseSeconds: 30) { noFan = $0 }
         #expect(noFan == HelperErrorCode.unsupported.rawValue)
+    }
+
+    @Test func nanReadingsNeverCrashTheHelper() {
+        let (g, smc, _, _) = makeFanGuard()
+        smc.keys["F0Ac"] = (.float, FanBytes.bytes(.nan))
+        #expect(g.status().actualRPM == -1)
+        let bad = FakeFanSMC()
+        bad.keys["F0Mn"] = (.float, FanBytes.bytes(.nan))
+        let (g2, _, _, _) = makeFanGuard(bad)
+        #expect(g2.setFan(rpm: 3000, leaseSeconds: 90) == .unsupported && bad.writes.isEmpty)
     }
 
     @Test func transientReadErrorIsNotUnsupported() {

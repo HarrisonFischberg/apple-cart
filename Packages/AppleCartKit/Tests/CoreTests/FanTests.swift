@@ -86,6 +86,35 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         #expect(decide(.manual, at: t0 + 121, &s) == .hold(rpm: 4450))
     }
 
+    @Test func safetyWatchesTheHottestSensorNotTheAverage() {
+        // Averages 85 C, one P-core cluster at 104 C: released.
+        var s = FanPolicyState()
+        let t = FanTemperatures(cpu: 85, gpu: 70, hottestSensor: 104)
+        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, curve: .default, temperatures: t, thermalPressure: false,
+                                 range: range, now: t0, state: &s) == .system(.hot(104)))
+        // The reader takes the hottest plausible sensor, leaving out the 0.0 of sensors that are off.
+        #expect(ChipTemperatures.hottest(["Tp01": 84, "Tp02": 104, "Te01": 67]) == 104)
+        #expect(ChipTemperatures.average(["Tp01": 84, "Tp02": 104, "Te01": 67]) == 85)
+        let withZero = ["Tp01": 61.0, "Tz00": 0.0, "Tg01": 58.0]
+        #expect(ChipTemperatures.hottest(withZero) == 61) // a 0.0 is neither hot nor makes it unknown
+        var z = FanPolicyState()
+        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, curve: .default, temperatures: FanTemperatures(cpu: 60, gpu: 58, hottestSensor: ChipTemperatures.hottest(withZero)),
+                                 thermalPressure: false, range: range, now: t0, state: &z) == .hold(rpm: 4450))
+        #expect(ChipTemperatures.hottest(["Tp01": 0, "Tp02": 140]) == nil) // nothing plausible: unknown
+    }
+
+    @Test func afterAHeatReleaseManualWaitsForBelow80() {
+        var s = FanPolicyState()
+        #expect(decide(.manual, soc: 91, &s) == .system(.hot(91)))
+        #expect(decide(.manual, soc: 89, at: t0 + 121, &s) == .system(.coolingDown)) // lockout over, but still hot
+        #expect(decide(.manual, soc: 80, at: t0 + 200, &s) == .system(.coolingDown))
+        #expect(decide(.manual, soc: 79, at: t0 + 210, &s) == .hold(rpm: 4450))
+        #expect(decide(.manual, soc: 85, at: t0 + 220, &s) == .hold(rpm: 4450)) // latch cleared: 85 C is fine again
+        var p = FanPolicyState()
+        _ = decide(.curve, thermal: true, &p)
+        #expect(decide(.curve, soc: 82, at: t0 + 130, &p) == .system(.coolingDown)) // same rule after thermal pressure
+    }
+
     @Test func smoothingStopsHunting() {
         let c = FanCurve(points: [FanCurvePoint(40, 0), FanCurvePoint(100, 100)])
         var s = FanPolicyState()
@@ -127,12 +156,14 @@ final class FakeFanController: FanController, @unchecked Sendable {
     var report = FanHelperReport(.ready, manual: false)
     var result: ChargeApplyResult = .applied
     var resetResult: ChargeApplyResult = .applied
+    /// What a fan that obeys would be turning at now (0 after a reset).
+    var commandedRPM = 0.0
     var calls: [Call] { lock.lock(); defer { lock.unlock() }; return _calls }
     func clear() { lock.lock(); _calls = []; lock.unlock() }
     private func record(_ c: Call) { lock.lock(); _calls.append(c); lock.unlock() }
     func status() async -> FanHelperReport { report }
-    func setFan(rpm: Int) async -> ChargeApplyResult { record(.set(rpm)); return result }
-    func resetFan() async -> ChargeApplyResult { record(.reset); return resetResult }
+    func setFan(rpm: Int) async -> ChargeApplyResult { record(.set(rpm)); if result == .applied { commandedRPM = Double(rpm) }; return result }
+    func resetFan() async -> ChargeApplyResult { record(.reset); commandedRPM = 0; return resetResult }
 }
 
 @MainActor
@@ -141,15 +172,17 @@ private final class FanRig {
     let settings = FanSettings(defaults: UserDefaults(suiteName: "fanrunner-" + UUID().uuidString)!)
     let controller = FakeFanController()
     lazy var runner = FanRunner(settings: settings, controller: controller, now: { [unowned self] in self.clock })
+    /// False: the fan ignores the helper and stays where it is (stopped).
+    var fanObeys = true
 
-    func sample(soc: Double? = 60, thermal: Bool = false, fans: Int = 1) -> FanSample {
-        FanSample(reading: FanReading(rpms: Array(repeating: 0, count: fans), range: fans > 0 ? range : nil),
-                  temperatures: FanTemperatures(cpu: soc, gpu: soc), thermalPressure: thermal)
+    func sample(soc: Double? = 60, thermal: Bool = false, fans: Int = 1, hottest: Double? = nil) -> FanSample {
+        FanSample(reading: FanReading(rpms: Array(repeating: fanObeys ? controller.commandedRPM : 0, count: fans), range: fans > 0 ? range : nil),
+                  temperatures: FanTemperatures(cpu: soc, gpu: soc, hottestSensor: hottest), thermalPressure: thermal)
     }
 
-    func feed(soc: Double? = 60, thermal: Bool = false, after seconds: TimeInterval = 0) async {
+    func feed(soc: Double? = 60, thermal: Bool = false, hottest: Double? = nil, after seconds: TimeInterval = 0) async {
         clock += seconds
-        await runner.evaluate(sample(soc: soc, thermal: thermal))
+        await runner.evaluate(sample(soc: soc, thermal: thermal, hottest: hottest))
     }
 
     /// Tool on, Manual 50% applied and confirmed, calls cleared.
@@ -285,6 +318,75 @@ private final class FanRig {
         await rig.feed(soc: 75)
         #expect(rig.runner.state.subtitle == "Curve")
         #expect(rig.runner.state.statusText == "Curve: 75 °C → \(FanText.rpm(range.rpm(percent: 47.5)))")
+    }
+
+    @Test func shutdownKeepsTheModeOnlyWithResume() async {
+        let rig = FanRig()
+        await rig.holding()
+        await rig.runner.shutdown()
+        #expect(rig.controller.calls == [.reset] && rig.settings.active == .system) // Resume off: forgotten
+        let rig2 = FanRig()
+        await rig2.holding()
+        rig2.settings.setResume(true)
+        await rig2.runner.shutdown()
+        #expect(rig2.controller.calls == [.reset]) // fans always go back to macOS on quit
+        #expect(rig2.settings.active == .manual) // but the next launch re-applies Manual 50%
+        // Relaunch: nothing before the helper is ready and a temperature is known.
+        let next = FanRunner(settings: rig2.settings, controller: rig2.controller, now: { [rig2] in rig2.clock })
+        rig2.controller.clear()
+        await next.setToolEnabled(true)
+        await next.evaluate(FanSample(reading: FanReading(rpms: [0], range: range), temperatures: FanTemperatures(), thermalPressure: false))
+        #expect(rig2.controller.calls.isEmpty)
+        await next.evaluate(rig2.sample())
+        #expect(rig2.controller.calls == [.set(4450)])
+    }
+
+    @Test func fanThatDoesNotRespondIsHandedBackOnce() async {
+        let rig = FanRig()
+        rig.fanObeys = false
+        await rig.runner.setToolEnabled(true)
+        rig.settings.applyManual(percent: 0)
+        await rig.runner.applyChanged()
+        await rig.feed()
+        #expect(rig.controller.calls.last == .set(2317))
+        rig.controller.clear()
+        await rig.feed(after: 5); await rig.feed(after: 5)
+        #expect(rig.controller.calls.isEmpty) // spin-up time
+        await rig.feed(after: 5)
+        #expect(rig.controller.calls == [.reset])
+        #expect(rig.runner.state.statusText == FanState.notRespondingText && rig.runner.state.holdingRPM == nil)
+        rig.controller.clear()
+        await rig.feed(after: 30); await rig.feed(after: 30)
+        #expect(rig.controller.calls.isEmpty) // no automatic retry
+        rig.fanObeys = true
+        await rig.runner.applyChanged() // the owner applies again
+        await rig.feed(after: 5)
+        #expect(rig.controller.calls == [.set(2317)])
+        #expect(!rig.runner.state.fanNotResponding)
+    }
+
+    @Test func fanThatRespondsPassesTheWatchdog() async {
+        let rig = FanRig()
+        await rig.holding()
+        for _ in 0..<6 { await rig.feed(after: 5) }
+        #expect(rig.runner.state.holdingRPM == 4450 && !rig.runner.state.fanNotResponding)
+        #expect(!rig.controller.calls.contains(.reset))
+    }
+
+    @Test func anotherAppIsHandedBackOnceThenLeftAlone() async {
+        let rig = FanRig()
+        rig.controller.report = FanHelperReport(.ready, manual: true, targetRPM: 3000)
+        await rig.runner.setToolEnabled(true)
+        #expect(rig.controller.calls == [.reset]) // once
+        rig.controller.clear()
+        await rig.feed(after: 31) // it set manual again
+        await rig.feed(after: 31); await rig.feed(after: 31)
+        #expect(rig.controller.calls.isEmpty)
+        #expect(rig.runner.state.statusText == FanState.otherAppText)
+        rig.settings.applyManual(percent: 50)
+        await rig.runner.applyChanged() // the owner takes over on purpose
+        #expect(rig.controller.calls == [.set(4450)])
+        #expect(!rig.runner.state.otherAppControls)
     }
 
     @Test func fanTextShowsFanOff() {

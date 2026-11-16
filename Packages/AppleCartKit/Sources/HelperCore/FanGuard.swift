@@ -92,22 +92,23 @@ public final class FanGuard: @unchecked Sendable {
         mayBeManual = true
         do {
             if let unlock = layout.unlockKey { try write(unlock, [FanWhitelist.manualMode]) }
-            for fan in layout.fans {
-                try write(fan.modeKey, [FanWhitelist.manualMode])
-                let back = try read(fan.modeKey)
-                guard back == [FanWhitelist.manualMode] else {
-                    log("fan \(fan.index) mode reads back \(back) after writing 1")
-                    throw FanWriteError.notApplied
-                }
-            }
-            var applied = 0
+            // Target first, so the fan never sits in manual mode at a stale target; then the mode; then verify both.
+            var targets: [Int: Double] = [:]
             for fan in layout.fans {
                 let clamped = Double(FanLimits.clampedMinimum(requested: rpm, systemMinimum: Int(fan.minimumRPM.rounded(.up)),
                                                               hardwareMaximum: Int(fan.maximumRPM.rounded(.down))))
                 try write(FanWhitelist.targetKey(fan.index), FanBytes.bytes(clamped))
-                log("fan \(fan.index) target \(Int(clamped)) rpm, reads back \((try? read(FanWhitelist.targetKey(fan.index))).flatMap(FanBytes.float).map { "\(Int($0))" } ?? "?")")
-                applied = max(applied, Int(clamped))
+                targets[fan.index] = clamped
             }
+            for fan in layout.fans { try write(fan.modeKey, [FanWhitelist.manualMode]) }
+            for fan in layout.fans {
+                let mode = try read(fan.modeKey)
+                let wanted = targets[fan.index] ?? 0
+                let back = FanBytes.float(try read(FanWhitelist.targetKey(fan.index)))
+                log("fan \(fan.index) reads back mode \(mode), target \(back.map { "\($0)" } ?? "?") (wrote \(Int(wanted)))")
+                guard mode == [FanWhitelist.manualMode], let back, Self.targetMatches(back, wanted) else { throw FanWriteError.notApplied }
+            }
+            let applied = Int(targets.values.max() ?? 0)
             target = applied
             log("fans manual at \(applied) rpm, lease \(seconds) s")
             return .ok
@@ -151,7 +152,7 @@ public final class FanGuard: @unchecked Sendable {
             s.maximumRPM = Int(layout.fans.map(\.maximumRPM).min()?.rounded(.down) ?? 0)
             var manual = false
             for fan in layout.fans {
-                if let a = try? readFloat(FanWhitelist.actualKey(fan.index)) { s.actualRPM = max(s.actualRPM, max(0, Int(a.rounded()))) }
+                if let a = try? readFloat(FanWhitelist.actualKey(fan.index)), a.isFinite, a < 100_000 { s.actualRPM = max(s.actualRPM, max(0, Int(a.rounded()))) }
                 if try read(fan.modeKey) != [FanWhitelist.systemMode] { manual = true }
             }
             if manual { mayBeManual = true }
@@ -167,6 +168,11 @@ public final class FanGuard: @unchecked Sendable {
     // MARK: Layout and I/O
 
     private enum FanWriteError: Error { case notApplied }
+
+    /// A target read back within 25 rpm or 1% (whichever is larger) of what was written counts as applied.
+    static func targetMatches(_ back: Double, _ wanted: Double) -> Bool {
+        back.isFinite && abs(back - wanted) <= max(25, wanted * 0.01)
+    }
 
     private func code(for error: Error) -> HelperErrorCode {
         switch error as? SMCError {
@@ -193,7 +199,7 @@ public final class FanGuard: @unchecked Sendable {
                 guard let modeKey else { log("fan \(i): no mode key"); throw SMCError.keyMissing }
                 try expect(FanWhitelist.targetKey(i), .float)
                 let lo = try readFloat(FanWhitelist.minimumKey(i)), hi = try readFloat(FanWhitelist.maximumKey(i))
-                guard lo > 0, hi > lo, hi <= 10_000 else { log("fan \(i): implausible range \(lo)-\(hi)"); throw SMCError.typeMismatch }
+                guard lo.isFinite, hi.isFinite, lo > 0, hi > lo, hi <= 10_000 else { log("fan \(i): implausible range \(lo)-\(hi)"); throw SMCError.typeMismatch }
                 fans.append(Fan(index: i, modeKey: modeKey, minimumRPM: lo, maximumRPM: hi))
             }
             var unlock: String?

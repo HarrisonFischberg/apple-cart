@@ -279,7 +279,7 @@ private struct FanOptions: View {
                     .toggleStyle(.switch).labelsHidden()
             }
         }
-        Text("Fans return to macOS when Apple Cart quits, when the Mac sleeps, when a temperature cannot be read and whenever anything fails. At 90 °C, or when macOS reports thermal pressure, macOS takes the fans for at least 2 minutes. A manual speed never goes below the fan's slowest running speed.").hint()
+        Text("Fans return to macOS when Apple Cart quits, when the Mac sleeps, when a temperature cannot be read and whenever anything fails. At 90 °C on the hottest chip sensor, or when macOS reports thermal pressure, macOS takes the fans for at least 2 minutes and until the chip is below 80 °C. If the fan does not follow a speed within 15 seconds, it goes back to macOS. A manual speed never goes below the fan's slowest running speed.").hint()
     }
 }
 

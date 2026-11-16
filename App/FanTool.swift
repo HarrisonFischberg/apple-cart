@@ -17,7 +17,8 @@ final class FanTool: Tool {
             let chips = temperatures.chipTemperatures()
             let thermal = ProcessInfo.processInfo.thermalState
             return FanSample(reading: FanSensors.read(),
-                             temperatures: FanTemperatures(cpu: chips.cpu, gpu: chips.gpu, battery: BatterySensors.read().temperatureC),
+                             temperatures: FanTemperatures(cpu: chips.cpu, gpu: chips.gpu, battery: BatterySensors.read().temperatureC,
+                                                           hottestSensor: chips.hottest),
                              thermalPressure: thermal == .serious || thermal == .critical)
         }.value
     }

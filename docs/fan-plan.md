@@ -24,9 +24,24 @@ Settings > Fan speed: mode (read only), Resume, the safety text and the shared h
 
 ## Safety rules (FanPolicy, tested in FanPolicyTests / FanRunnerTests)
 
-- No manual speed without a readable SoC temperature (hottest of the CPU and GPU averages from the existing reader).
-- Hottest SoC at 90 C or more, or ProcessInfo thermal state serious/critical: fans to macOS at once, for 2 minutes.
-  This watches the SoC whatever sensor a curve uses.
+- Every safety check uses the hottest single plausible sensor (max of all Tp*, Te*, Tg* readings in 5-130 C;
+  sensors that are off read 0 and are left out), never an average, so one hot core cluster cannot hide behind a cooler
+  mean. The CPU and GPU averages are only for display and for the CPU / GPU curve sensors. "Hottest SoC" on the curve is
+  this same hottest sensor.
+- No manual speed without that reading (none plausible = unknown = macOS).
+- Hottest sensor at 90 C or more, or ProcessInfo thermal state serious/critical: fans to macOS at once, for 2 minutes,
+  whatever sensor a curve uses.
+- Heat hysteresis (decided 2026-11-16): after a heat or thermal-pressure release, Manual or Curve resumes only once the
+  2 minutes have passed AND the hottest sensor is below 80 C. A Mac sitting at 85-89 C therefore stays with macOS
+  instead of flapping between macOS and a manual speed every 2 minutes. Below 80 C the latch clears and normal rules apply.
+- Fan response watchdog: after a manual speed starts, every fan must read within 20% of the target (and above 0) within
+  15 s. If not, the fans go back to macOS, the panel says "The fan did not respond. Control returned to macOS." and
+  nothing manual is tried again until the owner presses Apply.
+- Another app: if the helper reports manual mode we did not set, it is handed back to macOS once; if it comes back, the
+  panel says "Another app is controlling the fans." and Apple Cart leaves it alone until the owner presses Apply.
+- Quit and Delete all data always hand the fans back. Quit keeps the applied mode only when Resume is on (the next launch
+  re-applies it once the helper is ready and a fresh temperature is known); turning the tool off or choosing System
+  forgets it.
 - Never below the fan's minimum running speed (app maps 0% to F0Mn; the helper clamps again into [F*Mn, F*Mx]).
 - Smoothing: a new target is taken when it differs by more than 100 rpm or 10 s after the last change; switching
   between macOS and a manual speed also waits the 10 s (safety releases do not wait).
@@ -49,8 +64,10 @@ Read-only probe on this Mac (MacBook Pro M5, Mac17,2, macOS 27.2, one fan):
 
 Manual (setFan): read FNum and, per fan, the mode key (F{i}md, or F{i}Md on older SMCs), F{i}Tg, F{i}Mn, F{i}Mx, and
 check each key's type and size (ui8/1, flt/4) before any write; any mismatch or missing key = "unsupported", nothing
-written. Arm the lease timer first, then: Ftst = 1 (only if the key exists as ui8), F{i}md = 1 for each fan, read each
-mode back (not 1 -> restore, report notApplied), then F{i}Tg = clamped rpm as a little-endian float, read back and logged.
+written. Arm the lease timer first, then: Ftst = 1 (only if the key exists as ui8), F{i}Tg = clamped rpm as a
+little-endian float for each fan (target first, so a fan is never in manual mode at a stale target), then F{i}md = 1
+for each fan, then read both back. A mode that is not 1, or a target more than max(25 rpm, 1%) from what was written
+(or unreadable/NaN), restores (mode 0, verified) and returns notApplied. Any write error part way restores too.
 
 Restore (lease, sleep, signal, disconnect, resetFan, start): F{i}md = 0 for each fan, then Ftst = 0 if present, then read
 each mode back. At helper start and whenever nothing of ours can be live, it first reads the modes and writes nothing if
@@ -81,7 +98,8 @@ Repair. Fan calls are never sent to a version 2 helper.
 2. Open Console, filter subsystem `app.rarecreatures.applecart.helper`, category `fan`. At helper start it should log
    the fan layout and write nothing (fan is in mode 0).
 3. Turn on Fan speed, wait for an idle fan ("Fan off"). Manual > Min > Apply manual control. Expect the log
-   "write F0md [1]: ok", "write F0Tg ...: ok", and the panel "Current ~2,300 RPM" within a few seconds.
+   "write F0Tg ...: ok", "write F0md [1]: ok", "reads back mode [1], target 2317.0", and the panel "Current ~2,300 RPM"
+   within a few seconds. If the fan does not follow within 15 s the app hands back by itself and says so.
 4. After about 30 s press Return to System. Expect "write F0md [0]: ok" and the fan to spin down to "Fan off".
 5. If step 3 logs ok but the fan stays at 0 rpm, the writes do not take effect on this Mac: press Return to System and
    stop there (report notApplied/log lines). If anything looks wrong, quit Apple Cart (fans go back within the call) or

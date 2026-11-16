@@ -18,17 +18,26 @@ public final class LiveSystemSource: SystemSource, @unchecked Sendable {
                               uptime: SystemReader.uptime())
     }
 
-    /// CPU and GPU die temperatures alone (the fan runner reads these every 5 s without the rest of the snapshot).
-    public func chipTemperatures() -> (cpu: Double?, gpu: Double?) { temperatures() }
+    /// CPU and GPU averages for display plus the hottest single plausible sensor (Tp*, Te*, Tg*), which the fan safety
+    /// rules use: one hot core cluster must not hide behind a cooler average. The fan runner reads these every 5 s.
+    public func chipTemperatures() -> (cpu: Double?, gpu: Double?, hottest: Double?) {
+        let r = readings()
+        return (ChipTemperatures.average(r.cpu), ChipTemperatures.average(r.gpu), ChipTemperatures.hottest(r.cpu.merging(r.gpu) { a, _ in a }))
+    }
 
     private func temperatures() -> (cpu: Double?, gpu: Double?) {
+        let r = readings()
+        return (ChipTemperatures.average(r.cpu), ChipTemperatures.average(r.gpu))
+    }
+
+    private func readings() -> (cpu: [String: Double], gpu: [String: Double]) {
         lock.lock(); defer { lock.unlock() }
-        guard let smc = SMCReader() else { return (nil, nil) }
+        guard let smc = SMCReader() else { return ([:], [:]) }
         if smcKeys == nil { smcKeys = ChipTemperatures.keys(in: smc.allKeys()) }
-        guard let keys = smcKeys else { return (nil, nil) }
+        guard let keys = smcKeys else { return ([:], [:]) }
         let cpu = Dictionary(keys.cpu.compactMap { k in smc.float(k).map { (k, $0) } }, uniquingKeysWith: { a, _ in a })
         let gpu = Dictionary(keys.gpu.compactMap { k in smc.float(k).map { (k, $0) } }, uniquingKeysWith: { a, _ in a })
-        return (ChipTemperatures.average(cpu), ChipTemperatures.average(gpu))
+        return (cpu, gpu)
     }
 }
 
@@ -88,11 +97,16 @@ public enum ChipTemperatures {
         return k.cpu.isEmpty && k.gpu.isEmpty ? nil : k
     }
 
+    static let plausible = 5.0...130.0
+
     /// Mean of the plausible readings; sensors that are off read 0 and are left out. nil when none are plausible.
     public static func average(_ readings: [String: Double]) -> Double? {
-        let ok = readings.values.filter { (5...130).contains($0) }
+        let ok = readings.values.filter { plausible.contains($0) }
         return ok.isEmpty ? nil : ok.reduce(0, +) / Double(ok.count)
     }
+
+    /// The hottest plausible reading (sensors that are off read 0 and are left out). nil when none are plausible.
+    public static func hottest(_ readings: [String: Double]) -> Double? { readings.values.filter { plausible.contains($0) }.max() }
 }
 
 /// Read-only AppleSMC client (same struct layout as spikes/smc-probe). It never writes; reading needs no privileges.
@@ -178,8 +192,9 @@ public enum FanSensors {
     public static func read() -> FanReading? {
         guard let smc = SMCReader() else { return nil }
         let count = min(Int(smc.uint8("FNum") ?? 0), 10)
-        func float(_ k: String) -> Double? { smc.type(k) == "flt " ? smc.float(k) : nil }
-        let rpms = (0..<count).map { float("F\($0)Ac").map { max(0, $0) } }
+        // Anything not a finite, sane rpm (NaN, negative, huge) is treated as unreadable.
+        func float(_ k: String) -> Double? { smc.type(k) == "flt " ? smc.float(k).flatMap { (0...20_000).contains($0) ? $0 : nil } : nil }
+        let rpms = (0..<count).map { float("F\($0)Ac") }
         let mins = (0..<count).compactMap { float("F\($0)Mn") }, maxs = (0..<count).compactMap { float("F\($0)Mx") }
         var range: FanRange?
         if count > 0, mins.count == count, maxs.count == count, let lo = mins.max(), let hi = maxs.min(), lo > 0, hi > lo {

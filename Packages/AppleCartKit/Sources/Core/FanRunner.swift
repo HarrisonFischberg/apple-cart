@@ -26,8 +26,15 @@ public struct FanState: Equatable, Sendable {
     public var holdingTempC: Double?
     public var commandFailed = false
     public var waitingForWake = false
+    /// The fan never reached the applied speed: handed back, and nothing manual until the owner applies again.
+    public var fanNotResponding = false
+    /// Someone else keeps the fans in manual mode: handed back once, then left alone until the owner applies again.
+    public var otherAppControls = false
 
     public init() {}
+
+    public static let notRespondingText = "The fan did not respond. Control returned to macOS."
+    public static let otherAppText = "Another app is controlling the fans."
 
     /// No fan in the SMC (MacBook Air): an honest empty state, whatever the helper says.
     public var noFan: Bool { reading.map { $0.rpms.isEmpty } ?? false }
@@ -52,6 +59,8 @@ public struct FanState: Equatable, Sendable {
         case .unsupported: return "Fan control is not supported on this Mac."
         case .ready: break
         }
+        if otherAppControls { return Self.otherAppText }
+        if fanNotResponding { return Self.notRespondingText }
         if waitingForWake { return "Waiting for the Mac to wake." }
         if commandFailed { return "Could not set the fans. macOS is controlling them." }
         if let rpm = holdingRPM {
@@ -61,7 +70,7 @@ public struct FanState: Equatable, Sendable {
         switch decision {
         case .system(.hot(let t))?: return "Hot (\(SystemText.temperature(t))): macOS has the fans for 2 minutes."
         case .system(.thermalPressure)?: return "Thermal pressure: macOS has the fans for 2 minutes."
-        case .system(.coolingDown)?: return "Cooling down: macOS has the fans for now."
+        case .system(.coolingDown)?: return "Cooling down: macOS has the fans until the chip is below 80 °C."
         case .system(.noTemperature)?: return "Temperature unknown: macOS is controlling the fans."
         case .system(.belowCurve)?: return "Below the curve: macOS is controlling the fans."
         case .hold?: return "Applying…"
@@ -93,6 +102,9 @@ public final class FanRunner {
     public static let statusEvery: TimeInterval = 30
     /// The helper's own lease; past this a manual speed has certainly been undone by the helper.
     public static let leaseSeconds: TimeInterval = 90
+    /// After a manual speed starts, every fan must be within `responseTolerance` of the target by then.
+    public static let responseWindow: TimeInterval = 15
+    public static let responseTolerance = 0.2
 
     public private(set) var state = FanState()
     public let settings: FanSettings
@@ -105,6 +117,10 @@ public final class FanRunner {
     @ObservationIgnored private var maybeManualUntil: Date?
     @ObservationIgnored private var statusCheckedAt: Date?
     @ObservationIgnored private var lastSample: FanSample?
+    /// A manual speed started at this time and its response has not been confirmed yet.
+    @ObservationIgnored private var verifySince: Date?
+    /// We handed a manual mode we did not set back to macOS once already this session.
+    @ObservationIgnored private var handedBackForeign = false
     @ObservationIgnored private var busy = false
     @ObservationIgnored private var again = false
 
@@ -116,13 +132,19 @@ public final class FanRunner {
 
     private var manualMayBeLive: Bool { maybeManualUntil.map { now() < $0 } ?? false }
 
+    /// The owner turned the tool on or off. Off also forgets the applied mode (System until Apply is pressed again).
     public func setToolEnabled(_ on: Bool) async {
+        if !on { settings.setActive(.system) }
+        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false
+        await run(on)
+    }
+
+    private func run(_ on: Bool) async {
         toolEnabled = on
         if on {
             await refreshHelperStatus()
             await evaluate(lastSample)
         } else {
-            settings.setActive(.system) // turning the tool off returns to System until Apply is pressed again
             clearCommandState()
             if await controller.resetFan() == .applied { maybeManualUntil = nil }
         }
@@ -138,11 +160,14 @@ public final class FanRunner {
         await evaluate(nil)
     }
 
-    /// Apply pressed (or System chosen): start from a clean smoothing state and act now.
+    /// Apply pressed (or System chosen): start from a clean smoothing state and act now. The owner taking control again
+    /// also clears "did not respond" and "another app" (the heat lockout and latch stay).
     public func applyChanged() async {
-        let releasedUntil = policy.releasedUntil
-        policy = FanPolicyState()
-        policy.releasedUntil = releasedUntil
+        var fresh = FanPolicyState()
+        fresh.releasedUntil = policy.releasedUntil
+        fresh.heatLatched = policy.heatLatched
+        policy = fresh
+        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil
         await evaluate(lastSample)
     }
 
@@ -154,7 +179,13 @@ public final class FanRunner {
         if report.manual == false, sentRPM != nil {
             sentRPM = nil; sentAt = nil; state.holdingRPM = nil // lease, sleep or restart undid it; the next pass decides again
         } else if report.manual == true, sentRPM == nil, !manualMayBeLive {
-            maybeManualUntil = now().addingTimeInterval(Self.leaseSeconds) // manual we do not know about: hand it back
+            // Manual mode we did not set. Hand it back once; if it comes back, another app wants it: leave it alone.
+            if handedBackForeign { state.otherAppControls = true } else {
+                handedBackForeign = true
+                maybeManualUntil = now().addingTimeInterval(Self.leaseSeconds)
+            }
+        } else if report.manual == false {
+            state.otherAppControls = false
         }
     }
 
@@ -169,11 +200,15 @@ public final class FanRunner {
         } while again
     }
 
-    /// Before quit or delete-all: fans to macOS.
-    public func shutdown() async { await setToolEnabled(false) }
+    /// Before quit or delete-all: fans to macOS, always. The applied mode is kept only when Resume is on, so the next
+    /// launch can re-apply it (after the helper is ready and a fresh temperature is known).
+    public func shutdown() async {
+        if !settings.resume { settings.setActive(.system) }
+        await run(false)
+    }
 
     private func clearCommandState() {
-        sentRPM = nil; sentAt = nil
+        sentRPM = nil; sentAt = nil; verifySince = nil
         policy = FanPolicyState()
         state.holdingRPM = nil; state.holdingPercent = nil; state.holdingMode = .system
         state.commandFailed = false; state.waitingForWake = false; state.decision = nil
@@ -188,6 +223,9 @@ public final class FanRunner {
             clearCommandState()
             return
         }
+        if state.otherAppControls { state.holdingRPM = nil; state.decision = nil; return } // never fight another app
+        if state.fanNotResponding { state.decision = nil; await release(); return }
+        if await fanDidNotRespond() { return }
         let decision = FanPolicy.decide(mode: settings.active, manualPercent: settings.manualPercent, curve: settings.curve,
                                         temperatures: s?.temperatures ?? FanTemperatures(), thermalPressure: s?.thermalPressure ?? false,
                                         range: s?.reading?.range, now: now(), state: &policy)
@@ -211,6 +249,7 @@ public final class FanRunner {
         guard toolEnabled else { if await controller.resetFan() == .applied { maybeManualUntil = nil }; return }
         switch result {
         case .applied:
+            if sentRPM == nil { verifySince = now() } // a fresh start: check the fan really follows
             sentRPM = rpm; sentAt = now()
             state.holdingRPM = rpm; state.holdingMode = mode; state.holdingPercent = percent
             state.commandFailed = false; state.waitingForWake = false
@@ -224,13 +263,30 @@ public final class FanRunner {
         }
     }
 
+    /// Watchdog: once a manual speed has run for `responseWindow`, every fan must read within 20% of the target (a fan
+    /// that was stopped must at least be turning). If not, the writes are not working on this Mac: hand back, say so,
+    /// and do not retry until the owner presses Apply again.
+    private func fanDidNotRespond() async -> Bool {
+        guard let since = verifySince, let target = sentRPM, let reading = state.reading else { return false }
+        let ok = !reading.rpms.isEmpty && reading.rpms.allSatisfy { rpm in
+            guard let rpm else { return false }
+            return rpm > 0 && abs(rpm - Double(target)) <= Double(target) * Self.responseTolerance
+        }
+        if ok { verifySince = nil; return false }
+        guard now().timeIntervalSince(since) >= Self.responseWindow else { return false }
+        state.fanNotResponding = true
+        state.decision = nil
+        await release()
+        return true
+    }
+
     private func release() async {
         state.holdingRPM = nil; state.holdingPercent = nil; state.holdingMode = .system
         state.waitingForWake = false
         guard sentRPM != nil || manualMayBeLive else { return }
         let result = await controller.resetFan()
         if result == .applied || !manualMayBeLive {
-            sentRPM = nil; sentAt = nil; maybeManualUntil = nil
+            sentRPM = nil; sentAt = nil; maybeManualUntil = nil; verifySince = nil
             if result == .applied { state.commandFailed = false }
         } else {
             state.commandFailed = true // manual may still be live: send the reset again next pass
