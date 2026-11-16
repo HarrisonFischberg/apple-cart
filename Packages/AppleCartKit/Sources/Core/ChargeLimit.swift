@@ -125,6 +125,8 @@ public enum ChargePolicy {
 public enum ChargeApplyResult: Equatable, Sendable {
     case applied
     case unavailable
+    /// The helper refuses cuts while the Mac is going to sleep.
+    case sleeping
     case failed(String)
 }
 

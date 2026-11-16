@@ -14,6 +14,12 @@ public enum SMCWhitelist {
 
 public enum SMCError: Error, Equatable {
     case refused, unavailable, io(Int32), smc(UInt8), keyMissing
+
+    /// The SMC answers a key-info call for an absent key with result 0x84 (kSMCKeyNotFound).
+    public static let keyNotFound: UInt8 = 0x84
+
+    /// What a failed key-info call means: 0x84 is "no such key", anything else stays a generic failure.
+    public static func fromKeyInfo(_ e: SMCError) -> SMCError { e == .smc(keyNotFound) ? .keyMissing : e }
 }
 
 /// Narrow SMC surface: read and write one byte of the whitelisted key. Fakes implement this in tests.
@@ -59,7 +65,7 @@ public final class SMCConnection: SMCWriting, @unchecked Sendable {
 
     private func oneByteInfo(_ key: UInt32) throws {
         var d = KeyData(); d.key = key; d.data8 = Self.readInfo
-        try call(&d)
+        do { try call(&d) } catch let e as SMCError { throw SMCError.fromKeyInfo(e) }
         guard d.info.dataSize == 1 else { throw SMCError.keyMissing }
     }
 
