@@ -50,9 +50,10 @@ public struct FanCurve: Codable, Equatable, Sendable {
     public static let maxSensors = 2
     public static let tempRange = 40...100
     public static let percentRange = 0...100
-    /// Conservative: macOS below 55 C, then up to full speed at 90 C (where the safety release takes over anyway).
-    /// 30% and 65% are about 3,500 and 5,000 rpm on a 2,317-6,550 rpm fan.
-    public static let `default` = FanCurve(points: [FanCurvePoint(55, 0), FanCurvePoint(70, 30), FanCurvePoint(80, 65), FanCurvePoint(90, 100)],
+    /// Starts well before macOS does (it keeps the fan off until about 85 C on the M5 MacBook Pro): silent up to 60 C, which is
+    /// where this chip idles, then a gentle ramp, full speed at 90 C (where the safety release takes over anyway).
+    /// 15%, 40% and 70% are about 2,950, 3,900 and 5,300 rpm on a 2,317-6,550 rpm fan.
+    public static let `default` = FanCurve(points: [FanCurvePoint(60, 0), FanCurvePoint(68, 15), FanCurvePoint(75, 40), FanCurvePoint(82, 70), FanCurvePoint(90, 100)],
                                            sensors: [.hottestSoC])
 
     public var points: [FanCurvePoint]

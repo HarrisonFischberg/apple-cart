@@ -28,14 +28,14 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         s = FanPolicyState()
         #expect(decide(.manual, percent: 100, &s) == .hold(rpm: 6550))
         s = FanPolicyState()
-        #expect(decide(.curve, soc: 75, &s) == .hold(rpm: range.rpm(percent: 47.5)))
+        #expect(decide(.curve, soc: 75, &s) == .hold(rpm: range.rpm(percent: 40)))
     }
 
     @Test func curveInterpolatesAndZeroMeansSystem() {
         let c = FanCurve.default
-        #expect(c.percent(at: 40) == 0 && c.percent(at: 55) == 0)
-        #expect(c.percent(at: 62.5) == 15)
-        #expect(c.percent(at: 85) == 82.5)
+        #expect(c.percent(at: 40) == 0 && c.percent(at: 60) == 0)
+        #expect(c.percent(at: 64) == 7.5)
+        #expect(c.percent(at: 78.5) == 55)
         #expect(c.percent(at: 99) == 100)
         var s = FanPolicyState()
         #expect(decide(.curve, soc: 50, &s) == .system(.belowCurve(50))) // macOS keeps the fan off at idle
@@ -324,7 +324,7 @@ private final class FanRig {
         rig.settings.applyCurve(.default)
         await rig.feed(soc: 75)
         #expect(rig.runner.state.subtitle == "Curve")
-        #expect(rig.runner.state.statusText == "Curve: 75 °C → \(FanText.rpm(range.rpm(percent: 47.5)))")
+        #expect(rig.runner.state.statusText == "Curve: 75 °C → \(FanText.rpm(range.rpm(percent: 40)))")
     }
 
     @Test func shutdownKeepsTheModeOnlyWithResume() async {

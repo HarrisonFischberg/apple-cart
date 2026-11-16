@@ -18,7 +18,7 @@ confirmed helper state only, and System | Manual | Curve.
 - Curve: sensor menu (Hottest SoC, CPU, GPU, Battery) with its live temperature, a chart with draggable points, steppers
   per point, Add point (up to 6, 40-100 C, increasing), Add sensor (a second sensor: the curve follows the hotter of the
   two; if either is unreadable, macOS gets the fans), Reset to default, "Apply fan curve". 0% on the curve means "let
-  macOS decide", so the fan can stay off when cool. Default curve: 55 C -> 0% (macOS), 70 C -> 30% (about 3,600 rpm),
+  macOS decide", so the fan can stay off when cool. Default curve (starts earlier than macOS, which kept the fan off until about 85 C in the live load test): 60 C -> 0% (macOS), 68 C -> 15% (about 2,950 rpm), 75 C -> 40%, 82 C -> 70%, 90 C -> 100%. Older text: 55 C -> 0% (macOS), 70 C -> 30% (about 3,600 rpm),
   80 C -> 65% (about 5,100 rpm), 90 C -> 100%.
 - "Resume after restart or sleep" (off by default): off means every sleep, relaunch, tool off and quit leaves the fans
   with macOS until Apply is pressed again. On re-applies the saved mode after wake or relaunch, but still only once the
