@@ -60,7 +60,7 @@ public struct BatteryReading: Sendable, Equatable {
         isPluggedIn = int(d["ExternalConnected"]) == 1
         isCharging = int(d["IsCharging"]) == 1
         cycleCount = int(d["CycleCount"]) ?? int(bd["CycleCount"])
-        if let t = int(d["Temperature"]) { temperatureC = Double(t) / 100 }
+        if let t = int(d["Temperature"]), (1...90).contains(Double(t) / 100) { temperatureC = Double(t) / 100 } // same filter as the SMC path
         if let raw = int(bd["AppleRawCurrentCapacity"]), let max = int(bd["AppleRawMaxCapacity"]), max > 0 {
             measuredPercent = Double(raw) / Double(max) * 100
             if let design = int(bd["DesignCapacity"]), design > 0 { capacityVsDesign = Double(max) / Double(design) }
@@ -175,6 +175,8 @@ public final class BatterySampler {
     public private(set) var history = BatteryHistory()
     public private(set) var energyUsers: [EnergyUser] = []
     @ObservationIgnored private var holders: Set<String> = []
+    /// The Battery screen's hold; the only one that shows the energy list.
+    public static let viewHolder = "batteryView"
     @ObservationIgnored private var timer: Task<Void, Never>?
     public nonisolated static let log = Logger(subsystem: "app.rarecreatures.applecart", category: "power")
     @ObservationIgnored private var powerSource: CFRunLoopSource?
@@ -195,7 +197,10 @@ public final class BatterySampler {
 
     public func hold(_ name: String) {
         holders.insert(name)
-        guard timer == nil else { return }
+        guard timer == nil else {
+            if name == Self.viewHolder { sample(addToHistory: false) } // fill the energy list now, not at the next tick
+            return
+        }
         sample()
         watchPowerSource()
         timer = Task { [weak self] in
@@ -277,7 +282,7 @@ public final class BatterySampler {
         Self.log.debug("sample plugged=\(r.isPluggedIn) charging=\(r.isCharging) energyUsers=\(withEnergyUsers)")
         if r != latest { latest = r }
         if addToHistory { history.add(r) }
-        guard withEnergyUsers else { return }
+        guard withEnergyUsers, holders.contains(Self.viewHolder) else { return } // ps only while the Battery screen shows the list
         Task.detached { [weak self] in
             let users = EnergyUsers.current()
             await MainActor.run { self?.energyUsers = users }

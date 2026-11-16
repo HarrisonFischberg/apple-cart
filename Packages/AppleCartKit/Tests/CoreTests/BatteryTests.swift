@@ -33,6 +33,12 @@ private final class LockedProps: @unchecked Sendable {
         #expect(abs(r.batteryWatts - -18) < 0.001)
     }
 
+    @Test func implausibleBatteryTemperatureIsIgnored() {
+        #expect(BatteryReading(properties: ["CurrentCapacity": 50, "Temperature": 3050])?.temperatureC == 30.5)
+        #expect(BatteryReading(properties: ["CurrentCapacity": 50, "Temperature": 65535])?.temperatureC == nil)
+        #expect(BatteryReading(properties: ["CurrentCapacity": 50, "Temperature": 0])?.temperatureC == nil)
+    }
+
     @Test func noBatteryDataMeansNoReading() {
         #expect(BatteryReading(properties: [:]) == nil)
     }

@@ -49,9 +49,9 @@ public struct BatteryView: View {
         }
         .task(id: active) {
             if active, widgets.openInEditMode, !didOpenEditing { widgets.editing = true; didOpenEditing = true }
-            if active { sampler.hold("batteryView") } else { sampler.release("batteryView") }
+            if active { sampler.hold(BatterySampler.viewHolder) } else { sampler.release(BatterySampler.viewHolder) }
         }
-        .onDisappear { sampler.release("batteryView") }
+        .onDisappear { sampler.release(BatterySampler.viewHolder) }
     }
 
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
