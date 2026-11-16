@@ -113,6 +113,16 @@ public final class KeepAwake {
         }
     }
 
+    /// Swaps the assertion for one with or without the display, keeping the timer and end conditions of the running session.
+    public func setKeepDisplayOn(_ on: Bool) {
+        guard var o = options, o.keepDisplayOn != on else { return }
+        guard let t = assertions.create(keepDisplayOn: on, reason: Self.assertionName) else { return }
+        if let token { assertions.release(token) }
+        token = t
+        o.keepDisplayOn = on
+        options = o
+    }
+
     public func stop(reason: String? = nil) {
         task?.cancel(); task = nil
         if let token { assertions.release(token) }

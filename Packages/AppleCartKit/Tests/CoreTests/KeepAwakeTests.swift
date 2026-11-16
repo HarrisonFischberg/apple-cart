@@ -39,6 +39,18 @@ private final class Counter: @unchecked Sendable {
         #expect(fake.live.isEmpty && !k.isActive)
     }
 
+    @Test func displayOptionCanChangeMidSession() {
+        let fake = FakeAssertions()
+        let k = KeepAwake(assertions: fake)
+        k.setKeepDisplayOn(true) // no session: nothing happens
+        #expect(fake.live.isEmpty)
+        k.start(.init(duration: 3600))
+        k.setKeepDisplayOn(true)
+        #expect(fake.live.count == 1 && fake.lastDisplayOn == true && k.options?.keepDisplayOn == true && k.options?.duration == 3600)
+        k.stop()
+        #expect(fake.live.isEmpty)
+    }
+
     @Test func startingAgainReplacesNotStacks() {
         let fake = FakeAssertions()
         let k = KeepAwake(assertions: fake)
