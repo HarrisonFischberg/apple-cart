@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let diskMap = DiskMapModel()
     private let flushDNS = FlushDNS(runner: AdminPromptRunner())
     private lazy var readoutSettings = ReadoutSettings(store: store)
+    let glyphStyle = GlyphStyleSettings()
     private var statusReadout: StatusReadout?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -77,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if on { self.panelController?.close(); self.cleaningOverlay.show(mode: self.cleaningMode) } else { self.cleaningOverlay.hide() }
         }
-        statusReadout = StatusReadout(button: item.button, sampler: battery, registry: registry, settings: readoutSettings)
+        statusReadout = StatusReadout(button: item.button, sampler: battery, registry: registry, settings: readoutSettings, glyphStyle: glyphStyle)
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,

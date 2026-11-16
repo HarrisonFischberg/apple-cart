@@ -11,13 +11,15 @@ final class StatusReadout {
     private let sampler: BatterySampler
     private let registry: FeatureRegistry
     private let settings: ReadoutSettings
+    private let glyphStyle: GlyphStyleSettings
     private var holding = false
 
-    init(button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings) {
+    init(button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings, glyphStyle: GlyphStyleSettings) {
         self.button = button
         self.sampler = sampler
         self.registry = registry
         self.settings = settings
+        self.glyphStyle = glyphStyle
         track()
     }
 
@@ -25,6 +27,7 @@ final class StatusReadout {
         let wanted = withObservationTracking {
             let on = registry.isEnabled(.battery) && settings.readout != .off
             _ = sampler.latest
+            _ = glyphStyle.style
             return on
         } onChange: { [weak self] in
             Task { @MainActor in self?.track() }
@@ -35,7 +38,7 @@ final class StatusReadout {
         }
         let reading = wanted ? sampler.latest : nil
         // Percent text first, then the battery glyph (the glyph carries the plug / bolt / pause state).
-        button?.image = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading)) // no reading: neutral app icon
+        button?.image = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading), style: glyphStyle.style) // no reading: neutral app icon
         let text = settings.readout.text(for: reading)
         button?.title = text.isEmpty ? "" : text + " "
         button?.imagePosition = text.isEmpty ? .imageOnly : .imageTrailing
