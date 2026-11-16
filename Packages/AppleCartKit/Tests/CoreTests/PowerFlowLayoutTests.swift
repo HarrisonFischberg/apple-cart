@@ -152,4 +152,14 @@ private func layout(_ r: BatteryReading?, width: CGFloat, soc: Double? = nil, ot
         #expect(FlowSummary.text(samples[2].1, streams: [], rest: nil).hasPrefix("On battery. Charger not connected. The battery supplies 13.2 watts."))
         #expect(FlowSummary.text(nil, streams: [], rest: nil) == "Power flow. No data.")
     }
+
+    @Test func heldMapShowsTheBatteryCoveringTheWholeLoadEvenIfASampleSaysCharging() {
+        let noisy = reading(plugged: true, amps: 120) // a stray "charging" sample during a hold
+        let held = noisy.whileHeld()
+        #expect(held.batteryWatts < 0 && abs(-held.batteryWatts - 13.3) < 0.001 && !held.isCharging)
+        #expect(FlowState(held) == .chargerTooWeak)
+        #expect(noisy.whileHeld().isPluggedIn)
+        let unplugged = reading(plugged: false, amps: -1000)
+        #expect(unplugged.whileHeld() == unplugged)
+    }
 }

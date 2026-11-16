@@ -8,8 +8,11 @@ struct PowerFlowMap: View {
     /// The charge limit is deliberately holding the charger off (the percent), so a low charger reading is not a weak charger.
     var pausedAt: Int?
 
+    /// While the charger is held off the Mac runs wholly from the battery, even when one telemetry sample says otherwise.
+    private var shown: BatteryReading? { pausedAt == nil ? reading : reading?.whileHeld() }
+
     var body: some View {
-        let streams = PowerFlows.streams(reading)
+        let streams = PowerFlows.streams(shown)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text("Power flow").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
@@ -25,11 +28,11 @@ struct PowerFlowMap: View {
                     .accessibilityElement(children: .ignore).accessibilityLabel("Live")
                 }
             }
-            PowerFlowArt(reading: reading, active: active, pausedAt: pausedAt)
+            PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(FlowSummary.text(reading, streams: streams, rest: PowerFlows.rest(reading, streams: streams))
+                .accessibilityLabel(FlowSummary.text(shown, streams: streams, rest: PowerFlows.rest(shown, streams: streams))
                     .replacingOccurrences(of: "the charger is too weak", with: pausedAt == nil ? "the charger is too weak" : "charging is paused"))
-            if PowerFlows.chargerTooWeak(reading) {
+            if PowerFlows.chargerTooWeak(shown) {
                 Label(pausedAt.map { "Charging is paused at \($0)%. The Mac is running on the battery." }
                       ?? "The charger is too weak for what this Mac is doing. The battery is covering the rest.",
                       systemImage: pausedAt == nil ? "exclamationmark.triangle.fill" : "pause.circle.fill")

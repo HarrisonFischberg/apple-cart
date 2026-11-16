@@ -5,6 +5,18 @@ import Observation
 import os
 
 /// One reading of the battery, all values straight from the system.
+extension BatteryReading {
+    /// While the limiter holds the charger off, the Mac runs wholly from the battery. One telemetry sample can still say
+    /// the battery is charging; the map shows the held truth: the battery covers the Mac's whole load, nothing charges.
+    public func whileHeld() -> BatteryReading {
+        guard isPluggedIn else { return self }
+        var r = self
+        r.batteryWatts = -(systemWatts ?? max(-batteryWatts, 0))
+        r.isCharging = false
+        return r
+    }
+}
+
 public struct BatteryReading: Sendable, Equatable {
     public var date: Date
     public var percent: Int              // as macOS shows it
