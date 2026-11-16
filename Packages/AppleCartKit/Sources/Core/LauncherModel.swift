@@ -74,6 +74,14 @@ public final class LauncherModel {
     }
 }
 
+/// True while the owner drags the panel's edge; animated views hold still until it ends.
+@MainActor @Observable
+public final class LiveResize {
+    public static let shared = LiveResize()
+    public var active = false
+    public init() {}
+}
+
 /// Where the panel is: launcher (route nil) or a tool's view. Resets when it closes, unless kept open.
 @MainActor @Observable
 public final class PanelModel {

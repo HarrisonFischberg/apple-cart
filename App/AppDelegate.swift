@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if on { self.panelController?.close(); self.cleaningOverlay.show(mode: self.cleaningMode) } else { self.cleaningOverlay.hide() }
         }
         defer { if UserDefaults.standard.bool(forKey: BatteryWidgetSettings.startupKey) { panelController?.toggle() } }
-        statusReadout = StatusReadout(button: item.button, sampler: battery, registry: registry, settings: readoutSettings, glyphStyle: glyphStyle)
+        statusReadout = StatusReadout(item: item, button: item.button, sampler: battery, registry: registry, settings: readoutSettings, glyphStyle: glyphStyle)
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,

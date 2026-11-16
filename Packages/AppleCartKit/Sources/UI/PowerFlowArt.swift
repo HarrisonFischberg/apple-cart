@@ -17,6 +17,7 @@ struct PowerFlowArt: View {
     @State private var changedAt: Double = 0
     @State private var settled = true
     @State private var clock = ParticleClock()
+    @State private var live = LiveResize.shared
 
     private var state: FlowState { FlowState(reading) }
     private var streams: [PowerStream] { PowerFlows.streams(reading) }
@@ -27,6 +28,10 @@ struct PowerFlowArt: View {
         FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w, held: pausedAt != nil)
     }
 
+    /// What the map is made of, apart from sizes: animations follow this, not every pixel of a resize.
+    private struct Topology: Hashable { var state: FlowState; var streams: [String]; var held: Bool }
+    private var topology: Topology { Topology(state: state, streams: streams.compactMap { $0.watts == nil ? nil : $0.title }, held: pausedAt != nil) }
+
     private var tick: Animation? { reduceMotion ? nil : .smooth(duration: FlowMotion.transition) }
 
     var body: some View {
@@ -34,7 +39,7 @@ struct PowerFlowArt: View {
             let target = layout(geo.size.width)
             let moving = target.links.contains { ($0.watts ?? 0) > 0.05 }
             ZStack(alignment: .topLeading) {
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion || (!moving && settled))) { tl in
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion || live.active || (!moving && settled))) { tl in
                     Canvas { ctx, _ in
                         let t = tl.date.timeIntervalSinceReferenceDate
                         let shown = reduceMotion || from == nil ? target
@@ -53,9 +58,15 @@ struct PowerFlowArt: View {
                 }
                 .frame(width: geo.size.width, height: target.size.height, alignment: .topLeading)
             }
-            .animation(tick, value: target)
+            // Animate only real changes (state, tiles, held), never the geometry changes of a window resize.
+            .animation(tick, value: topology)
             .onChange(of: target) { old, new in
                 let now = Date.now.timeIntervalSinceReferenceDate
+                if abs(old.size.width - new.size.width) > 0.5 { // the panel was resized: snap, no easing
+                    from = nil; settled = true
+                    clock.update(speeds: Dictionary(new.links.map { ($0.id, FlowMotion.speed($0.watts ?? 0)) }, uniquingKeysWith: { a, _ in a }), at: now)
+                    return
+                }
                 // Start from what is on screen, so a reading mid-transition does not snap.
                 from = from.map { FlowLayout.lerp($0, old, FlowMotion.progress(elapsed: now - changedAt)) } ?? old
                 changedAt = now

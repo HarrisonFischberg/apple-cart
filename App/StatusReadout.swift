@@ -8,14 +8,18 @@ import os
 /// and a text readout is chosen; otherwise the icon is static and nothing samples.
 @MainActor
 final class StatusReadout {
+    private let item: NSStatusItem?
     private let button: NSStatusBarButton?
     private let sampler: BatterySampler
     private let registry: FeatureRegistry
     private let settings: ReadoutSettings
     private let glyphStyle: GlyphStyleSettings
     private var holding = false
+    /// Space left on each side of the item's content.
+    private static let sideMargin: CGFloat = 3
 
-    init(button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings, glyphStyle: GlyphStyleSettings) {
+    init(item: NSStatusItem? = nil, button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings, glyphStyle: GlyphStyleSettings) {
+        self.item = item
         self.button = button
         self.sampler = sampler
         self.registry = registry
@@ -50,7 +54,8 @@ final class StatusReadout {
         // The item spacing is a kern on the gap between values, and between the text and the icon.
         // The text is a touch smaller than the system size so the larger battery leads.
         let font = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
-        let gap = NSAttributedString(string: " ", attributes: [.kern: CGFloat(settings.spacing), .font: font])
+        // A zero-width space carries the kern, so spacing 0 is really 0 (a normal space adds about 3 pt of its own).
+        let gap = NSAttributedString(string: "\u{200B}", attributes: [.kern: CGFloat(settings.spacing), .font: font])
         let title = NSMutableAttributedString()
         for (i, part) in parts.enumerated() {
             if i > 0 { title.append(gap) }
@@ -59,5 +64,8 @@ final class StatusReadout {
         if !parts.isEmpty && button?.image != nil { title.append(gap) }
         button?.attributedTitle = title
         button?.imagePosition = parts.isEmpty ? .imageOnly : button?.image == nil ? .noImage : .imageTrailing
+        // Fit the item to its content with a small margin; the system's default margin around it is wider than needed.
+        let width = title.size().width + (button?.image?.size.width ?? 0)
+        item?.length = ceil(width) + Self.sideMargin * 2 + (button?.image != nil && !parts.isEmpty ? 4 : 0)
     }
 }

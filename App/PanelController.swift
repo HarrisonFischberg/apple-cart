@@ -66,6 +66,7 @@ final class PanelController {
         let win = window ?? makeWindow()
         window = win
         position(win)
+        panel.expanded = win.frame.width > PanelView.size.width + 40
         if launcher.allTiles.contains(.battery) { panel.open(.battery) } // Battery is the opening screen every time
         win.makeKeyAndOrderFront(nil)
         panel.isOpen = true
@@ -99,7 +100,7 @@ final class PanelController {
         frame.size = target
         frame.origin.x = min(max(frame.origin.x - (target.width - win.frame.width) / 2, visible.minX + 8), visible.maxX - target.width - 8)
         frame.origin.y = max(frame.origin.y, visible.minY + 8)
-        win.setFrame(frame, display: true, animate: true)
+        win.setFrame(frame, display: true, animate: false) // an animated resize relays the whole panel every frame
     }
 
     private func makeWindow() -> PanelWindow {
@@ -120,6 +121,12 @@ final class PanelController {
                 UserDefaults.standard.set(win.frame.height, forKey: "panel.height")
                 self.panel.expanded = win.frame.width > PanelView.size.width + 40
             }
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.willStartLiveResizeNotification, object: win, queue: .main) { _ in
+            MainActor.assumeIsolated { LiveResize.shared.active = true }
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: win, queue: .main) { _ in
+            MainActor.assumeIsolated { LiveResize.shared.active = false }
         }
         return win
     }
