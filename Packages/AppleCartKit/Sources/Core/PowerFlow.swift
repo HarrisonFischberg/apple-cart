@@ -42,3 +42,24 @@ public struct PowerFlow: Equatable, Sendable {
         }
     }
 }
+
+/// Watts along each link of the map, from real readings only. nil = unknown, 0 = known to be idle.
+public struct PowerFlows: Equatable, Sendable {
+    public var chargerToMac: Double?
+    public var chargerToBattery: Double?
+    public var batteryToMac: Double?
+
+    public init(_ r: BatteryReading?) {
+        guard let r else { return }
+        let into = r.batteryWatts > 0.05 ? r.batteryWatts : 0
+        let out = r.batteryWatts < -0.05 ? -r.batteryWatts : 0
+        batteryToMac = out
+        if r.isPluggedIn {
+            chargerToBattery = into
+            chargerToMac = r.systemWatts.map { max(0, $0 - out) } // the battery covers part of the load when it helps the charger
+        } else {
+            chargerToBattery = 0
+            chargerToMac = 0
+        }
+    }
+}

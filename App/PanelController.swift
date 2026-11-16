@@ -36,7 +36,11 @@ final class PanelController {
 
     init(registry: FeatureRegistry, store: SettingsStore, anchor: NSStatusBarButton?, openSettings: @escaping () -> Void,
          firstRun: FirstRunModel, readout: ReadoutSettings,
+         battery: BatterySampler, chargeLimit: ChargeLimitSettings, chargeController: ChargeController,
          toolView: @escaping (FeatureID, PanelModel) -> AnyView?) {
+        self.battery = battery
+        self.chargeLimit = chargeLimit
+        self.chargeController = chargeController
         self.firstRun = firstRun
         self.readout = readout
         launcher = LauncherModel(registry: registry, store: store)
@@ -45,6 +49,9 @@ final class PanelController {
         self.toolViewFactory = toolView
     }
     private let firstRun: FirstRunModel
+    private let battery: BatterySampler
+    private let chargeLimit: ChargeLimitSettings
+    private let chargeController: ChargeController
     private let readout: ReadoutSettings
     private let toolViewFactory: (FeatureID, PanelModel) -> AnyView?
 
@@ -56,6 +63,7 @@ final class PanelController {
         let win = window ?? makeWindow()
         window = win
         position(win)
+        if launcher.allTiles.contains(.battery) { panel.open(.battery) } // Battery is the opening screen every time
         win.makeKeyAndOrderFront(nil)
         panel.isOpen = true
         installMonitors()
@@ -74,7 +82,8 @@ final class PanelController {
                              collapse: { [weak self] in self?.close() },
                              quit: { NSApp.terminate(nil) },
                              toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) },
-                             firstRun: firstRun, readout: readout)
+                             firstRun: firstRun, readout: readout,
+                             battery: battery, chargeLimit: chargeLimit, chargeControlAvailable: chargeController.isAvailable)
         let win = PanelWindow(content: NSHostingView(rootView: view))
         win.onCancel = { [weak self] in self?.close() }
         return win
