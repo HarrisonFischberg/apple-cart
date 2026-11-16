@@ -195,7 +195,8 @@ public final class BatterySampler {
         let present = raw.adapterWatts != nil
         if raw.isPluggedIn && !present && adapterSeen { r.isPluggedIn = false; r.isCharging = false }
         else if !raw.isPluggedIn && present { r.isPluggedIn = true }
-        adapterSeen = present
+        // Stay "seen" through the about-one-second window where the flag still lags; forget only once macOS agrees.
+        if present { adapterSeen = true } else if !raw.isPluggedIn { adapterSeen = false }
         return r
     }
 

@@ -77,6 +77,8 @@ private final class LockedProps: @unchecked Sendable {
         box.edit { $0["AdapterDetails"] = nil }            // macOS still says ExternalConnected = 1 for about a second
         s.release("t"); s.hold("t")
         #expect(s.latest?.isPluggedIn == false && s.latest?.isCharging == false)
+        s.release("t"); s.hold("t")                        // a second sample in the same lagging window stays unplugged
+        #expect(s.latest?.isPluggedIn == false)
         box.edit { $0["ExternalConnected"] = 0; $0["AdapterDetails"] = ["Watts": 94] }  // plug back in: details appear before the flag
         s.release("t"); s.hold("t")
         #expect(s.latest?.isPluggedIn == true)
