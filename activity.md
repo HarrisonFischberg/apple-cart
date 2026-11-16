@@ -150,3 +150,12 @@ Release build, ad-hoc re-signed copy (hardened runtime dropped so Sparkle loads;
 - All tools off: 0.033, 0.003, 0.020, 0.020, 0.020% → median 0.020%. Target < 0.1%: PASS.
 - All 15 available tools on: 0.547, 0.503, 0.470, 0.497, 0.480% → median 0.497%. No target in the spec; recorded. Run 1 overlapped a 2-minute adapter-cut test (T002) and was not an outlier.
 - Not measured: which tool costs most when on, window open vs closed, other Macs, energy impact in Activity Monitor. Own-process CPU only (helpers excluded; none exist yet).
+
+## 2026-11-15 live checks (owner at the Mac, Debug build, Apple Development signed)
+- Break banner: PASS (Rest your eyes at 5 min). Snooze button not verified. Icon is the placeholder.
+- Plain paste ⌃⌥⌘V: PASS after Clipboard was turned on and Accessibility granted.
+- Copy text ⌃⌥⌘T: PASS via the Select an area button after Screen Recording was granted. Shortcut itself not re-confirmed after the permission restart.
+- Open at login: PASS (listed and on in Login Items). Real logout/login test not run.
+- Send debug info: PASS. Draft to support@rarecreatures.app, subject "Apple Cart debug info", body has version, macOS, Mac model, tools on, permission states only. Not sent.
+- Fixes found by the live run: Accessibility never prompted (now requestAccessibility()), Debug builds were ad-hoc signed so grants reset on rebuild (now Apple Development), Clipboard options pushed the panel off screen (now scrolls), Keep awake options always visible.
+- Not run: ⌃⌥⌘Q read QR, new menu bar battery glyph in the real menu bar, new battery panel live.
