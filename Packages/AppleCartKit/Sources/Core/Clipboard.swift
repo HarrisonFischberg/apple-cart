@@ -195,6 +195,9 @@ public final class ClipboardHistory: Tool {
         save()
     }
 
+    /// Forget what could be undone and delete the screenshot files of removed items now.
+    public func discardUndo() { lastDeleted = []; prune() }
+
     public func undoDelete() { items += lastDeleted; items.sort { $0.copiedAt > $1.copiedAt }; lastDeleted = []; save() }
 
     public func neverStore(from bundleID: String) {

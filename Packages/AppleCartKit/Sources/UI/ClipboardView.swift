@@ -18,21 +18,18 @@ public struct ClipboardView: View {
                 }
                 .padding(.leading, 14).padding(.trailing, 14).frame(minHeight: 44)
                 .background(Palette.tile, in: Capsule())
-                // Pinned items stay; the "Removed N. Undo" line below brings everything back.
+                // Pinned items stay. Erased items, and their screenshots on disk, are gone for good.
                 if history.items.contains(where: { !$0.pinned }) {
-                    Button("Erase all") { history.clearAll() }
+                    Button("Erase all") { history.clearAll(); history.discardUndo() }
                         .buttonStyle(.plain).font(.system(size: 14, weight: .semibold)).foregroundStyle(.red)
                         .padding(.horizontal, 14).frame(minHeight: 44)
                         .background(Palette.tile, in: Capsule())
-                        .accessibilityHint("Removes every unpinned item. You can undo it.")
+                        .accessibilityHint("Removes every unpinned item for good")
                 }
             }
             ScrollView {
                 VStack(spacing: 8) {
                     if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
-                    if !history.lastDeleted.isEmpty {
-                        HStack { Text("Removed \(history.lastDeleted.count).").foregroundStyle(Palette.secondary); Button("Undo") { history.undoDelete() }; Spacer() }
-                    }
                     let shown = history.search(query)
                     if shown.isEmpty {
                         VStack(spacing: 8) {
