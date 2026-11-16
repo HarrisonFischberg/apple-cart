@@ -4,8 +4,10 @@ import HelperProtocol
 import ServiceManagement
 
 /// Talks to the root helper over one shared NSXPCConnection. Ready only when the daemon is registered,
-/// approved and answers version() with our version.
+/// approved, answers status() with our version and can read the charger key.
 final class HelperChargeController: ChargeController, @unchecked Sendable {
+    private struct StatusReply: Sendable { var adapterEnabled: Bool, chie: Int, version: Int, code: Int }
+
     static var service: SMAppService { .daemon(plistName: HelperIdentity.plistName) }
     private static let timeout: DispatchTimeInterval = .seconds(5)
 
@@ -14,14 +16,20 @@ final class HelperChargeController: ChargeController, @unchecked Sendable {
     /// Nil when the team ID build setting is missing: then we never connect (fail closed).
     private let requirement = CodeSigningRequirement.helper(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String)
 
-    func status() async -> ChargeHelperStatus {
+    func status() async -> ChargeHelperReport {
         switch Self.service.status {
-        case .notRegistered, .notFound: return .notInstalled
-        case .requiresApproval: return .needsApproval
+        case .notRegistered, .notFound: return ChargeHelperReport(.notInstalled)
+        case .requiresApproval: return ChargeHelperReport(.needsApproval)
         case .enabled:
-            guard let v: Int = await call({ p, done in p.version(reply: done) }) else { return .unreachable }
-            return v == HelperIdentity.version ? .ready : .outdated
-        @unknown default: return .unreachable
+            let reply: StatusReply? = await call({ p, done in
+                p.status { enabled, chie, version, _, code in done(StatusReply(adapterEnabled: enabled, chie: chie, version: version, code: code)) }
+            })
+            guard let reply else { return ChargeHelperReport(.unreachable) }
+            guard reply.version == HelperIdentity.version else { return ChargeHelperReport(.outdated) }
+            // No CHIE key, or the SMC cannot be read: never report ready, so the runner never cuts.
+            if reply.code == HelperErrorCode.unsupported.rawValue || reply.chie < 0 { return ChargeHelperReport(.unsupported) }
+            return ChargeHelperReport(.ready, adapterCut: !reply.adapterEnabled)
+        @unknown default: return ChargeHelperReport(.unreachable)
         }
     }
 

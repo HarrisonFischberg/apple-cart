@@ -74,7 +74,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         breakBanners.onSnooze = { [breaks] in breaks.snooze($0) }
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.pause() } }
-        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.resume() } }
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self, breaks] _ in
+            MainActor.assumeIsolated {
+                breaks.resume()
+                // The helper put the charger back on before sleep; check it and watch that charging resumes.
+                if let limiter = self?.chargeLimiter { Task { await limiter.systemDidWake() } }
+            }
+        }
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [clipboard] _ in
             MainActor.assumeIsolated { clipboard.screenLocked() }
         }

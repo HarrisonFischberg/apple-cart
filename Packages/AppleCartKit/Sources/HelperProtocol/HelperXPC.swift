@@ -8,7 +8,7 @@ public enum HelperIdentity {
     public static let machService = "app.rarecreatures.applecart.helper"
     public static let plistName = "app.rarecreatures.applecart.helper.plist"
     /// Bump when the XPC surface or helper behavior changes; the app shows "outdated" on a mismatch.
-    public static let version = 1
+    public static let version = 2
     /// Info.plist key that carries the team ID from the AC_TEAM_ID build setting (the one place it lives).
     public static let teamIDInfoKey = "ACTeamID"
 }
@@ -20,6 +20,10 @@ public enum HelperIdentity {
     case refused = 2
     case smcFailed = 3
     case notAllowed = 4
+    /// Cut refused between "system will sleep" and power-on.
+    case sleeping = 5
+    /// This Mac has no CHIE key (or no SMC): charge control cannot work here.
+    case unsupported = 6
 }
 
 /// The whole XPC surface. Inputs are clamped on the helper side; nothing here is ever run as a shell string.

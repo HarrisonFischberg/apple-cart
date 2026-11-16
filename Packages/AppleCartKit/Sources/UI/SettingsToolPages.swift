@@ -238,7 +238,8 @@ struct ChargeHelperCard: View {
         case .needsApproval: "Installed. Approve Apple Cart in Login Items to turn it on."
         case .ready: "Installed and working."
         case .outdated: "Out of date. Repair installs the version that came with this app."
-        case .unreachable: "Installed but not answering. Try Repair."
+        case .unreachable: "Installed but not answering. Try Repair. It only works in a build signed with the Apple Cart team."
+        case .unsupported: "Not supported on this Mac. Charge control needs a charger key this Mac does not have."
         }
     }
 

@@ -45,7 +45,8 @@ public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Senda
 
     public func status(reply: @escaping @Sendable (Bool, Int, Int, Int, Int) -> Void) {
         let s = adapter.status()
-        reply(s.adapterEnabled, s.chie, HelperIdentity.version, s.leaseRemaining, s.chie < 0 ? HelperErrorCode.smcFailed.rawValue : 0)
+        let code: HelperErrorCode = !s.supported ? .unsupported : s.chie < 0 ? .smcFailed : .ok
+        reply(s.adapterEnabled, s.chie, HelperIdentity.version, s.leaseRemaining, code.rawValue)
     }
 
     public func setAdapter(enabled: Bool, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void) {

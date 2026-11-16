@@ -5,32 +5,28 @@ import HelperCore
 import HelperProtocol
 import os
 
-private struct NoSMC: SMCWriting {
-    func read(key: String) throws -> UInt8 { throw SMCError.unavailable }
-    func write(key: String, value: UInt8) throws { throw SMCError.unavailable }
-}
-
 let queue = DispatchQueue(label: "app.rarecreatures.applecart.helper")
-let smc: SMCWriting
-do { smc = try SMCConnection() } catch {
-    Logger(subsystem: HelperIdentity.helperBundleID, category: "helper").error("AppleSMC unavailable: \(String(describing: error), privacy: .public)")
-    smc = NoSMC() // stay up and answer smcFailed instead of crash-looping under KeepAlive
-}
 let adapter = AdapterGuard(
-    smc: smc,
+    // Reopened after an I/O failure; if AppleSMC cannot be opened at all, restores back off and status reports chie -1.
+    connect: { try SMCConnection() },
     schedule: { seconds, fire in DispatchLeaseTimer(seconds: seconds, queue: queue, fire: fire) },
     log: { Logger(subsystem: HelperIdentity.helperBundleID, category: "helper").notice("\($0, privacy: .public)") })
 adapter.start()
 
-// launchd stops us with SIGTERM (unregister, shutdown); Ctrl-C when run by hand. Restore, then exit cleanly.
+// launchd stops us with SIGTERM (unregister, shutdown); Ctrl-C when run by hand. Restore, then exit.
+// A failed restore exits non-zero so KeepAlive (SuccessfulExit = false) starts us again to retry.
 let signalSources = [SIGTERM, SIGINT].map { sig in
     signal(sig, SIG_IGN)
     let src = DispatchSource.makeSignalSource(signal: sig, queue: queue)
-    src.setEventHandler { adapter.restore(reason: "signal \(sig)"); exit(0) }
+    src.setEventHandler { exit(adapter.restore(reason: "signal \(sig)") == .smcFailed ? 1 : 0) }
     src.resume()
     return src
 }
 let power = SystemPowerWatcher(adapter: adapter, queue: queue)
+if power == nil {
+    Logger(subsystem: HelperIdentity.helperBundleID, category: "helper")
+        .error("IORegisterForSystemPower failed: no restore before sleep; the wall-clock lease still ends any cut")
+}
 
 let gate = ClientGate(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String)
 let listener = NSXPCListener(machServiceName: HelperIdentity.machService)

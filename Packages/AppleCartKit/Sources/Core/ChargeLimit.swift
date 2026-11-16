@@ -130,23 +130,32 @@ public enum ChargeApplyResult: Equatable, Sendable {
 
 public enum ChargeHelperStatus: Equatable, Sendable {
     case notInstalled, needsApproval, ready, outdated, unreachable
+    /// The helper runs but this Mac has no usable charger key (or SMC).
+    case unsupported
+}
+
+public struct ChargeHelperReport: Equatable, Sendable {
+    public var status: ChargeHelperStatus
+    /// What the helper says about the charger right now: true = cut. Nil when it could not tell.
+    public var adapterCut: Bool?
+    public init(_ status: ChargeHelperStatus, adapterCut: Bool? = nil) { self.status = status; self.adapterCut = adapterCut }
 }
 
 /// Whatever can actually stop and start charging: the root helper over XPC, or nothing.
 public protocol ChargeController: Sendable {
-    func status() async -> ChargeHelperStatus
+    func status() async -> ChargeHelperReport
     func apply(_ decision: ChargeDecision) async -> ChargeApplyResult
     /// Adapter back on, any lease cancelled.
     func resetAll() async -> ChargeApplyResult
 }
 
 extension ChargeController {
-    public var isAvailable: Bool { get async { await status() == .ready } }
+    public var isAvailable: Bool { get async { await status().status == .ready } }
 }
 
 public struct NoopChargeController: ChargeController {
     public init() {}
-    public func status() async -> ChargeHelperStatus { .notInstalled }
+    public func status() async -> ChargeHelperReport { ChargeHelperReport(.notInstalled) }
     public func apply(_ decision: ChargeDecision) async -> ChargeApplyResult { .unavailable }
     public func resetAll() async -> ChargeApplyResult { .unavailable }
 }
