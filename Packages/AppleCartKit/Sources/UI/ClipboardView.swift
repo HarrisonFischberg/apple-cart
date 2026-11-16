@@ -20,27 +20,29 @@ public struct ClipboardView: View {
             }
             .padding(.leading, 14).padding(.trailing, 2)
             .background(Palette.tile, in: Capsule())
-            if showSettings { settings }
-            if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
-            if !history.lastDeleted.isEmpty {
-                HStack { Text("Removed \(history.lastDeleted.count).").foregroundStyle(Palette.secondary); Button("Undo") { history.undoDelete() }; Spacer() }
-            }
-            let shown = history.search(query)
-            if shown.isEmpty {
+            ScrollView {
                 VStack(spacing: 8) {
-                    Image(systemName: "doc.on.clipboard").font(.system(size: 30)).foregroundStyle(Palette.secondary)
-                    Text(query.isEmpty ? "Nothing copied yet. Copy something and it shows up here." : "No matches.").hint()
-                        .multilineTextAlignment(.center)
-                }.frame(maxWidth: .infinity, minHeight: 160)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
-                            if i > 0 { Divider() }
-                            row(item)
-                        }
+                    if showSettings { settings }
+                    if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
+                    if !history.lastDeleted.isEmpty {
+                        HStack { Text("Removed \(history.lastDeleted.count).").foregroundStyle(Palette.secondary); Button("Undo") { history.undoDelete() }; Spacer() }
                     }
-                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    let shown = history.search(query)
+                    if shown.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "doc.on.clipboard").font(.system(size: 30)).foregroundStyle(Palette.secondary)
+                            Text(query.isEmpty ? "Nothing copied yet. Copy something and it shows up here." : "No matches.").hint()
+                                .multilineTextAlignment(.center)
+                        }.frame(maxWidth: .infinity, minHeight: 160)
+                    } else {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
+                                if i > 0 { Divider() }
+                                row(item)
+                            }
+                        }
+                        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
                 }
             }
         }
