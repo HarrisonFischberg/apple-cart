@@ -23,6 +23,31 @@ public struct FanSpeedView: View {
     private var ready: Bool { state.helperStatus == .ready && !state.noFan }
 
     public var body: some View {
+        VStack(spacing: 0) {
+            scrollContent
+            if !state.noFan { applyFooter }
+        }
+        .onAppear { if !pinnedTab { tab = state.holdingRPM != nil ? state.holdingMode : settings.active } }
+    }
+
+    /// The Apply button stays in view under the scrolling card, whatever the panel height.
+    @ViewBuilder private var applyFooter: some View {
+        switch tab {
+        case .system:
+            let applied = settings.active == .system && state.holdingRPM == nil
+            applyButton(applied ? "Applied" : "Apply system control", applied: applied, returnLink: false) { applySystem() }
+                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+        case .manual:
+            let applied = settings.active == .manual && settings.manualPercent == draftPercent
+            applyButton(applied ? "Applied" : "Apply manual control", applied: applied) {
+                settings.applyManual(percent: draftPercent)
+                Task { await runner.applyChanged() }
+            }
+            .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+        }
+    }
+
+    private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
@@ -54,7 +79,6 @@ public struct FanSpeedView: View {
             }
             .toolPage()
         }
-        .onAppear { if !pinnedTab { tab = state.holdingRPM != nil ? state.holdingMode : settings.active } }
     }
 
     // MARK: Header and fans
@@ -110,12 +134,8 @@ public struct FanSpeedView: View {
     // MARK: System
 
     private var systemEditor: some View {
-        let applied = settings.active == .system && state.holdingRPM == nil
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("macOS decides the fan speed, including keeping the fan off when the Mac is cool.")
-                .font(.system(size: 14)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            applyButton(applied ? "Applied" : "Apply system control", applied: applied, returnLink: false) { applySystem() }
-        }
+        Text("macOS decides the fan speed, including keeping the fan off when the Mac is cool.")
+            .font(.system(size: 14)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: Manual
@@ -123,8 +143,7 @@ public struct FanSpeedView: View {
     private var range: FanRange? { state.reading?.range }
 
     private var manualEditor: some View {
-        let applied = settings.active == .manual && settings.manualPercent == draftPercent
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Fan speed").font(.system(size: 15)).foregroundStyle(Palette.secondary)
                 Spacer()
@@ -145,10 +164,6 @@ public struct FanSpeedView: View {
                 .accessibilityLabel("Fan speed")
                 .accessibilityValue("\(draftPercent) percent" + (range.map { ", about \(FanText.rpm($0.rpm(percent: Double(draftPercent))))" } ?? ""))
             Text("0% is the slowest speed the fan runs at, 100% its maximum.").font(.system(size: 12)).foregroundStyle(Palette.secondary)
-            applyButton(applied ? "Applied" : "Apply manual control", applied: applied) {
-                settings.applyManual(percent: draftPercent)
-                Task { await runner.applyChanged() }
-            }
         }
     }
 
