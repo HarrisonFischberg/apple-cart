@@ -235,6 +235,8 @@ Flat. Tiles carry no shadow at rest or in any state. Depth is tonal: the tile is
 ### Named Rules
 **The Flat Tile Rule.** Tiles never get shadows. State is shown by fill, outline color, or dash, not by lift.
 
+**Power flow exception (owner request, 2026-11-15).** Inside the Battery power flow map only, the small flow tiles use Liquid Glass (`glassEffect`, no shadow) and the ribbons carry gradients, a soft halo and travelling light. Energy colors there: charger amber (amber bar), Mac blue, battery green when charging and orange (light #D9480F / dark #FF8A4C) when draining. An unplugged charger tile is dimmed with the dashed hairline. Everything else stays flat.
+
 ## Shapes
 
 Soft continuous rounded rectangles. Tiles and launcher tiles: 16 pt. Buttons: 8 pt. Chips, pills, bars, steppers, and the header "Add task" pill: full capsule or circle. Bars are 4 pt capsules with a 2 x 10 pt marker notch for a limit. Outlines are 1 pt, always inside the shape (`strokeBorder`). Icons are SF Symbols at 12 pt (tile title), 14 pt (header), 18 pt (launcher), medium weight.
