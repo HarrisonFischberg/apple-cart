@@ -128,7 +128,7 @@ MainActor.assumeIsolated {
     Task { await unin.choose(URL(fileURLWithPath: "/Applications/Itsycal.app")) } // read-only scan, nothing is moved
     let cleaner = CleanerModel(); cleaner.scan() // read-only scan, nothing is moved
     let diskMap = DiskMapModel(); diskMap.scan()
-    @MainActor final class PrevNotifier: BreakNotifier { func prepare() async {}; func send(_ k: BreakKind) async {} }
+    @MainActor final class PrevNotifier: BreakNotifier { func prepare() async {}; func send(_ k: BreakKind, everyMinutes: Int) async {} }
     @MainActor final class PrevBlocker: InputBlocker { var canBlock = false; func start(onExitHeld: @escaping @MainActor () -> Void) -> Bool { true }; func stop() {} }
     let breaks = BreakReminders(defaults: UserDefaults(suiteName: "preview-breaks")!, notifier: PrevNotifier())
     breaks.start(); breaks.setEnabled(.eyes, true); breaks.setEnabled(.water, true)

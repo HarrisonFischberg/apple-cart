@@ -5,11 +5,12 @@ public enum BreakKind: String, CaseIterable, Codable, Sendable {
     case eyes, stretch, water
 
     public var title: String { switch self { case .eyes: "Rest your eyes"; case .stretch: "Stretch"; case .water: "Drink water" } }
-    public var message: String {
+    /// Text for the banner. `everyMinutes` is the owner's chosen gap between reminders.
+    public func message(everyMinutes: Int) -> String {
         switch self {
-        case .eyes: "Look at something 20 feet away for 20 seconds."
-        case .stretch: "Stand up and stretch for a minute."
-        case .water: "Time for a glass of water."
+        case .eyes: "20-20-20: look at something 20 feet away for 20 seconds, every \(everyMinutes) minutes."
+        case .stretch: "Stand up, step outside if you can, and stretch for a minute."
+        case .water: "Time for a glass of water. Refill at the fountain."
         }
     }
     public var symbol: String { switch self { case .eyes: "eye"; case .stretch: "figure.walk"; case .water: "drop" } }
@@ -27,7 +28,7 @@ public protocol BreakNotifier: AnyObject {
     /// Asks macOS for notification permission, at the moment the user turns a reminder on.
     func prepare() async
     /// Shows a banner with a Snooze action.
-    func send(_ kind: BreakKind) async
+    func send(_ kind: BreakKind, everyMinutes: Int) async
 }
 
 @MainActor @Observable
@@ -79,7 +80,7 @@ public final class BreakReminders: Tool {
         let t = now()
         for kind in BreakKind.allCases where (nextDue[kind].map { $0 <= t } ?? false) {
             nextDue[kind] = t.addingTimeInterval(Double(config[kind]!.minutes) * 60)
-            await notifier.send(kind)
+            await notifier.send(kind, everyMinutes: config[kind]!.minutes)
         }
         rearm()
     }

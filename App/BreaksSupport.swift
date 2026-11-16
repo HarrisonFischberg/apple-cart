@@ -20,9 +20,10 @@ final class BreakBanners: NSObject, BreakNotifier, @preconcurrency UNUserNotific
 
     func prepare() async { _ = try? await center.requestAuthorization(options: [.alert, .sound]) }
 
-    func send(_ kind: BreakKind) async {
+    func send(_ kind: BreakKind, everyMinutes: Int) async {
         let c = UNMutableNotificationContent()
-        c.title = kind.title; c.body = kind.message; c.categoryIdentifier = "break"; c.userInfo = ["kind": kind.rawValue]
+        c.title = kind.title; c.body = kind.message(everyMinutes: everyMinutes); c.categoryIdentifier = "break"; c.userInfo = ["kind": kind.rawValue]
+        if let u = BreakArtFiles.url(for: kind), let a = try? UNNotificationAttachment(identifier: kind.rawValue, url: u, options: nil) { c.attachments = [a] }
         try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
     }
 

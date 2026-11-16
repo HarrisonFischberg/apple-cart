@@ -8,7 +8,7 @@ private final class FakeNotifier: BreakNotifier {
     var onSend: (() -> Void)?
     var prepared = 0
     func prepare() async { prepared += 1 }
-    func send(_ kind: BreakKind) async { sent.append(kind); onSend?() }
+    func send(_ kind: BreakKind, everyMinutes: Int) async { sent.append(kind); onSend?() }
 }
 
 @MainActor
