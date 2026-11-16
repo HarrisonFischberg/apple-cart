@@ -2,6 +2,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 import Observation
+import os
 
 /// One reading of the battery, all values straight from the system.
 public struct BatteryReading: Sendable, Equatable {
@@ -119,7 +120,11 @@ public final class BatterySampler {
     public private(set) var energyUsers: [EnergyUser] = []
     @ObservationIgnored private var holders: Set<String> = []
     @ObservationIgnored private var timer: Task<Void, Never>?
+    public nonisolated static let log = Logger(subsystem: "app.rarecreatures.applecart", category: "power")
     @ObservationIgnored private var powerSource: CFRunLoopSource?
+    @ObservationIgnored private var notePort: IONotificationPortRef?
+    @ObservationIgnored private var note: io_object_t = 0
+    @ObservationIgnored private var adapterSeen = false
     @ObservationIgnored private var settle: Task<Void, Never>?
     @ObservationIgnored private let interval: Duration
     @ObservationIgnored private let read: @Sendable () -> BatteryReading?
@@ -151,6 +156,8 @@ public final class BatterySampler {
             timer?.cancel(); timer = nil
             settle?.cancel(); settle = nil
             if let src = powerSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes); powerSource = nil }
+            if note != 0 { IOObjectRelease(note); note = 0 }
+            if let port = notePort { IONotificationPortDestroy(port); notePort = nil }
         }
     }
 
@@ -166,25 +173,52 @@ public final class BatterySampler {
         }, ctx)?.takeRetainedValue() else { return }
         CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
         powerSource = src
+        // The battery's own registry entry speaks about a second before macOS flips "plugged in".
+        // Measured on this Mac: the adapter details vanish ~1.0 s before ExternalConnected goes to 0.
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0, let port = IONotificationPortCreate(kIOMainPortDefault) else { return }
+        defer { IOObjectRelease(service) }
+        CFRunLoopAddSource(CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port).takeUnretainedValue(), .commonModes)
+        var n: io_object_t = 0
+        let ok = IOServiceAddInterestNotification(port, service, kIOGeneralInterest, { ctx, _, _, _ in
+            guard let ctx else { return }
+            let me = Unmanaged<BatterySampler>.fromOpaque(ctx).takeUnretainedValue()
+            MainActor.assumeIsolated { me.sample(withEnergyUsers: false, addToHistory: false) }
+        }, ctx, &n)
+        if ok == KERN_SUCCESS { notePort = port; note = n } else { IONotificationPortDestroy(port) }
+    }
+
+    /// The adapter details disappear before macOS flips ExternalConnected on unplug (and appear before it on plug-in).
+    /// Only trusted once this adapter has been seen with details, so an adapter that never reports them still works.
+    private func adjusted(_ raw: BatteryReading) -> BatteryReading {
+        var r = raw
+        let present = raw.adapterWatts != nil
+        if raw.isPluggedIn && !present && adapterSeen { r.isPluggedIn = false; r.isCharging = false }
+        else if !raw.isPluggedIn && present { r.isPluggedIn = true }
+        adapterSeen = present
+        return r
     }
 
     /// Read now, then again as the charger's numbers settle (charging state and watts lag the plug by a second or two).
     private func powerChanged() {
-        sample(withEnergyUsers: false)
+        Self.log.debug("power notification")
+        sample(withEnergyUsers: false, addToHistory: false)
         settle?.cancel()
         settle = Task { [weak self] in
             for ms in [400, 800, 1500] {
                 try? await Task.sleep(for: .milliseconds(ms))
                 guard !Task.isCancelled else { return }
-                self?.sample(withEnergyUsers: false)
+                self?.sample(withEnergyUsers: false, addToHistory: false)
             }
         }
     }
 
-    private func sample(withEnergyUsers: Bool = true) {
-        guard let r = read() else { return }
-        latest = r
-        history.add(r)
+    private func sample(withEnergyUsers: Bool = true, addToHistory: Bool = true) {
+        guard let raw = read() else { return }
+        let r = adjusted(raw)
+        Self.log.debug("sample plugged=\(r.isPluggedIn) charging=\(r.isCharging) energyUsers=\(withEnergyUsers)")
+        if r != latest { latest = r }
+        if addToHistory { history.add(r) }
         guard withEnergyUsers else { return }
         Task.detached { [weak self] in
             let users = EnergyUsers.current()

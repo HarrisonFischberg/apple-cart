@@ -2,6 +2,7 @@ import AppKit
 import Core
 import UI
 import Observation
+import os
 
 /// Keeps the menu bar icon and text current. Holds the battery sampler only while the Battery tool is on
 /// and a text readout is chosen; otherwise the icon is static and nothing samples.
@@ -39,6 +40,7 @@ final class StatusReadout {
         let reading = wanted ? sampler.latest : nil
         // Percent text first, then the battery glyph (the glyph carries the plug / bolt / pause state).
         button?.image = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading), style: glyphStyle.style) // no reading: neutral app icon
+        BatterySampler.log.debug("status icon updated plugged=\(reading?.isPluggedIn ?? false)")
         let text = settings.readout.text(for: reading)
         button?.title = text.isEmpty ? "" : text + " "
         button?.imagePosition = text.isEmpty ? .imageOnly : .imageTrailing

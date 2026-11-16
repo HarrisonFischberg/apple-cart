@@ -9,6 +9,14 @@ private func props(percent: Int = 80, amps: Int64 = 0, plugged: Int = 1) -> [Str
      "BatteryData": ["AppleRawCurrentCapacity": 4545, "AppleRawMaxCapacity": 5751, "DesignCapacity": 6249]]
 }
 
+private final class LockedProps: @unchecked Sendable {
+    private let lock = NSLock()
+    private var d: [String: Any]
+    init(_ d: [String: Any]) { self.d = d }
+    var value: [String: Any] { lock.withLock { d } }
+    func edit(_ f: (inout [String: Any]) -> Void) { lock.withLock { f(&d) } }
+}
+
 @MainActor
 @Suite struct BatteryTests {
     @Test func readsTheValuesTheSystemReports() throws {
@@ -59,5 +67,29 @@ private func props(percent: Int = 80, amps: Int64 = 0, plugged: Int = 1) -> [Str
         #expect(s.isSampling)
         s.release("menubar")
         #expect(!s.isSampling)
+    }
+
+    @Test func unplugShowsAsSoonAsTheAdapterDetailsVanish() throws {
+        let box = LockedProps(props())
+        let s = BatterySampler(interval: .seconds(60)) { BatteryReading(properties: box.value) }
+        s.hold("t")
+        #expect(s.latest?.isPluggedIn == true)
+        box.edit { $0["AdapterDetails"] = nil }            // macOS still says ExternalConnected = 1 for about a second
+        s.release("t"); s.hold("t")
+        #expect(s.latest?.isPluggedIn == false && s.latest?.isCharging == false)
+        box.edit { $0["ExternalConnected"] = 0; $0["AdapterDetails"] = ["Watts": 94] }  // plug back in: details appear before the flag
+        s.release("t"); s.hold("t")
+        #expect(s.latest?.isPluggedIn == true)
+        s.release("t")
+    }
+
+    @Test func anAdapterThatNeverReportsDetailsFollowsTheFlag() {
+        var d = props()
+        d["AdapterDetails"] = nil
+        let box = LockedProps(d)
+        let s = BatterySampler(interval: .seconds(60)) { BatteryReading(properties: box.value) }
+        s.hold("t")
+        #expect(s.latest?.isPluggedIn == true)
+        s.release("t")
     }
 }
