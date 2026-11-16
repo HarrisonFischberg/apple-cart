@@ -48,7 +48,7 @@ public enum BatteryGlyphImage {
         if style != .classic { g.badge = g.badge.single }
         let size: NSSize
         switch style {
-        case .classic: size = NSSize(width: 36, height: 17)
+        case .classic: size = NSSize(width: 36 * classicScale, height: 17 * classicScale)
         case .solid: size = NSSize(width: 28, height: 13)
         case .segments: size = NSSize(width: 38, height: 13)
         case .ring: size = NSSize(width: 15, height: 15)
@@ -56,7 +56,9 @@ public enum BatteryGlyphImage {
         }
         let img = NSImage(size: size, flipped: false) { _ in
             switch style {
-            case .classic: drawClassic(g)
+            case .classic:
+                NSGraphicsContext.current?.cgContext.scaleBy(x: classicScale, y: classicScale)
+                drawClassic(g)
             case .solid: drawSolid(g)
             case .segments: drawSegments(g)
             case .ring: drawRing(g)
@@ -68,6 +70,9 @@ public enum BatteryGlyphImage {
         img.accessibilityDescription = "Battery"
         return img
     }
+
+    /// Classic is drawn on a 36 x 17 grid and scaled down to its menu bar size.
+    private static let classicScale: CGFloat = 0.88
 
     private static let dim = NSColor.black.withAlphaComponent(0.55)
 

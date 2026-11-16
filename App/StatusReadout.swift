@@ -49,7 +49,7 @@ final class StatusReadout {
         BatterySampler.log.debug("status icon updated plugged=\(reading?.isPluggedIn ?? false)")
         // The item spacing is a kern on the gap between values, and between the text and the icon.
         // The text is a touch smaller than the system size so the larger battery leads.
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium)
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
         let gap = NSAttributedString(string: " ", attributes: [.kern: CGFloat(settings.spacing), .font: font])
         let title = NSMutableAttributedString()
         for (i, part) in parts.enumerated() {
