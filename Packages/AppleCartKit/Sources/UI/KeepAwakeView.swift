@@ -8,9 +8,8 @@ private let presets: [(label: String, spoken: String, seconds: TimeInterval?)] =
 
 public struct KeepAwakeView: View {
     let keepAwake: KeepAwake
-    @AppStorage("keepAwake.displayOn") private var displayOn = false // set in Settings
-    @AppStorage("keepAwake.useLevel") private var useLevel = false
-    @AppStorage("keepAwake.level") private var level = 20
+    @AppStorage("keepAwake.customAmount") private var customAmount = 45
+    @AppStorage("keepAwake.customHours") private var customHours = false
 
     public init(keepAwake: KeepAwake) { self.keepAwake = keepAwake }
 
@@ -32,6 +31,7 @@ public struct KeepAwakeView: View {
                                 .accessibilityAddTraits(isSelected(p.seconds) ? .isSelected : [])
                         }
                     }
+                    customRow
                     Text("Click a time to start. Click it again to stop.").font(.callout).foregroundStyle(Palette.secondary)
                     Text("Display and battery options are in Settings.").font(.callout).foregroundStyle(Palette.secondary)
                     if keepAwake.failed {
@@ -62,6 +62,30 @@ public struct KeepAwakeView: View {
         }
     }
 
+    /// Type any number of minutes or hours; the same Settings options apply.
+    private var customRow: some View {
+        HStack(spacing: 8) {
+            TextField("Custom", value: $customAmount, format: .number)
+                .textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing).frame(width: 64, height: 44)
+                .accessibilityLabel("Custom time amount")
+            Picker("Unit", selection: $customHours) {
+                Text("minutes").tag(false); Text("hours").tag(true)
+            }
+            .labelsHidden().pickerStyle(.segmented).frame(width: 140).accessibilityLabel("Custom time unit")
+            Button("Start") {
+                if let s = KeepAwakeOptions.customSeconds(customAmount, hours: customHours) { start(s) }
+            }
+            .buttonStyle(ChipStyle(selected: customIsSelected))
+            .disabled(KeepAwakeOptions.customSeconds(customAmount, hours: customHours) == nil)
+            .accessibilityLabel("Start custom time")
+        }
+    }
+
+    private var customIsSelected: Bool {
+        guard let d = keepAwake.options?.duration else { return false }
+        return d == KeepAwakeOptions.customSeconds(customAmount, hours: customHours) && !presets.contains { $0.seconds == d }
+    }
+
     private func isSelected(_ seconds: TimeInterval?) -> Bool {
         guard let o = keepAwake.options else { return false }
         return o.duration == seconds
@@ -72,7 +96,7 @@ public struct KeepAwakeView: View {
     }
 
     private func start(_ seconds: TimeInterval?) {
-        keepAwake.start(.init(duration: seconds, stopBelowPercent: useLevel ? level : nil, keepDisplayOn: displayOn))
+        keepAwake.start(.stored(duration: seconds))
     }
 
     private func remaining(_ end: Date, _ now: Date) -> String {

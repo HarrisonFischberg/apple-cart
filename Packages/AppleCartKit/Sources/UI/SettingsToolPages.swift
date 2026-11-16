@@ -62,8 +62,9 @@ struct ToolSettingsPage: View {
         switch id {
         case .battery:
             SettingsCard("Menu bar") { ReadoutRow(readout: readout) }
+            BatteryEnergySettings()
             Text("Charge limit is set from the panel.").hint()
-        case .keepAwake: KeepAwakeOptions()
+        case .keepAwake: KeepAwakeSettingsCards()
         case .clipboard: ClipboardOptions(history: tools.clipboard)
         case .breakReminders: BreakOptions(reminders: tools.breaks)
         case .cleaningMode: CleaningOptions()
@@ -117,20 +118,55 @@ struct ReadoutRow: View {
     }
 }
 
-private struct KeepAwakeOptions: View {
+private struct BatteryEnergySettings: View {
+    @AppStorage(MenuBarReadout.hardwarePercentKey) private var hardware = false
+    @AppStorage(EnergyThreshold.storageKey) private var threshold = EnergyThreshold.medium.rawValue
+    @AppStorage(EnergyThreshold.backgroundKey) private var background = false
+
+    var body: some View {
+        SettingsCard("Percentage") {
+            SettingsRow("Also show the battery's own percentage", detail: "Next to the macOS percent in the panel and the menu bar. Shows -- when unreadable.") {
+                Toggle("Also show the battery's own percentage", isOn: $hardware).toggleStyle(.switch).labelsHidden()
+            }
+        }
+        SettingsCard("Energy use") {
+            SettingsRow("Show apps above", detail: "Based on CPU use, not macOS's energy impact: Low 5%, Medium 20%, High 40% of one core.") {
+                Picker("Show apps above", selection: $threshold) {
+                    ForEach(EnergyThreshold.allCases, id: \.rawValue) { Text($0 == .medium ? "Medium (macOS default)" : $0.title).tag($0.rawValue) }
+                }
+                .labelsHidden().pickerStyle(.menu).fixedSize()
+            }
+            SettingsRow("Include background processes", detail: "Adds helpers and system processes. Off lists only apps.") {
+                Toggle("Include background processes", isOn: $background).toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+}
+
+private struct KeepAwakeSettingsCards: View {
     @AppStorage("keepAwake.displayOn") private var displayOn = false
     @AppStorage("keepAwake.useLevel") private var useLevel = false
-    @AppStorage("keepAwake.level") private var level = 20
+    @AppStorage("keepAwake.level") private var level = KeepAwakeOptions.defaultLevel
+    @AppStorage("keepAwake.endOnUnplug") private var endOnUnplug = false
+    @AppStorage("keepAwake.untilLimit") private var untilLimit = false
 
     var body: some View {
         SettingsCard("When it starts") {
             SettingsRow("Keep the display on too") { Toggle("Keep the display on too", isOn: $displayOn).toggleStyle(.switch).labelsHidden() }
-            SettingsRow("Stop when the battery reaches") { Toggle("Stop when the battery reaches", isOn: $useLevel).toggleStyle(.switch).labelsHidden() }
+            SettingsRow("Disable sleep until the charge limit", detail: "Recommended. Ends when plugged in and the charge reaches your limit. At 100% it ends when full.") {
+                Toggle("Disable sleep until the charge limit", isOn: $untilLimit).toggleStyle(.switch).labelsHidden()
+            }
+        }
+        SettingsCard("Manual sleep control") {
+            SettingsRow("Re-enable sleep at a battery level") { Toggle("Re-enable sleep at a battery level", isOn: $useLevel).toggleStyle(.switch).labelsHidden() }
             if useLevel {
-                SettingsRow("Battery level", detail: "Only counts while on battery.") {
-                    Stepper("\(level)%", value: $level, in: 5...80, step: 5).fixedSize()
+                SettingsRow("Re-enable sleep at \(level)%", detail: "Only counts while on battery.") {
+                    Slider(value: Binding(get: { Double(level) }, set: { level = Int($0) }),
+                           in: Double(KeepAwakeOptions.levelRange.lowerBound)...Double(KeepAwakeOptions.levelRange.upperBound), step: 5)
+                        .frame(width: 180).accessibilityLabel("Re-enable sleep at battery level").accessibilityValue("\(level) percent")
                 }
             }
+            SettingsRow("Re-enable sleep when unplugged") { Toggle("Re-enable sleep when unplugged", isOn: $endOnUnplug).toggleStyle(.switch).labelsHidden() }
         }
         Text("Start it from the panel by choosing a time.").hint()
     }

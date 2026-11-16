@@ -18,6 +18,19 @@ private func reading(percent: Int, amps: Int64 = 0, charging: Bool = false) -> B
         #expect(MenuBarReadout.percent.text(for: nil) == "")
     }
 
+    @Test func hardwarePercentIsOptionalAndShowsDashesWhenUnreadable() throws {
+        let known = try #require(BatteryReading(properties: ["CurrentCapacity": 99,
+            "BatteryData": ["AppleRawCurrentCapacity": 497, "AppleRawMaxCapacity": 500]]))
+        #expect(MenuBarReadout.hardwarePercentText(known) == "99.4%")
+        #expect(MenuBarReadout.percent.text(for: known, showHardwarePercent: true) == "99% (99.4%)")
+        #expect(MenuBarReadout.hardwarePercentText(reading(percent: 99)) == "--")
+        #expect(MenuBarReadout.hardwarePercentText(nil) == "--")
+        #expect(MenuBarReadout.percent.text(for: reading(percent: 99), showHardwarePercent: true) == "99% (--)")
+        #expect(MenuBarReadout.percent.text(for: reading(percent: 99), showHardwarePercent: false) == "99%")
+        #expect(MenuBarReadout.power.text(for: reading(percent: 80, amps: -1500), showHardwarePercent: true) == "80% (--) −18 W")
+        #expect(MenuBarReadout.off.text(for: known, showHardwarePercent: true) == "")
+    }
+
     @Test func iconFollowsChargeAndState() {
         #expect(MenuBarReadout.symbol(for: reading(percent: 5)) == "battery.0percent")
         #expect(MenuBarReadout.symbol(for: reading(percent: 50)) == "battery.50percent")
