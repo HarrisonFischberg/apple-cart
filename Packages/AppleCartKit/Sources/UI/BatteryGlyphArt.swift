@@ -48,7 +48,7 @@ public enum BatteryGlyphImage {
         if style != .classic { g.badge = g.badge.single }
         let size: NSSize
         switch style {
-        case .classic: size = NSSize(width: 29, height: 13)
+        case .classic: size = NSSize(width: 36, height: 17)
         case .solid: size = NSSize(width: 28, height: 13)
         case .segments: size = NSSize(width: 38, height: 13)
         case .ring: size = NSSize(width: 15, height: 15)
@@ -71,9 +71,9 @@ public enum BatteryGlyphImage {
 
     private static let dim = NSColor.black.withAlphaComponent(0.55)
 
-    private static func nub(x: CGFloat = 25.2) {
+    private static func nub(x: CGFloat = 25.2, midY: CGFloat = 6.5, height: CGFloat = 4.6) {
         dim.setFill()
-        NSBezierPath(roundedRect: NSRect(x: x, y: 4.2, width: 2, height: 4.6), xRadius: 1, yRadius: 1).fill()
+        NSBezierPath(roundedRect: NSRect(x: x, y: midY - height / 2, width: 2, height: height), xRadius: 1, yRadius: 1).fill()
     }
 
     /// A badge with a clear halo so it stays readable on top of a fill.
@@ -95,13 +95,14 @@ public enum BatteryGlyphImage {
     /// Thin outline, fill close to it, and the badge cut out of the fill. Where the charge is too low for
     /// the fill to reach the badge, it sits solid in the empty part instead.
     private static func drawClassic(_ g: BatteryGlyph) {
-        let body = NSRect(x: 0.6, y: 0.5, width: 25, height: 12)
-        dim.setStroke()
-        let outline = NSBezierPath(roundedRect: body.insetBy(dx: 0.5, dy: 0.5), xRadius: 3.2, yRadius: 3.2)
-        outline.lineWidth = 1
+        // A larger battery than before, with the badge filling most of the body.
+        let body = NSRect(x: 0.6, y: 0.5, width: 31.5, height: 16)
+        NSColor.black.withAlphaComponent(0.7).setStroke()
+        let outline = NSBezierPath(roundedRect: body.insetBy(dx: 0.7, dy: 0.7), xRadius: 4.6, yRadius: 4.6)
+        outline.lineWidth = 1.4
         outline.stroke()
-        nub(x: body.maxX + 0.9)
-        let inner = body.insetBy(dx: 2, dy: 2)
+        nub(x: body.maxX + 1, midY: body.midY, height: 6)
+        let inner = body.insetBy(dx: 2.6, dy: 2.4)
         var edge = inner.minX
         // Plugged in (plug with pause bars or a bolt) and on battery (a dash) both draw a clear, hollow body with the
         // badge as solid ink; the percentage text carries the level.
