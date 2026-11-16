@@ -23,7 +23,7 @@ public struct BatteryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 20) {
                         if widgets.editing {
                             editList
                         } else {
@@ -31,7 +31,14 @@ public struct BatteryView: View {
                             if widgets.layout.visible.isEmpty { Text("All widgets are hidden. Use Edit to show some.").hint() }
                         }
                     }
-                    .toolCard()
+                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        // The tool card, with a faint wash of the flow blue from the top.
+                        let card = RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        card.fill(Palette.tile)
+                            .overlay(card.fill(LinearGradient(colors: [Palette.flow.opacity(0.07), .clear], startPoint: .top, endPoint: .bottom)))
+                            .overlay(card.strokeBorder(.primary.opacity(0.06)))
+                    }
                 } else if active {
                     ProgressView().frame(maxWidth: .infinity).padding(40)
                 } else {
@@ -49,7 +56,7 @@ public struct BatteryView: View {
 
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
         switch w {
-        case .charge: summary(r); chargeBar(r)
+        case .charge: VStack(alignment: .leading, spacing: 14) { summary(r); chargeBar(r) }
         case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt)
         case .details: details(r)
         case .history: graph
@@ -85,24 +92,42 @@ public struct BatteryView: View {
     }
 
     private func summary(_ r: BatteryReading) -> some View {
-        HStack(alignment: .center, spacing: 14) {
+        let held = limiter?.state.holdingAt
+        return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Battery").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
-                if widgets.showPercentage { Text("\(r.percent)%").font(.system(size: 34, weight: .bold)).monospacedDigit() }
+                if widgets.showPercentage {
+                    Text("\(r.percent)%").font(.system(size: 40, weight: .bold)).monospacedDigit().foregroundStyle(percentStyle(r))
+                }
                 if showHardwarePercent {
                     Text("Battery reports \(MenuBarReadout.hardwarePercentText(r))").font(.caption).foregroundStyle(Palette.secondary).monospacedDigit()
                 }
             }
-            Rectangle().fill(Color.primary.opacity(0.14)).frame(width: 1, height: 40).accessibilityHidden(true)
+            Rectangle().fill(Color.primary.opacity(0.14)).frame(width: 1, height: 44).accessibilityHidden(true)
             Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 2) {
-                HStack(spacing: 6) {
-                    Circle().fill(dot(r)).frame(width: 8, height: 8).accessibilityHidden(true)
-                    StatusText(state(r))
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 7) {
+                    Circle().fill(dot(r)).frame(width: 8, height: 8).shadow(color: dot(r).opacity(0.8), radius: 4).accessibilityHidden(true)
+                    if let held {
+                        Text("Held at \(held)%").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.amberText)
+                            .padding(.horizontal, 10).frame(height: 24)
+                            .background(Palette.amberFill, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.amber.opacity(0.55)))
+                    } else {
+                        StatusText(state(r))
+                    }
                 }
                 Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
+            .multilineTextAlignment(.trailing)
         }
+    }
+
+    /// The big percent: flow blue while charging, amber while the limit holds it, plain ink otherwise.
+    private func percentStyle(_ r: BatteryReading) -> AnyShapeStyle {
+        if limiter?.state.holdingAt != nil { return AnyShapeStyle(Palette.amber) }
+        if r.isCharging { return AnyShapeStyle(LinearGradient(colors: [Palette.flowLight, Palette.flow], startPoint: .top, endPoint: .bottom)) }
+        return AnyShapeStyle(Color.primary)
     }
 
     /// Status dot: amber while the limit holds the charge, green on the charger, red when low on battery, grey otherwise.
@@ -112,28 +137,36 @@ public struct BatteryView: View {
         return r.percent <= 20 ? .red : Palette.secondary
     }
 
-    /// Full-width charge bar; the badge sits at the trailing end. With charge control it is also the limit control:
+    /// Full-width charge bar; the badge sits on the track at the trailing end. With charge control it is also the limit control:
     /// a handle at the limit, dragged to set it, and a dashed marker at the lower edge of the sailing range.
     private func chargeBar(_ r: BatteryReading) -> some View {
         let g = MenuBarReadout.glyph(for: r)
         let low = !r.isPluggedIn && r.percent <= 20
+        let tint = low ? Color.red : Palette.flow
         return ZStack(alignment: .leading) {
-            Capsule().fill(Palette.ground)
+            Capsule().fill(Palette.track).overlay(Capsule().strokeBorder(.primary.opacity(0.06)))
             GeometryReader { geo in
-                Capsule().fill(low ? Color.red : Palette.accent)
+                Capsule().fill(LinearGradient(colors: [tint, low ? Color.red : Palette.flowLight], startPoint: .leading, endPoint: .trailing))
+                    .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.38), .clear], startPoint: .top, endPoint: .center))
+                        .padding(.horizontal, 5).padding(.top, 2))
+                    .shadow(color: tint.opacity(0.45), radius: 6)
                     .frame(width: max(geo.size.height, geo.size.width * g.level))
                     .opacity(g.level > 0 ? 1 : 0)
             }
             if g.badge != .none {
-                BadgeGlyph(badge: g.badge).frame(width: g.badge.isWide ? 28 : 14, height: 14)
-                    .foregroundStyle(g.level > 0.92 ? Color.white : Palette.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 10)
+                BadgeGlyph(badge: g.badge).frame(width: g.badge.isWide ? 24 : 12, height: 12)
+                    .foregroundStyle(Color.primary)
+                    .padding(.horizontal, 6).frame(height: 18)
+                    .background(Palette.raisedTop, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.primary.opacity(0.14)))
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 2)
             }
         }
         .frame(height: 22)
         .accessibilityElement()
         .accessibilityLabel("Charge \(r.percent) percent")
         .overlay { if let chargeLimit { LimitHandle(settings: chargeLimit, changed: { Task { await limiter?.reevaluate() } }) } }
+        .padding(.top, chargeLimit == nil ? 0 : 6) // room for the notch over the marker
         .padding(.bottom, chargeLimit == nil ? 0 : 16) // room for the limit label under the marker
     }
 
@@ -221,6 +254,11 @@ private struct LimitHandle: View {
                     .accessibilityHidden(true)
             }
             let markerX = min(max(x(settings.limit), 2), w - 2)
+            Path { p in // a small notch over the marker
+                p.move(to: CGPoint(x: markerX - 4, y: -10)); p.addLine(to: CGPoint(x: markerX + 4, y: -10)); p.addLine(to: CGPoint(x: markerX, y: -5))
+                p.closeSubpath()
+            }
+            .fill(Color.primary).allowsHitTesting(false).accessibilityHidden(true)
             Capsule().fill(Color.primary).frame(width: 2.5, height: h + 10)
                 .frame(width: 44, height: 44).contentShape(Rectangle()) // 44 pt target
                 .position(x: markerX, y: h / 2)

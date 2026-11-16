@@ -73,12 +73,13 @@ struct PowerFlowArt: View {
 
     // MARK: Colors
 
-    /// Power the Mac uses is blue, charge into the battery green, power taken from the battery orange.
-    private func color(_ k: FlowLinkKind) -> (Color, opacity: Double) {
+    /// Ribbon colors, from the source end to the destination end: power the Mac uses is vivid blue brightening along the flow,
+    /// charge into the battery green, power taken from the battery warm orange into amber.
+    private func colors(_ k: FlowLinkKind) -> (Color, Color) {
         switch k {
-        case .supply, .stream: (Palette.accent, 0.6)
-        case .charge: (Palette.green, 0.9)
-        case .drain: (Palette.drain, 0.55)
+        case .supply, .stream: (Palette.flow, Palette.flowLight)
+        case .charge: (Palette.green, Palette.green)
+        case .drain: (Palette.drain, Palette.amber)
         }
     }
 
@@ -109,14 +110,22 @@ struct PowerFlowArt: View {
         return Double(len)
     }
 
-    /// A Sankey band: the curve offset by half the ribbon width on each side, so its thickness reads the same along the way.
-    private static func band(_ c: (CGPoint, CGPoint, CGPoint, CGPoint), width w: CGFloat, vertical: Bool) -> Path {
-        func s(_ p: CGPoint, _ k: CGFloat) -> CGPoint { vertical ? CGPoint(x: p.x + w / 2 * k, y: p.y) : CGPoint(x: p.x, y: p.y + w / 2 * k) }
-        var p = Path()
-        p.move(to: s(c.0, -1)); p.addCurve(to: s(c.3, -1), control1: s(c.1, -1), control2: s(c.2, -1))
-        p.addLine(to: s(c.3, 1)); p.addCurve(to: s(c.0, 1), control1: s(c.2, 1), control2: s(c.1, 1))
+    /// One edge of a Sankey band (k = -1 top, 1 bottom). It leaves the source at `w0`, pinches a little in the middle
+    /// and swells to `w1` at the destination, so the ribbon reads as a soft S rather than a pipe.
+    private static func edge(_ c: (CGPoint, CGPoint, CGPoint, CGPoint), _ w0: CGFloat, _ w1: CGFloat, vertical: Bool, _ k: CGFloat) -> [CGPoint] {
+        let waist = (w0 + w1) / 2 * 0.8
+        func s(_ p: CGPoint, _ w: CGFloat) -> CGPoint { vertical ? CGPoint(x: p.x + w / 2 * k, y: p.y) : CGPoint(x: p.x, y: p.y + w / 2 * k) }
+        return [s(c.0, w0), s(c.1, waist), s(c.2, waist), s(c.3, w1)]
+    }
+
+    private static func band(_ c: (CGPoint, CGPoint, CGPoint, CGPoint), width w: CGFloat, vertical: Bool) -> (fill: Path, top: Path) {
+        let t = edge(c, w, w * 1.15, vertical: vertical, -1), b = edge(c, w, w * 1.15, vertical: vertical, 1)
+        var top = Path()
+        top.move(to: t[0]); top.addCurve(to: t[3], control1: t[1], control2: t[2])
+        var p = top
+        p.addLine(to: b[3]); p.addCurve(to: b[0], control1: b[2], control2: b[1])
         p.closeSubpath()
-        return p
+        return (p, top)
     }
 
     /// A small chevron at the middle of the ribbon, pointing the way the power goes.
@@ -139,34 +148,70 @@ struct PowerFlowArt: View {
             path.move(to: c.0); path.addCurve(to: c.3, control1: c.1, control2: c.2)
             let width = FlowMotion.ribbonWidth(l.watts)
             guard width > 0 else {
-                // Not reported, or known idle: a quiet dashed thread so the tile still reads as connected.
-                ctx.stroke(path, with: .color(.primary.opacity(0.14)), style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [3, 3]))
+                if pausedAt != nil, l.id == FlowLinkID(.charger, .mac) {
+                    pausedLink(&ctx, path, c, l)
+                } else {
+                    // Not reported, or known idle: a quiet dashed thread so the tile still reads as connected.
+                    ctx.stroke(path, with: .color(.primary.opacity(0.18)), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, dash: [3, 3]))
+                }
                 continue
             }
-            let (tint, opacity) = color(l.kind)
+            let (src, dst) = colors(l.kind)
+            let charge = l.kind == .charge
             let band = Self.band(c, width: width, vertical: l.vertical)
-            ctx.fill(band, with: .color(tint.opacity(opacity)))
-            ctx.stroke(band, with: .color(tint.opacity(min(1, opacity + 0.3))), lineWidth: 0.75)
-            ctx.stroke(Self.chevron(c), with: .color(.primary.opacity(0.85)), style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+            // Soft feathered glow, the body brightening along the flow, then a light top edge.
+            ctx.drawLayer { g in
+                g.addFilter(.blur(radius: charge ? 3.5 : 6))
+                g.fill(band.fill, with: .linearGradient(Gradient(colors: [src.opacity(charge ? 0.7 : 0.3), dst.opacity(charge ? 0.7 : 0.45)]),
+                                                        startPoint: c.0, endPoint: c.3))
+            }
+            ctx.fill(band.fill, with: .linearGradient(Gradient(colors: [src.opacity(charge ? 0.95 : 0.6), dst.opacity(charge ? 0.95 : 0.8)]),
+                                                      startPoint: c.0, endPoint: c.3))
+            ctx.stroke(band.top, with: .color(.white.opacity(charge ? 0.25 : 0.4)), lineWidth: 1)
+            ctx.stroke(Self.chevron(c), with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
             guard particles, let w = l.watts else { continue }
             let len = Self.length(c)
-            let r = min(max(width * 0.12, 1), 2)
-            let fade = min(1, Double(width) / 4) // particles thin out with a ribbon that is fading away
-            FlowMotion.particles(distance: clock.distance(l.id, at: t), length: len, watts: w) { f in
-                let p = Self.point(c, CGFloat(f))
-                let edge = min(f, 1 - f) * len / 10 // ease in and out at the tiles
-                let a = fade * min(1, edge)
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(0.6 * a)))
+            let r = min(max(width * 0.14, 1.3), 2.6)
+            let fade = min(1, Double(width) / 4) // pulses thin out with a ribbon that is fading away
+            ctx.drawLayer { g in
+                g.addFilter(.blur(radius: 1.2))
+                FlowMotion.particles(distance: clock.distance(l.id, at: t), length: len, watts: w) { f in
+                    let p = Self.point(c, CGFloat(f))
+                    let a = fade * min(1, min(f, 1 - f) * len / 10) // ease in and out at the tiles
+                    g.fill(Path(ellipseIn: CGRect(x: p.x - r * 1.6, y: p.y - r, width: r * 3.2, height: r * 2)), with: .color(.white.opacity(0.85 * a)))
+                }
             }
+        }
+    }
+
+    /// The held charger link: a dashed amber thread with a small "Paused" pill (a pause glyph when the gap is too narrow).
+    private func pausedLink(_ ctx: inout GraphicsContext, _ path: Path, _ c: (CGPoint, CGPoint, CGPoint, CGPoint), _ l: FlowLayout.Link) {
+        ctx.stroke(path, with: .color(Palette.amber.opacity(0.75)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 3]))
+        let m = Self.point(c, 0.5)
+        let label = ctx.resolve(Text("Paused").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.amberText))
+        let size = label.measure(in: CGSize(width: 100, height: 20))
+        let wide = size.width + 14 <= l.end.x - l.start.x - 8
+        let pill = wide ? CGRect(x: m.x - size.width / 2 - 7, y: m.y - 8, width: size.width + 14, height: 16) : CGRect(x: m.x - 8, y: m.y - 8, width: 16, height: 16)
+        let shape = Capsule().path(in: pill)
+        ctx.fill(shape, with: .color(Palette.amberFill))
+        ctx.stroke(shape, with: .color(Palette.amber.opacity(0.6)), lineWidth: 1)
+        if wide {
+            ctx.draw(label, at: m)
+        } else {
+            var glyph = ctx.resolve(Image(systemName: "pause.fill"))
+            glyph.shading = .color(Palette.amberText)
+            ctx.draw(glyph, in: pill.insetBy(dx: 4.5, dy: 4.5))
         }
     }
 
     // MARK: Tiles
 
     /// `caption` names the tile (small, above the value); `note` is an optional third line under the value.
+    /// `lit` tiles glow in their tint; idle, held and missing ones stay neutral. `badge` is a small corner glyph (the held pause).
     private struct TileContent {
-        var symbol: String, value: String, caption: String, note: String? = nil, tint: Color = .primary, number: Double = 0, big = false
+        var symbol: String, value: String, caption: String, note: String? = nil, tint: Color, number: Double = 0, big = false
+        var lit = true, badge: String? = nil
     }
 
     private func content(_ id: FlowNodeID) -> TileContent {
@@ -175,21 +220,24 @@ struct PowerFlowArt: View {
         switch id {
         case .charger:
             guard let r, r.isPluggedIn else {
-                return TileContent(symbol: "powerplug", value: "—", caption: "Charger", note: r == nil ? "No data" : "Unplugged", tint: Palette.secondary)
+                return TileContent(symbol: "powerplug", value: "—", caption: "Charger", note: r == nil ? "No data" : "Unplugged",
+                                   tint: Palette.secondary, lit: false)
             }
             if let n = pausedAt {
-                return TileContent(symbol: "powerplug", value: PowerFlow.watts(0), caption: "Charger", note: "Held at \(n)%", tint: Palette.secondary)
+                return TileContent(symbol: "powerplug", value: PowerFlow.watts(0), caption: "Charger", note: "Held at \(n)%",
+                                   tint: Palette.secondary, lit: false, badge: "pause.fill")
             }
             guard let m = flows.chargerToMac else {
-                return TileContent(symbol: "powerplug.fill", value: r.adapterWatts.map { "\($0) W" } ?? "—", caption: "Charger", note: "Rating")
+                return TileContent(symbol: "powerplug.fill", value: r.adapterWatts.map { "\($0) W" } ?? "—", caption: "Charger", note: "Rating", tint: Palette.amber)
             }
             let supplied = m + (flows.chargerToBattery ?? 0)
             return TileContent(symbol: "powerplug.fill", value: PowerFlow.watts(supplied), caption: "Charger",
-                               note: r.adapterWatts.map { "\($0) W capacity" }, number: supplied)
+                               note: r.adapterWatts.map { "\($0) W capacity" }, tint: Palette.amber, number: supplied)
         case .mac:
-            return TileContent(symbol: "laptopcomputer", value: PowerFlow.watts(r?.systemWatts), caption: "Mac uses", number: r?.systemWatts ?? 0, big: true)
+            return TileContent(symbol: "laptopcomputer", value: PowerFlow.watts(r?.systemWatts), caption: "Mac uses", tint: Palette.flow,
+                               number: r?.systemWatts ?? 0, big: true, lit: r?.systemWatts != nil)
         case .battery:
-            guard let r else { return TileContent(symbol: "battery.0percent", value: "—", caption: "No data", tint: Palette.secondary) }
+            guard let r else { return TileContent(symbol: "battery.0percent", value: "—", caption: "No data", tint: Palette.secondary, lit: false) }
             let level = [0, 25, 50, 75, 100].min { abs($0 - r.percent) < abs($1 - r.percent) } ?? 50
             switch state {
             case .charging:
@@ -199,10 +247,10 @@ struct PowerFlowArt: View {
                 return TileContent(symbol: "battery.\(level)percent", value: "−" + PowerFlow.watts(r.batteryWatts), caption: "Battery",
                                    tint: Palette.drain, number: -r.batteryWatts)
             default:
-                return TileContent(symbol: "battery.\(level)percent", value: PowerFlow.watts(0), caption: "Battery", tint: Palette.secondary)
+                return TileContent(symbol: "battery.\(level)percent", value: PowerFlow.watts(0), caption: "Battery", tint: Palette.secondary, lit: false)
             }
         case .more:
-            return TileContent(symbol: "ellipsis", value: PowerFlow.watts(rest), caption: "Rest of Mac", tint: Palette.secondary, number: rest ?? 0)
+            return TileContent(symbol: "ellipsis", value: PowerFlow.watts(rest), caption: "Rest of Mac", tint: Palette.secondary, number: rest ?? 0, lit: false)
         case .stream(let title):
             let w = streams.first { $0.title == title }?.watts
             let symbol = switch title {
@@ -211,43 +259,68 @@ struct PowerFlowArt: View {
             case "Charger loss": "flame"
             default: "square.stack.3d.up"
             }
-            return TileContent(symbol: symbol, value: w.map { PowerFlow.watts($0) } ?? "—", caption: title, number: w ?? 0)
+            return TileContent(symbol: symbol, value: w.map { PowerFlow.watts($0) } ?? "—", caption: title, tint: Palette.flow, number: w ?? 0)
         }
     }
 
-    /// Flat raised tile with a hairline. Short tiles put the icon beside the text; the charger and the Mac stack it on top.
+    /// Lifted tile: a soft vertical gradient, a hairline in its stream's tint with a faint glow, and a light inner top edge.
+    /// Short tiles put the icon beside the text; the charger and the Mac stack it on top.
     @ViewBuilder private func tile(_ n: FlowLayout.Node) -> some View {
         let c = content(n.id)
         let compact = n.rect.height < 60
-        let shape = RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
+        let lit = c.lit && !n.dimmed
+        let shape = RoundedRectangle(cornerRadius: compact ? 11 : 14, style: .continuous)
         Group {
             if compact {
-                HStack(spacing: 6) {
-                    Image(systemName: c.symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(c.tint).frame(width: 14)
+                HStack(spacing: 4) {
+                    icon(c, size: 14).frame(width: 16)
                     VStack(alignment: .leading, spacing: 0) {
                         caption(c.caption)
-                        number(c, size: 13)
+                        number(c, size: 14)
                         if let note = c.note { caption(note) }
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 5)
             } else {
-                VStack(spacing: 2) {
-                    Image(systemName: c.symbol).font(.system(size: c.big ? 17 : 15, weight: .medium)).foregroundStyle(c.tint)
-                        .padding(.bottom, 2)
+                VStack(spacing: 1) {
+                    icon(c, size: c.big ? 20 : 18).padding(.bottom, 2)
                     caption(c.caption)
-                    number(c, size: c.big ? 19 : 15)
+                    number(c, size: c.big ? 22 : 18)
                     if let note = c.note { caption(note) }
                 }
                 .padding(.horizontal, 5)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(n.dimmed ? Color.clear : Palette.raised, in: shape)
-        .overlay(shape.strokeBorder(Color.primary.opacity(n.dimmed ? 0.18 : 0.12), style: StrokeStyle(lineWidth: 1, dash: n.dimmed ? [4, 3] : [])))
-        .opacity(n.dimmed ? 0.5 : 1)
+        .background {
+            if !n.dimmed {
+                shape.fill(LinearGradient(colors: [Palette.raisedTop, Palette.raised], startPoint: .top, endPoint: .bottom))
+                    .shadow(color: c.tint.opacity(lit ? 0.3 : 0), radius: 8)
+            }
+        }
+        .overlay {
+            shape.strokeBorder(lit ? c.tint.opacity(0.45) : Color.primary.opacity(n.dimmed ? 0.2 : 0.12),
+                               style: StrokeStyle(lineWidth: 1, dash: n.dimmed ? [4, 3] : []))
+            if !n.dimmed {
+                shape.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.16), .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let badge = c.badge {
+                Image(systemName: badge).font(.system(size: 7, weight: .bold)).foregroundStyle(Palette.amberText)
+                    .frame(width: 16, height: 16)
+                    .background(Palette.amberFill, in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.amber.opacity(0.6)))
+                    .padding(4)
+            }
+        }
+        .opacity(n.dimmed ? 0.55 : 1)
         .accessibilityHidden(true)
+    }
+
+    private func icon(_ c: TileContent, size: CGFloat) -> some View {
+        Image(systemName: c.symbol).font(.system(size: size, weight: .semibold)).foregroundStyle(c.tint).symbolRenderingMode(.hierarchical)
     }
 
     private func caption(_ text: String) -> some View {

@@ -9,6 +9,16 @@ public enum Palette {
     public static let accent = adaptive(light: 0x0A5ED7, dark: 0x5AB0FF)
     /// A surface one step up from the tile, for tiles and cards nested inside a tool card (power flow tiles, the energy list).
     public static let raised = adaptive(light: 0xF6F6F8, dark: 0x232327)
+    /// Top of a lifted tile's vertical gradient (the bottom is `raised`).
+    public static let raisedTop = adaptive(light: 0xFFFFFF, dark: 0x2E2E34)
+    /// Vivid blue of the power flow ribbons and the charge bar fill, and its lighter end.
+    public static let flow = adaptive(light: 0x0A6CFF, dark: 0x0A84FF)
+    public static let flowLight = adaptive(light: 0x4C9BFF, dark: 0x64B5FF)
+    /// Darker rounded track under the charge bar.
+    public static let track = adaptive(light: 0xE3E3E8, dark: 0x0B0B0D)
+    /// Amber chip for a held charge (DESIGN.md amber fill / amber text, checked at 5.4:1 or better).
+    public static let amberFill = adaptive(light: 0xFFF1D6, dark: 0x2B2008)
+    public static let amberText = adaptive(light: 0x5C3600, dark: 0xFFD58A)
     /// Energy colors of the power flow map: charger (amber bar), battery charging (green), battery draining (orange).
     public static let amber = adaptive(light: 0xC77700, dark: 0xF5A524)
     public static let green = adaptive(light: 0x177A3C, dark: 0x4ADE80)

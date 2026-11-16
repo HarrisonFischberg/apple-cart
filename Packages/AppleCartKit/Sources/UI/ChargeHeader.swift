@@ -30,7 +30,7 @@ struct ChargeHeader: View {
                     LimitPopover(settings: settings, limiter: limiter)
                 }
             Spacer(minLength: 0)
-            pill(settings.topUpActive ? "Topping up" : "Top Up", symbol: settings.topUpActive ? nil : "plus.circle", selected: settings.topUpActive) {
+            pill(settings.topUpActive ? "Topping up" : "Top Up", symbol: settings.topUpActive ? "bolt.fill" : "plus.circle", selected: settings.topUpActive) {
                 settings.setTopUp(!settings.topUpActive)
                 Task { await limiter?.reevaluate() }
             }
@@ -53,10 +53,11 @@ struct ChargeHeader: View {
             }
             .font(.system(size: 14, weight: .semibold))
             // A symbol marks an action pill (Top Up): its label takes the control blue, as in the owner's target.
-            .foregroundStyle(selected ? Color.white : symbol == nil ? Color.primary : Palette.accent)
+            .foregroundStyle(selected || symbol != nil ? Palette.accent : Color.primary)
             .padding(.horizontal, 14).frame(height: 32)
-            .background(selected ? Palette.accent : Palette.tile, in: Capsule())
-            .overlay(Capsule().strokeBorder(.primary.opacity(selected ? 0 : 0.12)))
+            // Selected (Top Up on) is a blue tint, not a solid fill, so the label keeps the same blue.
+            .background(selected ? Palette.accent.opacity(0.18) : Palette.tile, in: Capsule())
+            .overlay(Capsule().strokeBorder(selected ? Palette.accent.opacity(0.6) : .primary.opacity(0.12)))
             .frame(minHeight: 44) // 44 pt target around the 32 pt pill
             .contentShape(Rectangle())
         }

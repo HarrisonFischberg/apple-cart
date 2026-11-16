@@ -85,18 +85,20 @@ public struct FlowLayout: Equatable, Sendable {
         let showBattery = state != .pluggedIdle
         let h = height(leaves: leaves.count, battery: showBattery)
 
-        let hub = CGRect(x: (w - Self.hub.width) / 2, y: inset, width: Self.hub.width, height: Self.hub.height)
+        // With nothing on the right the Mac takes the right edge, so the charger's ribbon gets the whole width.
+        let hub = CGRect(x: leaves.isEmpty ? w - Self.hub.width : (w - Self.hub.width) / 2, y: inset, width: Self.hub.width, height: Self.hub.height)
         let below = CGRect(x: hub.minX, y: h - inset - Self.below.height, width: Self.below.width, height: Self.below.height)
-        let hubRect = hub
         let sourceSlot = CGRect(x: 0, y: hub.midY - source.height / 2, width: source.width, height: source.height)
         let parkedSlot = CGRect(x: 0, y: h - inset - parked.height, width: parked.width, height: parked.height)
+        // A battery helping a weak (or held) charger sits under the charger, so its ribbon curves up into the Mac beside the charger's.
+        let helperSlot = CGRect(x: 0, y: h - inset - Self.below.height, width: source.width, height: Self.below.height)
 
         var nodes = [Node(id: .mac, rect: hub)]
         var links: [Link] = []
         let onBattery = state == .onBattery
         // On battery the battery takes the source slot and the charger is parked, dimmed and unlinked.
         nodes.append(Node(id: .charger, rect: onBattery ? parkedSlot : sourceSlot, dimmed: onBattery))
-        if showBattery { nodes.append(Node(id: .battery, rect: onBattery ? sourceSlot : below)) }
+        if showBattery { nodes.append(Node(id: .battery, rect: onBattery ? sourceSlot : state == .chargerTooWeak ? helperSlot : below)) }
 
         func right(_ r: CGRect, _ y: CGFloat) -> CGPoint { CGPoint(x: r.maxX, y: y) }
         func left(_ r: CGRect, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX, y: y) }
@@ -116,10 +118,12 @@ public struct FlowLayout: Equatable, Sendable {
             links.append(Link(id: FlowLinkID(.charger, .mac), kind: .supply, start: right(sourceSlot, sourceSlot.midY),
                               end: left(hub, hub.midY), watts: state == .noData ? nil : held ? 0 : flows.chargerToMac))
         case .chargerTooWeak:
+            let supply: Double? = held ? 0 : flows.chargerToMac
+            let ys = stack([max(1.5, FlowMotion.ribbonWidth(supply)), FlowMotion.ribbonWidth(flows.batteryToMac)], mid: hub.midY, span: hub.height - 16)
             links.append(Link(id: FlowLinkID(.charger, .mac), kind: .supply, start: right(sourceSlot, sourceSlot.midY),
-                              end: left(hub, hub.midY), watts: held ? 0 : flows.chargerToMac))
-            links.append(Link(id: FlowLinkID(.battery, .mac), kind: .drain, start: CGPoint(x: below.midX, y: below.minY),
-                              end: CGPoint(x: hub.midX, y: hub.maxY), watts: flows.batteryToMac, vertical: true))
+                              end: left(hub, ys[0]), watts: supply))
+            links.append(Link(id: FlowLinkID(.battery, .mac), kind: .drain, start: right(helperSlot, helperSlot.midY),
+                              end: left(hub, ys[1]), watts: flows.batteryToMac))
         }
 
         // The fork: the hub's right edge fans out to a column of leaves.
@@ -180,7 +184,7 @@ extension PowerFlows {
 /// Timing and sizing for the animated map. Pure so it can be tested.
 public enum FlowMotion {
     public static let transition: Double = 0.55
-    public static let minWidth: CGFloat = 3, maxWidth: CGFloat = 32
+    public static let minWidth: CGFloat = 4, maxWidth: CGFloat = 32
 
     /// Ribbon thickness from watts: 0 for unknown or idle, otherwise clamped so 1 W stays visible and 26 W+ stays inside its tile.
     public static func ribbonWidth(_ w: Double?) -> CGFloat {

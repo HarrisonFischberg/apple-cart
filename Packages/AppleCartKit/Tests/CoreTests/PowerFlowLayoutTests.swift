@@ -126,6 +126,17 @@ private func layout(_ r: BatteryReading?, width: CGFloat, soc: Double? = nil, ot
         }
     }
 
+    @Test func helperBatteryCurvesIntoTheMacBesideTheCharger() {
+        let weak = layout(samples[3].1, width: 320, soc: nil, other: nil)
+        let hub = weak.node(.mac)!.rect, battery = weak.node(.battery)!.rect
+        #expect(battery.minX == 0 && battery.minY > weak.node(.charger)!.rect.maxY) // under the charger
+        let charger = weak.link(FlowLinkID(.charger, .mac))!, drain = weak.link(FlowLinkID(.battery, .mac))!
+        #expect(!drain.vertical && drain.end.x == hub.minX && drain.end.y > charger.end.y) // both enter the Mac's left edge, battery below
+        // With no stream tiles the Mac sits at the right edge, so the charger's ribbon spans the map.
+        let idle = layout(reading(plugged: true, amps: 0, usb: nil, loss: nil), width: 320)
+        #expect(idle.node(.mac)!.rect.maxX == 320)
+    }
+
     @Test func lerpMorphsBetweenStates() {
         let a = layout(samples[0].1, width: 320), b = layout(samples[2].1, width: 320)
         #expect(FlowLayout.lerp(a, b, 0).node(.battery) == a.node(.battery).map { var n = $0; n.dimmed = b.node(.battery)!.dimmed; return n })
