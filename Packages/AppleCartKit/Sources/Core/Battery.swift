@@ -18,6 +18,10 @@ public struct BatteryReading: Sendable, Equatable {
     public var systemWatts: Double?      // what the Mac is using
     public var adapterWatts: Int?
     public var minutesRemaining: Int?
+    public var adapterVolts: Double?     // the charger's negotiated voltage
+    public var adapterAmps: Double?      // the charger's current limit
+    public var usbOutWatts: Double?      // power this Mac hands to devices on its USB-C ports (PowerOutDetails), nil when not reported
+    public var adapterLossWatts: Double? // lost as heat in the charger path (PowerTelemetryData.AdapterEfficiencyLoss)
 
     /// Builds a reading from the AppleSmartBattery property dictionary (top level plus nested BatteryData).
     public init?(properties d: [String: Any], date: Date = Date()) {
@@ -38,12 +42,24 @@ public struct BatteryReading: Sendable, Equatable {
         let amps = Int64(truncatingIfNeeded: (d["InstantAmperage"] as? NSNumber)?.uint64Value ?? 0)
         let volts = Double(int(d["Voltage"]) ?? 0)
         batteryWatts = Double(amps) * volts / 1_000_000
-        if let t = d["PowerTelemetryData"] as? [String: Any], let load = int(t["SystemLoad"]) {
-            systemWatts = Double(load) / 1000
+        if let t = d["PowerTelemetryData"] as? [String: Any] {
+            if let load = int(t["SystemLoad"]) { systemWatts = Double(load) / 1000 }
+            if let loss = int(t["AdapterEfficiencyLoss"]) { adapterLossWatts = Double(loss) / 1000 }
         }
-        adapterWatts = int((d["AdapterDetails"] as? [String: Any])?["Watts"])
+        if let ports = d["PowerOutDetails"] as? [[String: Any]] {
+            usbOutWatts = ports.reduce(0) { $0 + Double(int($1["Watts"]) ?? 0) } / 1000 // milliwatts
+        }
+        let adapter = d["AdapterDetails"] as? [String: Any]
+        adapterWatts = int(adapter?["Watts"])
+        adapterVolts = int(adapter?["AdapterVoltage"]).map { Double($0) / 1000 } // millivolts
+        adapterAmps = int(adapter?["Current"]).map { Double($0) / 1000 }         // milliamps
         if let m = int(d["TimeRemaining"]), m != 65535 { minutesRemaining = m }
     }
+}
+
+extension BatteryReading {
+    /// Plain-language state, shared by the panel and Shortcuts.
+    public var stateText: String { isCharging ? "Charging" : isPluggedIn ? "Plugged in, not charging" : "On battery" }
 }
 
 public enum BatteryReader {
@@ -126,7 +142,8 @@ public final class BatterySampler {
     @ObservationIgnored private var note: io_object_t = 0
     @ObservationIgnored private var adapterSeen = false
     @ObservationIgnored private var settle: Task<Void, Never>?
-    @ObservationIgnored private let interval: Duration
+    /// Seconds between samples; read before each wait, so a change applies from the next tick.
+    @ObservationIgnored public var interval: Duration
     @ObservationIgnored private let read: @Sendable () -> BatteryReading?
 
     public init(interval: Duration = .seconds(5), read: @escaping @Sendable () -> BatteryReading? = BatteryReader.read) {

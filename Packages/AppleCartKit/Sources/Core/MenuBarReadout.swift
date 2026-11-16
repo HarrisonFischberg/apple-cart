@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 public enum MenuBarReadout: String, CaseIterable, Sendable {
@@ -54,14 +55,33 @@ public final class FirstRunModel {
     }
 }
 
-/// The chosen readout, observable so the status item follows changes at once.
+/// The chosen menu bar values, spacing, refresh rate and right-click entries, observable so the status item follows at once.
+/// The three-way `readout` stays as a quick preset: picking it sets `items`.
 @MainActor @Observable
 public final class ReadoutSettings {
-    public var readout: MenuBarReadout { didSet { store.setMenuBarReadout(readout) } }
+    public var readout: MenuBarReadout { didSet { store.setMenuBarReadout(readout); items = MenuBarItem.preset(readout) } }
+    public var items: Set<MenuBarItem> { didSet { defaults.set(items.map(\.rawValue).sorted(), forKey: "menuBar.items") } }
+    public var spacing: Int { didSet { let v = MenuBarLimits.clampedSpacing(spacing); if v != spacing { spacing = v } else { defaults.set(v, forKey: "menuBar.spacing") } } }
+    public var updateSeconds: Int { didSet { let v = MenuBarLimits.clampedUpdate(updateSeconds); if v != updateSeconds { updateSeconds = v } else { defaults.set(v, forKey: "menuBar.updateSeconds") } } }
+    public var showGlyph: Bool { didSet { defaults.set(showGlyph, forKey: "menuBar.showGlyph") } }
+    public var rightClick: Set<RightClickAction> { didSet { defaults.set(rightClick.map(\.rawValue).sorted(), forKey: "menuBar.rightClick") } }
     @ObservationIgnored private let store: SettingsStore
+    @ObservationIgnored private let defaults: UserDefaults
 
-    public init(store: SettingsStore) {
+    public init(store: SettingsStore, defaults: UserDefaults = .standard) {
         self.store = store
-        readout = store.menuBarReadout()
+        self.defaults = defaults
+        let readout = store.menuBarReadout()
+        self.readout = readout
+        // Unknown names (from another build) are dropped; nothing saved means the readout preset.
+        items = defaults.stringArray(forKey: "menuBar.items").map { Set($0.compactMap(MenuBarItem.init(rawValue:))) } ?? MenuBarItem.preset(readout)
+        spacing = MenuBarLimits.clampedSpacing(defaults.object(forKey: "menuBar.spacing") as? Int ?? MenuBarLimits.defaultSpacing)
+        updateSeconds = MenuBarLimits.clampedUpdate(defaults.object(forKey: "menuBar.updateSeconds") as? Int ?? MenuBarLimits.defaultUpdateSeconds)
+        showGlyph = defaults.object(forKey: "menuBar.showGlyph") as? Bool ?? true
+        rightClick = defaults.stringArray(forKey: "menuBar.rightClick").map { Set($0.compactMap(RightClickAction.init(rawValue:))) } ?? [.checkForUpdates]
     }
+
+    /// Back to the quick preset, default spacing and the glyph.
+    public func reset() { items = MenuBarItem.preset(readout); spacing = MenuBarLimits.defaultSpacing; showGlyph = true }
+    public func clearAll() { items = [] }
 }

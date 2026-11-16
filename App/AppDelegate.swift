@@ -81,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if on { self.panelController?.close(); self.cleaningOverlay.show(mode: self.cleaningMode) } else { self.cleaningOverlay.hide() }
         }
+        defer { if UserDefaults.standard.bool(forKey: BatteryWidgetSettings.startupKey) { panelController?.toggle() } }
         statusReadout = StatusReadout(button: item.button, sampler: battery, registry: registry, settings: readoutSettings, glyphStyle: glyphStyle)
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
@@ -116,7 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController?.close()
             let menu = NSMenu()
             menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
-            if updater.isConfigured { menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self }
+            let extra = readoutSettings.rightClick
+            if updater.isConfigured && extra.contains(.checkForUpdates) { menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self }
+            if extra.contains(.copyStatus) { menu.addItem(withTitle: RightClickAction.copyStatus.title, action: #selector(copyBatteryStatus), keyEquivalent: "").target = self }
+            if extra.contains(.openMacBatterySettings) { menu.addItem(withTitle: RightClickAction.openMacBatterySettings.title, action: #selector(openMacBatterySettings), keyEquivalent: "").target = self }
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit Apple Cart", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
@@ -125,6 +129,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             panelController?.toggle()
         }
+    }
+
+    @objc private func copyBatteryStatus() {
+        // A fresh one-off read, so the text is current even when nothing is sampling.
+        guard let r = BatteryReader.read() else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("\(r.percent)%, \(r.stateText.lowercased())", forType: .string)
+    }
+
+    @objc private func openMacBatterySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") { NSWorkspace.shared.open(url) }
     }
 
     @objc private func checkForUpdates() { updater.checkForUpdates() }

@@ -63,3 +63,33 @@ public struct PowerFlows: Equatable, Sendable {
         }
     }
 }
+
+/// A reported extra stream out of the power budget. watts nil = this Mac does not report it (shown as a dash).
+public struct PowerStream: Equatable, Sendable, Identifiable {
+    public var id: String { title }
+    public let title: String
+    public let watts: Double?
+}
+
+extension PowerFlows {
+    /// Streams under this many watts are hidden.
+    public static let hideBelow = 1.0
+
+    /// Plugged in, yet the battery is giving power: the charger cannot cover the Mac's load alone.
+    public static func chargerTooWeak(_ r: BatteryReading?) -> Bool {
+        guard let r, r.isPluggedIn else { return false }
+        return -r.batteryWatts >= hideBelow
+    }
+
+    /// The Mac side of the map: SoC, USB and Other, plus charger loss. Unreported entries keep a nil value (a dash);
+    /// reported ones under 1 W drop out. This Mac's registry reports USB out and charger loss only, so SoC and Other
+    /// stay dashes here. Fill `socWatts` / `otherWatts` in when a Mac exposes them (not verified on real hardware).
+    public static func streams(_ r: BatteryReading?, socWatts: Double? = nil, otherWatts: Double? = nil) -> [PowerStream] {
+        guard let r else { return [] }
+        return [PowerStream(title: "SoC", watts: socWatts),
+                PowerStream(title: "USB", watts: r.usbOutWatts),
+                PowerStream(title: "Other", watts: otherWatts),
+                PowerStream(title: "Charger loss", watts: r.isPluggedIn ? r.adapterLossWatts : nil)]
+            .filter { $0.watts.map { $0 >= hideBelow } ?? true }
+    }
+}

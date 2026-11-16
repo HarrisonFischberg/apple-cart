@@ -24,11 +24,11 @@ TODO = not started.
 | Disable sleep until the limit is reached | PART: Keep awake can stop at a battery level | Add "until limit reached" and display, mute and lock-on-lid options | no |
 | Sleep control (30 min / 1 h / 3 h / forever / custom, re-enable at 5-95%, end on unplug) | PART: Keep awake has 15 m to 8 h, forever, stop at level | Add custom duration, 5-95% range, "end when unplugged" | no |
 | Hardware battery percentage next to the macOS one | PART: "True charge" in Details | Optional second number in the menu bar and panel | no |
-| Menu bar customization (icons, live values, spacing 0-20, update 2-20 s, right-click actions) | PART: readout choice plus 5 glyph styles | Item catalog, update interval, spacing, right-click actions | no |
-| Popover customization (add, remove, reorder widgets) | TODO | Edit mode on the Battery screen | no |
-| Power flow (adapter, battery, Mac; SoC, Display, USB, Other; hide under 1 W; weak charger case) | PART: adapter, Mac, battery ribbons | Add breakdown where macOS reports it; weak-charger state; hide small streams | no |
+| Menu bar customization (icons, live values, spacing 0-20, update 2-20 s, right-click actions) | HAVE (untested on screen): preview, glyph on/off and 5 styles, 11-item catalog in 4 groups, Reset and Clear all, spacing 0-20, update 2-20 s (drives the sampler), right-click extras. Not built: macOS battery condition item, low-power tint, status items | Item catalog, update interval, spacing, right-click actions | no |
+| Popover customization (add, remove, reorder widgets) | HAVE (untested on screen): Edit button, drag handles, show/hide, Reset, order saved; settings Show on startup, Show percentage, Open in edit mode | Edit mode on the Battery screen | no |
+| Power flow (adapter, battery, Mac; SoC, Display, USB, Other; hide under 1 W; weak charger case) | PART: weak-charger warning, SoC/USB/Other/Charger loss rows under 1 W hidden, dash when not reported. This Mac reports only USB out and charger loss, so SoC and Other stay dashes (keys not found; not verified on real hardware). Fork ribbons and "more" tile not drawn | Add breakdown where macOS reports it; weak-charger state; hide small streams | no |
 | Apps using significant energy (Low, Medium, High thresholds, background option, Quit button) | PART: top 5 by CPU | Threshold setting, background toggle, Quit action | no |
-| Apple Shortcuts actions (get percent, limit, state, temperature; set limit; pause; top up; discharge; LED; calibration) | TODO | App Intents for each | read actions no, write actions yes |
+| Apple Shortcuts actions (get percent, limit, state, temperature; set limit; pause; top up; discharge; LED; calibration) | PART: 4 read actions built (App Intents, metadata generated, not run in the Shortcuts app) and listed in Settings with Open Shortcuts; write actions listed as needing the helper | App Intents for each | read actions no, write actions yes |
 | Fast user switching | n/a for now | Install per user; note in docs | no |
 
 ## Order
