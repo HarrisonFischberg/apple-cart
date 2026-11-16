@@ -87,6 +87,26 @@ MainActor.assumeIsolated {
     sampler.hold("preview")
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 4))
     if let r = sampler.latest { print("READING percent=\(r.percent) measured=\(r.measuredPercent ?? -1) plugged=\(r.isPluggedIn) charging=\(r.isCharging) cycles=\(r.cycleCount ?? -1) battW=\(r.batteryWatts) sysW=\(r.systemWatts ?? -1)") }
+    // Synthetic readings so every battery state renders the same on any Mac.
+    func synthetic(percent: Int, plugged: Bool, charging: Bool, amps: Int, system: Int?, adapter: Int?) -> BatteryReading? {
+        var p: [String: Any] = ["CurrentCapacity": percent, "ExternalConnected": plugged ? 1 : 0, "IsCharging": charging ? 1 : 0,
+                                "Voltage": 12000, "InstantAmperage": NSNumber(value: UInt64(bitPattern: Int64(amps))), "CycleCount": 98,
+                                "BatteryData": ["AppleRawCurrentCapacity": 4545, "AppleRawMaxCapacity": 5751, "DesignCapacity": 6249]]
+        if let system { p["PowerTelemetryData"] = ["SystemLoad": system] }
+        if let adapter { p["AdapterDetails"] = ["Watts": adapter] }
+        return BatteryReading(properties: p)
+    }
+    let batteryStates: [(String, BatterySampler)] = [
+        ("charging", synthetic(percent: 62, plugged: true, charging: true, amps: 1300, system: 14200, adapter: 96)),
+        ("acfull", synthetic(percent: 100, plugged: true, charging: false, amps: 0, system: 9800, adapter: 96)),
+        ("onbattery", synthetic(percent: 41, plugged: false, charging: false, amps: -1500, system: 18000, adapter: nil)),
+        ("nodata", synthetic(percent: 77, plugged: false, charging: false, amps: 0, system: nil, adapter: nil)),
+    ].map { name, r in
+        let s = BatterySampler(interval: .seconds(1), read: { r })
+        s.hold("preview-\(name)")
+        return (name, s)
+    }
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 1.5))
     @MainActor func firstRunPanel(step: Int) -> PanelView {
         let st = DemoStore(); let reg = FeatureRegistry(store: st)
         let fr = FirstRunModel(store: st); if step == 1 { fr.next() }
@@ -149,6 +169,16 @@ MainActor.assumeIsolated {
                view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
         render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
                view: fullPanel(.battery, AnyView(BatteryView(sampler: sampler, active: true))), outDir: out)
+        render(name: "t006-menubar-glyphs-\(tag)", size: NSSize(width: 420, height: 50), dark: dark, view:
+            HStack(spacing: 14) {
+                ForEach([(0.0, BatteryBadge.none), (0.4, .none), (0.62, .bolt), (1, .plug), (0.8, .paused), (0.1, .plug)], id: \.0) { l, b in
+                    Image(nsImage: BatteryGlyphImage.make(BatteryGlyph(level: l, badge: b)))
+                }
+            }.padding().frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.ground), outDir: out)
+        for (state, sam) in batteryStates {
+            render(name: "t006-battery-\(state)-\(tag)", size: PanelView.size, dark: dark,
+                   view: fullPanel(.battery, AnyView(BatteryView(sampler: sam, active: true))), outDir: out)
+        }
         for step in 0...1 { render(name: "t007-firstrun\(step + 1)-\(tag)", size: PanelView.size, dark: dark, view: firstRunPanel(step: step), outDir: out) }
         render(name: "t008-system-\(tag)", size: PanelView.size, dark: dark,
                view: fullPanel(.system, AnyView(SystemView(sampler: sysSampler, active: true))), outDir: out)

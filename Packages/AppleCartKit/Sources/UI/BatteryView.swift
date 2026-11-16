@@ -18,6 +18,8 @@ public struct BatteryView: View {
                 if let r = sampler.latest {
                     VStack(alignment: .leading, spacing: 12) {
                         summary(r)
+                        chargeBar(r)
+                        flowTiles(r)
                         details(r)
                         graph
                         apps
@@ -46,6 +48,56 @@ public struct BatteryView: View {
                 Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
         }
+    }
+
+    /// Full-width charge bar; the badge sits at the trailing end (limit marker is reserved for the charge limit feature).
+    private func chargeBar(_ r: BatteryReading) -> some View {
+        let g = MenuBarReadout.glyph(for: r)
+        let low = !r.isPluggedIn && r.percent <= 20
+        return ZStack(alignment: .leading) {
+            Capsule().fill(Palette.ground)
+            GeometryReader { geo in
+                Capsule().fill(low ? Color.red : Palette.accent)
+                    .frame(width: max(geo.size.height, geo.size.width * g.level))
+                    .opacity(g.level > 0 ? 1 : 0)
+            }
+            if g.badge != .none {
+                BadgeGlyph(badge: g.badge).frame(width: 14, height: 14)
+                    .foregroundStyle(g.level > 0.92 ? Color.white : Palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 10)
+            }
+        }
+        .frame(height: 22)
+        .accessibilityElement()
+        .accessibilityLabel("Charge \(r.percent) percent")
+    }
+
+    private func flowTiles(_ r: BatteryReading) -> some View {
+        let f = PowerFlow(r)
+        return HStack(spacing: 4) {
+            tile(f.adapter, f.adapterNote) { BadgeGlyph(badge: .plug).frame(width: 14, height: 14) }
+            link
+            tile(f.system, f.systemNote) { Image(systemName: "laptopcomputer").font(.system(size: 14)) }
+            link
+            tile(f.battery, f.batteryNote) { if r.isCharging { BadgeGlyph(badge: .bolt).frame(width: 14, height: 14) } else { Image(systemName: "battery.50percent").font(.system(size: 14)) } }
+        }
+    }
+
+    private var link: some View {
+        Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.secondary)
+            .accessibilityHidden(true)
+    }
+
+    private func tile<Icon: View>(_ value: String, _ note: String, @ViewBuilder icon: () -> Icon) -> some View {
+        VStack(spacing: 4) {
+            icon().foregroundStyle(Palette.secondary).frame(height: 16)
+            Text(value).font(.system(size: 16, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            Text(note).font(.system(size: 11)).foregroundStyle(Palette.secondary).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(.vertical, 10).padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private func details(_ r: BatteryReading) -> some View {
