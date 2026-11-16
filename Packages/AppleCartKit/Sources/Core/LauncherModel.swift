@@ -81,6 +81,8 @@ public final class PanelModel {
     public var keepOpen = false
     /// True while the window is on screen; tool views use it to stop work when hidden.
     public var isOpen = false
+    /// The window is in its large size (the Expand button's state).
+    public var expanded = false
 
     public init() {}
 

@@ -10,7 +10,7 @@ final class PanelWindow: NSPanel {
 
     init(content: NSView) {
         super.init(contentRect: NSRect(origin: .zero, size: PanelView.size),
-                   styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+                   styleMask: [.borderless, .nonactivatingPanel, .resizable], backing: .buffered, defer: false)
         isFloatingPanel = true
         level = .statusBar
         backgroundColor = .clear
@@ -19,6 +19,8 @@ final class PanelWindow: NSPanel {
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         contentView = content
+        contentMinSize = PanelView.size
+        contentMaxSize = NSSize(width: 900, height: 1400)
     }
 
     override var canBecomeKey: Bool { true }
@@ -77,22 +79,54 @@ final class PanelController {
         panel.panelDidClose(launcher: launcher)
     }
 
+    /// The size the owner last left the panel at, never below the normal size.
+    private func savedSize() -> CGSize {
+        let d = UserDefaults.standard
+        let w = d.double(forKey: "panel.width"), h = d.double(forKey: "panel.height")
+        guard w > 0, h > 0 else { return PanelView.size }
+        let visible = (anchor?.window?.screen ?? NSScreen.main)?.visibleFrame.size ?? CGSize(width: 1200, height: 900)
+        return CGSize(width: min(max(w, PanelView.size.width), visible.width - 16), height: min(max(h, PanelView.size.height), visible.height - 16))
+    }
+
+    /// Normal size and large size, keeping the top edge where it is.
+    private func toggleSize() {
+        guard let win = window else { return }
+        let visible = (win.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        let target = panel.expanded ? PanelView.size
+            : CGSize(width: min(PanelView.expandedSize.width, visible.width - 16), height: min(PanelView.expandedSize.height, visible.height - 16))
+        var frame = win.frame
+        frame.origin.y = frame.maxY - target.height
+        frame.size = target
+        frame.origin.x = min(max(frame.origin.x - (target.width - win.frame.width) / 2, visible.minX + 8), visible.maxX - target.width - 8)
+        frame.origin.y = max(frame.origin.y, visible.minY + 8)
+        win.setFrame(frame, display: true, animate: true)
+    }
+
     private func makeWindow() -> PanelWindow {
         let view = PanelView(launcher: launcher, panel: panel,
                              openSettings: { [weak self] in self?.close(); self?.openSettings() },
                              collapse: { [weak self] in self?.close() },
                              quit: { NSApp.terminate(nil) },
+                             toggleSize: { [weak self] in self?.toggleSize() },
                              toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) },
                              firstRun: firstRun, readout: readout,
                              chargeLimit: chargeLimit, chargeLimiter: chargeLimiter)
         let win = PanelWindow(content: NSHostingView(rootView: view))
         win.onCancel = { [weak self] in self?.close() }
+        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: win, queue: .main) { [weak self, weak win] _ in
+            MainActor.assumeIsolated {
+                guard let self, let win, win.isVisible else { return }
+                UserDefaults.standard.set(win.frame.width, forKey: "panel.width")
+                UserDefaults.standard.set(win.frame.height, forKey: "panel.height")
+                self.panel.expanded = win.frame.width > PanelView.size.width + 40
+            }
+        }
         return win
     }
 
     /// Centered under the status item, clamped to the screen it is on.
     private func position(_ win: NSWindow) {
-        let size = PanelView.size
+        let size = savedSize()
         guard let button = anchor, let bw = button.window else { win.center(); return }
         let rect = bw.convertToScreen(button.convert(button.bounds, to: nil))
         let visible = (bw.screen ?? NSScreen.main)?.visibleFrame ?? .zero

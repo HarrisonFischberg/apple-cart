@@ -27,7 +27,9 @@ extension FeatureID {
 
 /// Fixed-size panel: brand header, a strip of icons for the tools that are on, the chosen tool, a footer.
 public struct PanelView: View {
+    /// The normal size, and the smallest the window can be resized to.
     public static let size = CGSize(width: 380, height: 540)
+    public static let expandedSize = CGSize(width: 560, height: 780)
     public static let appName = "Apple Cart"
 
     let launcher: LauncherModel
@@ -35,6 +37,7 @@ public struct PanelView: View {
     let openSettings: () -> Void
     let collapse: () -> Void
     let quit: () -> Void
+    let toggleSize: () -> Void
     let toolView: (FeatureID) -> AnyView?
     let firstRun: FirstRunModel?
     let readout: ReadoutSettings?
@@ -45,6 +48,7 @@ public struct PanelView: View {
 
     public init(launcher: LauncherModel, panel: PanelModel,
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
+                toggleSize: @escaping () -> Void = {},
                 toolView: @escaping (FeatureID) -> AnyView? = { _ in nil },
                 firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil,
                 chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil) {
@@ -57,6 +61,7 @@ public struct PanelView: View {
         self.openSettings = openSettings
         self.collapse = collapse
         self.quit = quit
+        self.toggleSize = toggleSize
         self.toolView = toolView
     }
 
@@ -99,7 +104,7 @@ public struct PanelView: View {
             }
             footer
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(minWidth: Self.size.width, maxWidth: .infinity, minHeight: Self.size.height, maxHeight: .infinity)
         .background(Palette.ground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
@@ -196,6 +201,17 @@ public struct PanelView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
+            Button(action: toggleSize) {
+                Image(systemName: panel.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Color.primary)
+                    .frame(width: 56, height: 44)
+                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(panel.expanded ? "Make the panel smaller" : "Make the panel bigger")
+            .help(panel.expanded ? "Back to the normal size" : "Make the panel bigger. You can also drag its edges.")
             footerButton("Quit", symbol: "power", action: quit)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
