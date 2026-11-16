@@ -107,7 +107,6 @@ public struct BatteryView: View {
             row("Capacity vs new", r.capacityVsDesign.map { String(format: "%.0f%%", $0 * 100) })
             row("Cycles", r.cycleCount.map(String.init))
             row("Temperature", r.temperatureC.map { String(format: "%.1f °C", $0) } ?? "Not provided by macOS")
-            row("Mac is using", r.systemWatts.map { String(format: "%.1f W", $0) })
             row("Charger", r.isPluggedIn ? r.adapterWatts.map { "\($0) W" } ?? "Connected" : "Not connected")
             row("Time left", r.minutesRemaining.map { "\($0 / 60) h \($0 % 60) min" })
         }
