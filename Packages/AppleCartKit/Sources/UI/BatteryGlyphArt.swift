@@ -8,14 +8,14 @@ enum BadgeShape {
         let p = CGMutablePath()
         switch badge {
         case .none: break
-        case .plug:
-            p.addRect(CGRect(x: 3, y: 8, width: 1.3, height: 2))
-            p.addRect(CGRect(x: 5.7, y: 8, width: 1.3, height: 2))
-            p.addRoundedRect(in: CGRect(x: 2, y: 4, width: 6, height: 4.4), cornerWidth: 1.2, cornerHeight: 1.2)
-            p.addRect(CGRect(x: 4.3, y: 0, width: 1.4, height: 4.2))
+        case .plug: // big rounded head, small prongs, stubby tail
+            p.addRect(CGRect(x: 2.8, y: 7.7, width: 1.3, height: 2.3))
+            p.addRect(CGRect(x: 5.9, y: 7.7, width: 1.3, height: 2.3))
+            p.addRoundedRect(in: CGRect(x: 1.4, y: 2.6, width: 7.2, height: 5.6), cornerWidth: 2, cornerHeight: 2)
+            p.addRect(CGRect(x: 4.2, y: 0.4, width: 1.6, height: 2.4))
         case .bolt:
-            p.addLines(between: [CGPoint(x: 6.2, y: 10), CGPoint(x: 2, y: 5.4), CGPoint(x: 4.6, y: 5.4),
-                                 CGPoint(x: 3.8, y: 0), CGPoint(x: 8, y: 5), CGPoint(x: 5.4, y: 5)])
+            p.addLines(between: [CGPoint(x: 6.0, y: 10), CGPoint(x: 2.4, y: 5.4), CGPoint(x: 4.6, y: 5.4),
+                                 CGPoint(x: 4.0, y: 0), CGPoint(x: 7.6, y: 5), CGPoint(x: 5.4, y: 5)])
             p.closeSubpath()
         case .paused:
             p.addRect(CGRect(x: 2, y: 1, width: 2.2, height: 8))
@@ -32,7 +32,8 @@ public enum BatteryGlyphImage {
     public static func make(_ g: BatteryGlyph, style: MenuBarGlyphStyle = .classic) -> NSImage {
         let size: NSSize
         switch style {
-        case .classic, .solid: size = NSSize(width: 28, height: 13)
+        case .classic: size = NSSize(width: 29, height: 13)
+        case .solid: size = NSSize(width: 28, height: 13)
         case .segments: size = NSSize(width: 38, height: 13)
         case .ring: size = NSSize(width: 15, height: 15)
         case .slim: size = NSSize(width: 34, height: 13)
@@ -75,21 +76,36 @@ public enum BatteryGlyphImage {
         path.fill()
     }
 
-    /// Outline, fill to the level, badge punched into the fill.
+    /// Thin outline, fill close to it, and the badge cut out of the fill. Where the charge is too low for
+    /// the fill to reach the badge, it sits solid in the empty part instead.
     private static func drawClassic(_ g: BatteryGlyph) {
-        let body = NSRect(x: 0.75, y: 0.75, width: 23.5, height: 11.5)
+        let body = NSRect(x: 0.6, y: 0.5, width: 25, height: 12)
         dim.setStroke()
-        let outline = NSBezierPath(roundedRect: body, xRadius: 3.2, yRadius: 3.2)
-        outline.lineWidth = 1.2
+        let outline = NSBezierPath(roundedRect: body.insetBy(dx: 0.5, dy: 0.5), xRadius: 3.2, yRadius: 3.2)
+        outline.lineWidth = 1
         outline.stroke()
-        nub()
+        nub(x: body.maxX + 0.9)
         let inner = body.insetBy(dx: 2, dy: 2)
+        var edge = inner.minX
         if g.level > 0 {
             NSColor.black.setFill()
             let w = max(inner.height, inner.width * g.level)
-            NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: w, height: inner.height), xRadius: 1.6, yRadius: 1.6).fill()
+            edge = inner.minX + w
+            NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: w, height: inner.height), xRadius: 2.2, yRadius: 2.2).fill()
         }
-        badge(g.badge, in: inner.insetBy(dx: 5, dy: -0.4))
+        guard g.badge != .none else { return }
+        let box = NSRect(x: 0, y: 0, width: inner.height, height: inner.height)
+        // On a low charge the badge goes in the middle of the empty part so it is never half cut.
+        let cx = edge >= body.midX + box.width / 2 + 1 ? body.midX : (edge + inner.maxX) / 2
+        let path = NSBezierPath(cgPath: BadgeShape.path(g.badge, in: box.offsetBy(dx: cx - box.midX, dy: inner.midY - box.midY)))
+        if cx == body.midX && g.level > 0 {
+            NSGraphicsContext.current?.compositingOperation = .clear
+            path.fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+        } else {
+            NSColor.black.withAlphaComponent(0.85).setFill()
+            path.fill()
+        }
     }
 
     /// A solid body: the charged part is full black, the rest is dim, and the badge is cut out of it.
