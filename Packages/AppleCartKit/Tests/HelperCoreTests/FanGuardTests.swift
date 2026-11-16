@@ -231,6 +231,8 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
         #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .ok)
         #expect(settles == 1)
         #expect(FanGuard.settleSeconds == 0.15)
+        #expect(g.restore(reason: "test") == .ok && settles == 2) // restore wrote the mode: settle before reading it back
+        #expect(g.restore(reason: "test") == .ok && settles == 2) // nothing to write: no wait
     }
 
     @Test func halfSuccessIsRestored() {

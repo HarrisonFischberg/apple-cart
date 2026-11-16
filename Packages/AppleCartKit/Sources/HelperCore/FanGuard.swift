@@ -316,6 +316,7 @@ public final class FanGuard: @unchecked Sendable {
                 do { try write(unlock, [FanWhitelist.systemMode]) } catch { firstError = firstError ?? error }
             }
             if let firstError { throw firstError }
+            settle() // the SMC applies a mode change asynchronously, as in setFan
             for fan in layout.fans where try read(fan.modeKey) != [FanWhitelist.systemMode] {
                 log("fan \(fan.index) mode still non-zero after restore")
                 throw FanWriteError.notApplied
