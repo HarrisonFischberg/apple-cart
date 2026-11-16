@@ -7,7 +7,6 @@ public struct SystemView: View {
     let sampler: SystemSampler
     let active: Bool
     @State private var expanded: Set<Row> = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Row: Hashable { case cpu, gpu, memory }
 
@@ -22,7 +21,7 @@ public struct SystemView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
                         temperatures(r)
                         divider
                         usage(r)
@@ -31,7 +30,7 @@ public struct SystemView: View {
                         divider
                         footer(r)
                     }
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                     .background {
                         // Same card as the battery view: the tile with a faint wash of the flow blue from the top.
                         let card = RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -68,19 +67,19 @@ public struct SystemView: View {
     }
 
     private func tempTile(_ title: String, symbol: String, _ c: Double?) -> some View {
-        VStack(spacing: 4) {
-            Label(title, systemImage: symbol).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.secondary)
+        VStack(spacing: 2) {
+            Label(title, systemImage: symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
             if let c {
-                Text(SystemText.temperature(c)).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                Text(SystemText.temperature(c)).font(.system(size: 19, weight: .bold)).monospacedDigit()
             } else {
                 Text("Not available on this Mac").font(.system(size: 12)).foregroundStyle(Palette.secondary)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 8).padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 72)
-        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.08)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title) temperature")
         .accessibilityValue(c.map { SystemText.temperature($0) } ?? "Not available on this Mac")
@@ -118,7 +117,7 @@ public struct SystemView: View {
                     UsageBar(fraction: (percent ?? 0) / 100, color: color)
                     Text(value).font(.system(size: 15)).monospacedDigit().frame(minWidth: 44, alignment: .trailing)
                 }
-                .frame(minHeight: 40).contentShape(Rectangle())
+                .frame(minHeight: 36).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(title) usage")
@@ -126,7 +125,7 @@ public struct SystemView: View {
             .accessibilityHint(open ? "Hides the apps using the \(title)" : "Shows the apps using the \(title)")
             if open { appList(row) }
             Sparkline(values: history.values, capacity: SystemSampler.historyLength, color: color)
-                .frame(height: 52)
+                .frame(height: 40)
                 .accessibilityElement()
                 .accessibilityLabel("\(title) usage, last 2 minutes")
                 .accessibilityValue(history.summary)
@@ -166,7 +165,7 @@ public struct SystemView: View {
                 .padding(.leading, 24).padding(.bottom, 4)
             }
             Sparkline(values: sampler.memoryHistory.values, capacity: SystemSampler.historyLength, color: Palette.teal)
-                .frame(height: 52)
+                .frame(height: 40)
                 .accessibilityElement()
                 .accessibilityLabel("Memory used, last 2 minutes")
                 .accessibilityValue(sampler.memoryHistory.summary)
@@ -220,7 +219,6 @@ public struct SystemView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.leading, 24).padding(.bottom, 6)
-        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
     private func chevron(_ open: Bool) -> some View {
@@ -229,7 +227,10 @@ public struct SystemView: View {
     }
 
     private func toggle(_ row: Row) {
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) {
+        // The details simply appear: no slide or fade.
+        var t = Transaction(animation: nil)
+        t.disablesAnimations = true
+        withTransaction(t) {
             if expanded.contains(row) { expanded.remove(row) } else { expanded.insert(row) }
         }
     }
