@@ -6,20 +6,16 @@ Built 2026-11-16 on branch feature/fan. Status: code and unit tests done; first 
 ## What the owner gets
 
 Panel card "Fan control" (BETA): one row per fan ("Current 1,840 RPM", or "Fan off" when stopped), a status line from
-confirmed helper state only, and System | Manual | Curve.
+confirmed helper state only, and System | Manual.
 
 - Every mode needs Apply, System included: picking a segment only changes what the card shows (with a small "Not
   applied yet" note under it); the subtitle and fan rows keep showing the confirmed live state. System shows "macOS
   decides the fan speed, including keeping the fan off when the Mac is cool" and "Apply system control", which always
-  sends resetFan; the "Return to System" link under an applied Manual or Curve does the same.
+  sends resetFan; the "Return to System" link under an applied Manual does the same.
 - System: macOS controls the fans.
 - Manual: Min / Medium / Max chips and a slider, 0% = the fan's minimum running speed (F0Mn), 100% = F0Mx. Nothing is
   sent until "Apply manual control".
-- Curve: sensor menu (Hottest SoC, CPU, GPU, Battery) with its live temperature, a chart with draggable points, steppers
-  per point, Add point (up to 6, 40-100 C, increasing), Add sensor (a second sensor: the curve follows the hotter of the
-  two; if either is unreadable, macOS gets the fans), Reset to default, "Apply fan curve". 0% on the curve means "let
-  macOS decide", so the fan can stay off when cool. Default curve (starts earlier than macOS, which kept the fan off until about 85 C in the live load test): 60 C -> 0% (macOS), 68 C -> 15% (about 2,950 rpm), 75 C -> 40%, 82 C -> 70%, 90 C -> 100%. Older text: 55 C -> 0% (macOS), 70 C -> 30% (about 3,600 rpm),
-  80 C -> 65% (about 5,100 rpm), 90 C -> 100%.
+- Curve mode was removed 2026-11-16 (owner: only System and Manual). A saved "curve" mode in UserDefaults reads as System.
 - "Resume after restart or sleep" (off by default): off means every sleep, relaunch, tool off and quit leaves the fans
   with macOS until Apply is pressed again. On re-applies the saved mode after wake or relaunch, but still only once the
   helper reports ready and a fresh temperature has been read.
@@ -30,12 +26,11 @@ Settings > Fan speed: mode (read only), Resume, the safety text and the shared h
 
 - Every safety check uses the hottest single plausible sensor (max of all Tp*, Te*, Tg* readings in 5-130 C;
   sensors that are off read 0 and are left out), never an average, so one hot core cluster cannot hide behind a cooler
-  mean. The CPU and GPU averages are only for display and for the CPU / GPU curve sensors. "Hottest SoC" on the curve is
-  this same hottest sensor.
+  mean. The CPU and GPU averages are only for display.
 - No manual speed without that reading (none plausible = unknown = macOS).
 - Hottest sensor at 90 C or more, or ProcessInfo thermal state serious/critical: fans to macOS at once, for 2 minutes,
-  whatever sensor a curve uses.
-- Heat hysteresis (decided 2026-11-16): after a heat or thermal-pressure release, Manual or Curve resumes only once the
+  whatever the mode.
+- Heat hysteresis (decided 2026-11-16): after a heat or thermal-pressure release, Manual resumes only once the
   2 minutes have passed AND the hottest sensor is below 80 C. A Mac sitting at 85-89 C therefore stays with macOS
   instead of flapping between macOS and a manual speed every 2 minutes. Below 80 C the latch clears and normal rules apply.
 - Fan response watchdog: after a manual speed starts, every fan must read within 20% of the target (and above 0) within

@@ -1,13 +1,12 @@
 import Core
 import SwiftUI
 
-/// Fan speed: live speed per fan, then System, Manual (one speed) or Curve (temperature to speed). Choosing Manual or
-/// Curve only opens its editor; nothing is sent until Apply. System is applied at once (it is always safe).
+/// Fan speed: live speed per fan, then System or Manual (one speed). Choosing Manual
+/// only opens its editor; nothing is sent until Apply. System is applied at once (it is always safe).
 public struct FanSpeedView: View {
     let runner: FanRunner
     @State private var tab: FanControlMode
     @State private var draftPercent: Int
-    @State private var draftCurve: FanCurve
     private let pinnedTab: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -17,7 +16,6 @@ public struct FanSpeedView: View {
         _tab = State(initialValue: tab ?? runner.settings.active)
         pinnedTab = tab != nil
         _draftPercent = State(initialValue: runner.settings.manualPercent)
-        _draftCurve = State(initialValue: runner.settings.curve)
     }
 
     private var state: FanState { runner.state }
@@ -41,7 +39,6 @@ public struct FanSpeedView: View {
                     switch tab {
                     case .system: systemEditor
                     case .manual: manualEditor
-                    case .curve: curveEditor
                     }
                     if tab != .system { resumeRow }
                     Text("Control stays on until you return to System. macOS takes the fans back by itself if Apple Cart disconnects, the Mac sleeps (unless Resume is on), a temperature cannot be read, the chip reaches 90 °C or macOS reports thermal pressure.")
@@ -155,119 +152,6 @@ public struct FanSpeedView: View {
         }
     }
 
-    // MARK: Curve
-
-    private var curveEditor: some View {
-        let applied = settings.active == .curve && settings.curve == draftCurve.validated
-        return VStack(alignment: .leading, spacing: 10) {
-            ForEach(draftCurve.sensors.indices, id: \.self) { i in sensorRow(i) }
-            CurveChart(curve: $draftCurve, current: draftCurve.temperature(state.temperatures))
-                .frame(height: 150)
-            pointColumns
-            HStack(spacing: 16) {
-                linkButton("Add point", symbol: "plus") {
-                    guard let last = draftCurve.points.last else { return }
-                    draftCurve.points.append(FanCurvePoint(min(last.tempC + 5, FanCurve.tempRange.upperBound), last.percent))
-                    draftCurve = draftCurve.validated
-                }
-                .disabled(draftCurve.points.count >= FanCurve.maxPoints || (draftCurve.points.last?.tempC ?? 100) >= FanCurve.tempRange.upperBound)
-                Spacer()
-                linkButton("Reset to default", symbol: "arrow.counterclockwise") { draftCurve = .default }
-            }
-            if draftCurve.sensors.count < FanCurve.maxSensors {
-                linkButton("Add sensor", symbol: "plus.circle") {
-                    if let s = FanSensor.allCases.first(where: { !draftCurve.sensors.contains($0) }) { draftCurve.sensors.append(s) }
-                }
-                .accessibilityHint("Adds a second temperature. The curve follows whichever is hotter.")
-            }
-            applyButton(applied ? "Applied" : "Apply fan curve", applied: applied) {
-                settings.applyCurve(draftCurve)
-                draftCurve = settings.curve
-                Task { await runner.applyChanged() }
-            }
-        }
-    }
-
-    private func sensorRow(_ i: Int) -> some View {
-        let sensor = draftCurve.sensors[i]
-        return HStack(spacing: 10) {
-            Menu {
-                ForEach(FanSensor.allCases, id: \.self) { s in
-                    Button {
-                        draftCurve.sensors[i] = s
-                        draftCurve = draftCurve.validated
-                    } label: {
-                        Text(state.temperatures.value(s).map { "\(s.title)  \(FanText.celsius($0))" } ?? "\(s.title)  (not available)")
-                    }
-                }
-            } label: {
-                Text(sensor.title)
-            }
-            .menuStyle(.button).fixedSize()
-            .accessibilityLabel("Curve sensor")
-            .accessibilityValue(sensor.title)
-            Text(state.temperatures.value(sensor).map { FanText.celsius($0) } ?? "—")
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.secondary).monospacedDigit()
-                .accessibilityLabel("\(sensor.title) temperature")
-            Spacer()
-            if i > 0 {
-                Button { draftCurve.sensors.remove(at: i) } label: {
-                    Image(systemName: "minus.circle").font(.system(size: 16)).foregroundStyle(Palette.secondary)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Remove \(sensor.title) sensor")
-            }
-        }
-        .frame(minHeight: 44)
-    }
-
-    private var pointColumns: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text("Temperature (°C)")
-                Spacer()
-                Text("Fan speed")
-            }
-            .font(.system(size: 14)).foregroundStyle(Palette.secondary)
-            ForEach(draftCurve.points.indices, id: \.self) { i in
-                HStack(spacing: 8) {
-                    Text("\(draftCurve.points[i].tempC)°").monospacedDigit().frame(width: 40, alignment: .trailing)
-                    Stepper("Point \(i + 1) temperature", value: tempBinding(i), in: FanCurve.tempRange).labelsHidden()
-                        .accessibilityValue("\(draftCurve.points[i].tempC) degrees Celsius")
-                    if draftCurve.points.count > 2 {
-                        Button { draftCurve.points.remove(at: i) } label: {
-                            Image(systemName: "minus.circle").foregroundStyle(Palette.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain).accessibilityLabel("Remove point \(i + 1)")
-                    }
-                    Spacer()
-                    Text(draftCurve.points[i].percent == 0 ? "macOS" : "\(draftCurve.points[i].percent)%").monospacedDigit()
-                        .frame(width: 52, alignment: .trailing)
-                    Stepper("Point \(i + 1) fan speed", value: percentBinding(i), in: FanCurve.percentRange, step: 5).labelsHidden()
-                        .accessibilityValue(draftCurve.points[i].percent == 0 ? "macOS decides" : "\(draftCurve.points[i].percent) percent")
-                }
-                .font(.system(size: 15))
-                .frame(minHeight: 44)
-            }
-            Text("0% lets macOS decide, so the fan can stay off when the Mac is cool.").font(.system(size: 12)).foregroundStyle(Palette.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// Temperatures stay strictly increasing: a point cannot pass its neighbours.
-    private func tempBinding(_ i: Int) -> Binding<Int> {
-        Binding(get: { draftCurve.points[i].tempC }, set: { v in
-            let lo = i > 0 ? draftCurve.points[i - 1].tempC + 1 : FanCurve.tempRange.lowerBound
-            let hi = i + 1 < draftCurve.points.count ? draftCurve.points[i + 1].tempC - 1 : FanCurve.tempRange.upperBound
-            draftCurve.points[i].tempC = min(max(v, lo), hi)
-        })
-    }
-
-    private func percentBinding(_ i: Int) -> Binding<Int> {
-        Binding(get: { draftCurve.points[i].percent }, set: { draftCurve.points[i].percent = min(max($0, 0), 100) })
-    }
-
     // MARK: Shared pieces
 
     private var resumeRow: some View {
@@ -298,14 +182,9 @@ public struct FanSpeedView: View {
             }
         }
     }
-
-    private func linkButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Label(title, systemImage: symbol).font(.system(size: 15)).frame(minHeight: 44).contentShape(Rectangle()) }
-            .buttonStyle(.plain).foregroundStyle(Palette.accent)
-    }
 }
 
-/// System | Manual | Curve, the selected segment a lighter raised pill. `pending`: the selected segment is not the mode
+/// System | Manual, the selected segment a lighter raised pill. `pending`: the selected segment is not the mode
 /// that is applied, so it carries a small "Not applied yet" note.
 private struct ModePicker: View {
     let selection: FanControlMode
@@ -356,57 +235,5 @@ private struct ModePicker: View {
         .opacity(enabled ? 1 : 0.5)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Fan mode")
-    }
-}
-
-/// Temperature (40-100 C) across, fan speed (0-100%) up. Points can be dragged; the steppers below do the same.
-private struct CurveChart: View {
-    @Binding var curve: FanCurve
-    let current: Double?
-    private let tMin = Double(FanCurve.tempRange.lowerBound), tMax = Double(FanCurve.tempRange.upperBound)
-
-    var body: some View {
-        GeometryReader { geo in
-            let inset: CGFloat = 12
-            let w = geo.size.width - inset * 2, h = geo.size.height - inset * 2
-            let point = { (p: FanCurvePoint) in
-                CGPoint(x: inset + w * CGFloat((Double(p.tempC) - tMin) / (tMax - tMin)), y: inset + h * (1 - CGFloat(p.percent) / 100))
-            }
-            ZStack(alignment: .topLeading) {
-                ForEach(1..<5) { i in
-                    Path { p in let y = inset + h * CGFloat(i) / 5; p.move(to: CGPoint(x: inset, y: y)); p.addLine(to: CGPoint(x: inset + w, y: y)) }
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                }
-                if let c = current, (tMin...tMax).contains(c) {
-                    let x = inset + w * CGFloat((c - tMin) / (tMax - tMin))
-                    Path { p in p.move(to: CGPoint(x: x, y: inset)); p.addLine(to: CGPoint(x: x, y: inset + h)) }
-                        .stroke(Palette.amber.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                }
-                Path { p in p.addLines(curve.points.map(point)) }
-                    .stroke(Palette.flowLight, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                ForEach(curve.points.indices, id: \.self) { i in
-                    Circle().fill(Palette.flowLight).overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                        .frame(width: 14, height: 14)
-                        .frame(width: 30, height: 30).contentShape(Circle())
-                        .position(point(curve.points[i]))
-                        .gesture(DragGesture(minimumDistance: 0).onChanged { g in
-                            let t = tMin + Double((g.location.x - inset) / max(w, 1)) * (tMax - tMin)
-                            let pct = Double(1 - (g.location.y - inset) / max(h, 1)) * 100
-                            let lo = i > 0 ? curve.points[i - 1].tempC + 1 : FanCurve.tempRange.lowerBound
-                            let hi = i + 1 < curve.points.count ? curve.points[i + 1].tempC - 1 : FanCurve.tempRange.upperBound
-                            curve.points[i].tempC = min(max(Int(t.rounded()), lo), hi)
-                            curve.points[i].percent = min(max(Int((pct / 5).rounded()) * 5, 0), 100)
-                        })
-                        .accessibilityHidden(true)
-                }
-                Text("40°").font(.system(size: 10)).foregroundStyle(Palette.secondary).position(x: inset + 8, y: inset + h + 2)
-                Text("100°").font(.system(size: 10)).foregroundStyle(Palette.secondary).position(x: inset + w - 10, y: inset + h + 2)
-            }
-        }
-        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Fan curve")
-        .accessibilityValue(curve.points.map { "\($0.tempC) degrees, \($0.percent == 0 ? "macOS" : "\($0.percent) percent")" }.joined(separator: "; "))
-        .accessibilityHint("Change the points with the steppers below.")
     }
 }

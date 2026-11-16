@@ -267,13 +267,13 @@ struct ChargeHelperCard: View {
     }
 }
 
-/// Fan speed: Resume and the safety rules. The mode, speed and curve are set in the panel.
+/// Fan speed: Resume and the safety rules. The mode and speed are set in the panel.
 private struct FanOptions: View {
     let settings: FanSettings
 
     var body: some View {
         SettingsCard("Fan speed") {
-            SettingsRow("Mode", detail: "Choose System, Manual or Curve in the panel.") { Text(settings.active.title).foregroundStyle(Palette.secondary) }
+            SettingsRow("Mode", detail: "Choose System or Manual in the panel.") { Text(settings.active.title).foregroundStyle(Palette.secondary) }
             SettingsRow("Resume after restart or sleep", detail: "Off: every restart and sleep gives the fans back to macOS until you apply again.") {
                 Toggle("Resume after restart or sleep", isOn: Binding(get: { settings.resume }, set: { settings.setResume($0) }))
                     .toggleStyle(.switch).labelsHidden()

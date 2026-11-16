@@ -5,9 +5,9 @@ import Testing
 private let range = FanRange(minRPM: 2317, maxRPM: 6550)
 private let t0 = Date(timeIntervalSince1970: 1_000_000)
 
-private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve = .default, soc: Double? = 60, battery: Double? = nil,
+private func decide(_ mode: FanControlMode, percent: Int = 50, soc: Double? = 60, battery: Double? = nil,
                     thermal: Bool = false, range: FanRange? = range, at: Date = t0, _ state: inout FanPolicyState) -> FanDecision {
-    FanPolicy.decide(mode: mode, manualPercent: percent, curve: curve, temperatures: FanTemperatures(cpu: soc, gpu: soc.map { $0 - 5 }, battery: battery),
+    FanPolicy.decide(mode: mode, manualPercent: percent, temperatures: FanTemperatures(cpu: soc, gpu: soc.map { $0 - 5 }, battery: battery),
                      thermalPressure: thermal, range: range, now: at, state: &state)
 }
 
@@ -27,47 +27,12 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         #expect(decide(.manual, percent: 0, &s) == .hold(rpm: 2317))
         s = FanPolicyState()
         #expect(decide(.manual, percent: 100, &s) == .hold(rpm: 6550))
-        s = FanPolicyState()
-        #expect(decide(.curve, soc: 75, &s) == .hold(rpm: range.rpm(percent: 40)))
-    }
-
-    @Test func curveInterpolatesAndZeroMeansSystem() {
-        let c = FanCurve.default
-        #expect(c.percent(at: 40) == 0 && c.percent(at: 60) == 0)
-        #expect(c.percent(at: 64) == 7.5)
-        #expect(c.percent(at: 78.5) == 55)
-        #expect(c.percent(at: 99) == 100)
-        var s = FanPolicyState()
-        #expect(decide(.curve, soc: 50, &s) == .system(.belowCurve(50))) // macOS keeps the fan off at idle
-        let high = FanCurve(points: [FanCurvePoint(50, 20), FanCurvePoint(70, 100)])
-        s = FanPolicyState()
-        #expect(decide(.curve, curve: high, soc: 45, &s) == .hold(rpm: range.rpm(percent: 20))) // below the first point: its speed
-    }
-
-    @Test func curveValidationKeepsTheRules() {
-        let v = FanCurve(points: [FanCurvePoint(30, 150), FanCurvePoint(30, -5), FanCurvePoint(120, 50)] + (0..<6).map { FanCurvePoint(60 + $0, 10) },
-                         sensors: [.cpu, .cpu, .gpu, .battery]).validated
-        #expect(v.points.count <= FanCurve.maxPoints)
-        #expect(zip(v.points, v.points.dropFirst()).allSatisfy { $0.tempC < $1.tempC })
-        #expect(v.points.allSatisfy { FanCurve.tempRange.contains($0.tempC) && FanCurve.percentRange.contains($0.percent) })
-        #expect(v.sensors == [.cpu, .gpu])
-        #expect(FanCurve(points: [FanCurvePoint(50, 10)]).validated.points == FanCurve.default.points)
-    }
-
-    @Test func secondSensorTakesTheHotterAndAnUnknownOneReleases() {
-        let c = FanCurve(points: [FanCurvePoint(40, 0), FanCurvePoint(80, 100)], sensors: [.hottestSoC, .battery])
-        #expect(c.temperature(FanTemperatures(cpu: 50, battery: 60)) == 60)
-        #expect(c.temperature(FanTemperatures(cpu: 50, battery: nil)) == nil)
-        var s = FanPolicyState()
-        #expect(decide(.curve, curve: c, soc: 50, battery: nil, &s) == .system(.noTemperature))
     }
 
     @Test func unknownTemperatureNeverHoldsAManualSpeed() {
-        for mode in [FanControlMode.manual, .curve] {
-            var s = FanPolicyState()
-            #expect(decide(mode, soc: nil, &s) == .system(.noTemperature))
-        }
         var s = FanPolicyState()
+        #expect(decide(.manual, soc: nil, &s) == .system(.noTemperature))
+        s = FanPolicyState()
         #expect(decide(.manual, range: nil, &s) == .system(.noRange))
     }
 
@@ -90,7 +55,7 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         // Averages 85 C, one P-core cluster at 104 C: released.
         var s = FanPolicyState()
         let t = FanTemperatures(cpu: 85, gpu: 70, hottestSensor: 104)
-        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, curve: .default, temperatures: t, thermalPressure: false,
+        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, temperatures: t, thermalPressure: false,
                                  range: range, now: t0, state: &s) == .system(.hot(104)))
         // The reader takes the hottest plausible sensor, leaving out the 0.0 of sensors that are off.
         #expect(ChipTemperatures.hottest(["Tp01": 84, "Tp02": 104, "Te01": 67]) == 104)
@@ -98,7 +63,7 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         let withZero = ["Tp01": 61.0, "Tz00": 0.0, "Tg01": 58.0]
         #expect(ChipTemperatures.hottest(withZero) == 61) // a 0.0 is neither hot nor makes it unknown
         var z = FanPolicyState()
-        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, curve: .default, temperatures: FanTemperatures(cpu: 60, gpu: 58, hottestSensor: ChipTemperatures.hottest(withZero)),
+        #expect(FanPolicy.decide(mode: .manual, manualPercent: 50, temperatures: FanTemperatures(cpu: 60, gpu: 58, hottestSensor: ChipTemperatures.hottest(withZero)),
                                  thermalPressure: false, range: range, now: t0, state: &z) == .hold(rpm: 4450))
         #expect(ChipTemperatures.hottest(["Tp01": 0, "Tp02": 140]) == nil) // nothing plausible: unknown
     }
@@ -111,35 +76,27 @@ private func decide(_ mode: FanControlMode, percent: Int = 50, curve: FanCurve =
         #expect(decide(.manual, soc: 79, at: t0 + 210, &s) == .hold(rpm: 4450))
         #expect(decide(.manual, soc: 85, at: t0 + 220, &s) == .hold(rpm: 4450)) // latch cleared: 85 C is fine again
         var p = FanPolicyState()
-        _ = decide(.curve, thermal: true, &p)
-        #expect(decide(.curve, soc: 82, at: t0 + 130, &p) == .system(.coolingDown)) // same rule after thermal pressure
+        _ = decide(.manual, thermal: true, &p)
+        #expect(decide(.manual, soc: 82, at: t0 + 130, &p) == .system(.coolingDown)) // same rule after thermal pressure
     }
 
     @Test func smoothingStopsHunting() {
-        let c = FanCurve(points: [FanCurvePoint(40, 0), FanCurvePoint(100, 100)])
         var s = FanPolicyState()
-        guard case .hold(let first) = decide(.curve, curve: c, soc: 70, &s) else { Issue.record("no hold"); return }
-        // A small rise within 10 s keeps the old target.
-        #expect(decide(.curve, curve: c, soc: 71, at: t0 + 5, &s) == .hold(rpm: first))
+        guard case .hold(let first) = decide(.manual, percent: 40, &s) else { Issue.record("no hold"); return }
+        // A small change within 10 s keeps the old target (46 -> 50 % is under 200 rpm but over 100 rpm, so use 41 %).
+        #expect(decide(.manual, percent: 41, at: t0 + 5, &s) == .hold(rpm: first))
         // After 10 s it follows.
-        #expect(decide(.curve, curve: c, soc: 71, at: t0 + 10, &s) != .hold(rpm: first))
-        // A big jump (> 100 rpm) is taken at once.
-        guard case .hold(let now) = decide(.curve, curve: c, soc: 71, at: t0 + 11, &s) else { return }
-        #expect(decide(.curve, curve: c, soc: 85, at: t0 + 12, &s) != .hold(rpm: now))
-        // Dropping to 0% waits the 10 s too, but a safety release does not.
-        var z = FanPolicyState()
-        _ = decide(.curve, curve: c, soc: 70, &z)
-        #expect(decide(.curve, curve: c, soc: 30, at: t0 + 3, &z) != .system(.belowCurve(30)))
-        #expect(decide(.curve, curve: c, soc: 30, at: t0 + 10, &z) == .system(.belowCurve(30)))
+        #expect(decide(.manual, percent: 41, at: t0 + 10, &s) != .hold(rpm: first))
+        // A safety release is immediate.
         var h = FanPolicyState()
-        _ = decide(.curve, curve: c, soc: 70, &h)
-        #expect(decide(.curve, curve: c, soc: 95, at: t0 + 1, &h) == .system(.hot(95)))
+        _ = decide(.manual, &h)
+        #expect(decide(.manual, soc: 95, at: t0 + 1, &h) == .system(.hot(95)))
     }
 
     @MainActor @Test func settingsStartInSystemUnlessResumeIsOn() {
         let d = UserDefaults(suiteName: "fan-" + UUID().uuidString)!
         let s = FanSettings(defaults: d)
-        #expect(s.active == .system && !s.resume && s.curve == .default && s.manualPercent == 50)
+        #expect(s.active == .system && !s.resume && s.manualPercent == 50)
         s.applyManual(percent: 60)
         #expect(FanSettings(defaults: d).active == .system) // relaunch without Resume: macOS
         s.applyManual(percent: 60)
@@ -318,15 +275,6 @@ private final class FanRig {
         #expect(rig.controller.calls.isEmpty)
     }
 
-    @Test func curveStatusNamesTheCurveTemperatureInCelsius() async {
-        let rig = FanRig()
-        await rig.runner.setToolEnabled(true)
-        rig.settings.applyCurve(.default)
-        await rig.feed(soc: 75)
-        #expect(rig.runner.state.subtitle == "Curve")
-        #expect(rig.runner.state.statusText == "Curve: 75 °C → \(FanText.rpm(range.rpm(percent: 40)))")
-    }
-
     @Test func shutdownKeepsTheModeOnlyWithResume() async {
         let rig = FanRig()
         await rig.holding()
@@ -370,22 +318,6 @@ private final class FanRig {
         await rig.feed(after: 5)
         #expect(rig.controller.calls == [.set(2317)])
         #expect(!rig.runner.state.fanNotResponding)
-    }
-
-    @Test func watchdogWindowRestartsWhenTheCurveMovesTheTarget() async {
-        let rig = FanRig()
-        rig.fanObeys = false // still spinning up: reads below either target
-        await rig.runner.setToolEnabled(true)
-        rig.settings.applyCurve(.default)
-        await rig.feed(soc: 75)
-        guard case .set(let first)? = rig.controller.calls.last else { Issue.record("no first apply"); return }
-        await rig.feed(soc: 85, after: 10) // warming up: the curve raises the target 10 s in
-        guard case .set(let second)? = rig.controller.calls.last, second != first else { Issue.record("target did not move"); return }
-        rig.controller.clear()
-        await rig.feed(soc: 85, after: 5) // 15 s after the first target, 5 s after the new one
-        #expect(!rig.controller.calls.contains(.reset) && !rig.runner.state.fanNotResponding)
-        await rig.feed(soc: 85, after: 10) // a full window on the new target and still nothing
-        #expect(rig.controller.calls.contains(.reset) && rig.runner.state.fanNotResponding)
     }
 
     @Test func fanThatRespondsPassesTheWatchdog() async {

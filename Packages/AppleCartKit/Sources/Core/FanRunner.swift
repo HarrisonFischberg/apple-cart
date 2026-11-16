@@ -22,8 +22,6 @@ public struct FanState: Equatable, Sendable {
     /// The mode the confirmed hold belongs to.
     public var holdingMode: FanControlMode = .system
     public var holdingPercent: Int?
-    /// The temperature the curve followed for the confirmed hold.
-    public var holdingTempC: Double?
     public var commandFailed = false
     public var waitingForWake = false
     /// The fan never reached the applied speed: handed back, and nothing manual until the owner applies again.
@@ -39,12 +37,11 @@ public struct FanState: Equatable, Sendable {
     /// No fan in the SMC (MacBook Air): an honest empty state, whatever the helper says.
     public var noFan: Bool { reading.map { $0.rpms.isEmpty } ?? false }
 
-    /// Header subtitle from confirmed state only: "System", "Manual 60%", "Curve".
+    /// Header subtitle from confirmed state only: "System", "Manual 60%".
     public var subtitle: String {
         guard holdingRPM != nil else { return "System" }
         switch holdingMode {
         case .manual: return "Manual \(holdingPercent ?? 0)%"
-        case .curve: return "Curve"
         case .system: return "System"
         }
     }
@@ -64,7 +61,6 @@ public struct FanState: Equatable, Sendable {
         if waitingForWake { return "Waiting for the Mac to wake." }
         if commandFailed { return "Could not set the fans. macOS is controlling them." }
         if let rpm = holdingRPM {
-            if holdingMode == .curve, let t = holdingTempC { return "Curve: \(FanText.celsius(t)) → \(FanText.rpm(rpm))" }
             return "Holding \(FanText.rpm(rpm))"
         }
         switch decision {
@@ -72,7 +68,6 @@ public struct FanState: Equatable, Sendable {
         case .system(.thermalPressure)?: return "Thermal pressure: macOS has the fans for 2 minutes."
         case .system(.coolingDown)?: return "Cooling down: macOS has the fans until the chip is below 80 °C."
         case .system(.noTemperature)?: return "Temperature unknown: macOS is controlling the fans."
-        case .system(.belowCurve)?: return "Below the curve: macOS is controlling the fans."
         case .hold?: return "Applying…"
         default: return "macOS is controlling the fans."
         }
@@ -88,7 +83,7 @@ public enum FanText {
 
     public static func rpm(_ rpm: Int) -> String { "\(rpm.formatted()) rpm" }
 
-    /// Curves are set in Celsius, so their temperatures are shown in Celsius too, whatever the region uses.
+    /// Fan temperatures are always shown in Celsius, whatever the region uses.
     public static func celsius(_ c: Double) -> String { "\(Int(c.rounded())) °C" }
 }
 
@@ -253,7 +248,7 @@ public final class FanRunner {
         if state.otherAppControls { state.holdingRPM = nil; state.decision = nil; return } // never fight another app
         if state.fanNotResponding { state.decision = nil; await release(); return }
         if await fanDidNotRespond() { return }
-        let decision = FanPolicy.decide(mode: settings.active, manualPercent: settings.manualPercent, curve: settings.curve,
+        let decision = FanPolicy.decide(mode: settings.active, manualPercent: settings.manualPercent,
                                         temperatures: s?.temperatures ?? FanTemperatures(), thermalPressure: s?.thermalPressure ?? false,
                                         range: s?.reading?.range, now: now(), state: &policy)
         state.decision = decision
@@ -266,7 +261,6 @@ public final class FanRunner {
     private func hold(_ rpm: Int, range: FanRange?) async {
         let mode = settings.active
         let percent = mode == .manual ? settings.manualPercent : range?.percent(rpm: rpm)
-        state.holdingTempC = mode == .curve ? settings.curve.temperature(state.temperatures) : nil
         if sentRPM == rpm, let at = sentAt, now().timeIntervalSince(at) < Self.renewEvery {
             state.holdingRPM = rpm; state.holdingMode = mode; state.holdingPercent = percent
             return
