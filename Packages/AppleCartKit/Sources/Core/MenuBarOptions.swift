@@ -47,7 +47,7 @@ public enum MenuBarItem: String, CaseIterable, Sendable {
     /// nil when this Mac does not report the value, it does not apply right now, or it is idle: nothing is invented.
     public func text(for r: BatteryReading) -> String? {
         switch self {
-        case .percent: return "\(r.percent)%"
+        case .percent: return "\(Int(r.shownPercent.rounded()))%"
         case .watts:
             guard abs(r.batteryWatts) >= 0.05 else { return nil }
             return "\(r.batteryWatts > 0 ? "+" : "−")\(Int(abs(r.batteryWatts).rounded())) W"

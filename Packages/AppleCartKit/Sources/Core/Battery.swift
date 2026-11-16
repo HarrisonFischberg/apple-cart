@@ -8,6 +8,16 @@ import os
 extension BatteryReading {
     /// While the limiter holds the charger off, the Mac runs wholly from the battery. One telemetry sample can still say
     /// the battery is charging; the map shows the held truth: the battery covers the Mac's whole load, nothing charges.
+    /// The charge to show people: the battery's own figure (macOS rounds and can lag by several points while the battery
+    /// drains, for example in a hold), except that a full battery on a charger reads 100.
+    public var shownPercent: Double {
+        guard let m = measuredPercent else { return Double(percent) }
+        if percent >= 100 && batteryWatts >= -0.5 { return 100 }
+        return min(max(m, 0), 100)
+    }
+    /// `shownPercent` as text: one decimal, no decimal at exactly 100.
+    public var shownPercentText: String { shownPercent >= 100 ? "100%" : String(format: "%.1f%%", shownPercent) }
+
     public func whileHeld() -> BatteryReading {
         guard isPluggedIn else { return self }
         var r = self

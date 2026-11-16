@@ -107,3 +107,19 @@ private func full(percent: Int = 80, amps: Int64 = 0, plugged: Bool = true, char
         #expect(PowerFlow(nil).battery == "—" && PowerFlow(nil).batteryNote == "No data")
     }
 }
+
+@Suite struct ShownPercentTests {
+    private func r(percent: Int, amps: Int64, raw: Int, max: Int) -> BatteryReading {
+        BatteryReading(properties: ["CurrentCapacity": percent, "ExternalConnected": 1, "IsCharging": 0, "Voltage": 12000,
+                                    "InstantAmperage": NSNumber(value: UInt64(bitPattern: amps)),
+                                    "BatteryData": ["AppleRawCurrentCapacity": raw, "AppleRawMaxCapacity": max]])!
+    }
+
+    @Test func showsTheBatterysOwnFigureWhileItDrainsAndHundredWhenFullOnTheCharger() {
+        let draining = r(percent: 88, amps: -1400, raw: 4841, max: 5789) // macOS still says 88 during a hold
+        #expect(draining.shownPercentText == "83.6%")
+        #expect(MenuBarReadout.percent.text(for: draining, showHardwarePercent: false) == "84%")
+        let full = r(percent: 100, amps: 0, raw: 5650, max: 5773)
+        #expect(full.shownPercentText == "100%")
+    }
+}

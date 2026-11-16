@@ -97,7 +97,7 @@ public struct BatteryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Battery").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
                 if widgets.showPercentage {
-                    Text("\(r.percent)%").font(.system(size: 40, weight: .bold)).monospacedDigit().foregroundStyle(percentStyle(r))
+                    Text(r.shownPercentText).font(.system(size: 40, weight: .bold)).monospacedDigit().foregroundStyle(percentStyle(r))
                 }
                 if showHardwarePercent {
                     Text("Battery reports \(MenuBarReadout.hardwarePercentText(r))").font(.caption).foregroundStyle(Palette.secondary).monospacedDigit()
@@ -117,7 +117,7 @@ public struct BatteryView: View {
                         StatusText(state(r))
                     }
                 }
-                Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
+                Text(flow(held == nil ? r : r.whileHeld())).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
             .multilineTextAlignment(.trailing)
         }
@@ -164,7 +164,7 @@ public struct BatteryView: View {
         }
         .frame(height: 22)
         .accessibilityElement()
-        .accessibilityLabel("Charge \(r.percent) percent")
+        .accessibilityLabel("Charge \(Int(r.shownPercent.rounded())) percent")
         .overlay { if let chargeLimit { LimitHandle(settings: chargeLimit, changed: { Task { await limiter?.reevaluate() } }) } }
         .padding(.top, chargeLimit == nil ? 0 : 6) // room for the notch over the marker
         .padding(.bottom, chargeLimit == nil ? 0 : 16) // room for the limit label under the marker

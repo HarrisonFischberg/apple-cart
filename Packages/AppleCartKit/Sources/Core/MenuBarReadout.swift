@@ -25,7 +25,8 @@ public enum MenuBarReadout: String, CaseIterable, Sendable {
     public func text(for r: BatteryReading?,
                      showHardwarePercent: Bool = UserDefaults.standard.bool(forKey: MenuBarReadout.hardwarePercentKey)) -> String {
         guard let r, self != .off else { return "" }
-        let percent = showHardwarePercent ? "\(r.percent)% (\(Self.hardwarePercentText(r)))" : "\(r.percent)%"
+        let shown = "\(Int(r.shownPercent.rounded()))%"
+        let percent = showHardwarePercent ? "\(r.percent)% (\(Self.hardwarePercentText(r)))" : shown
         guard self == .power, abs(r.batteryWatts) >= 0.05 else { return percent }
         return "\(percent) \(r.batteryWatts > 0 ? "+" : "−")\(Int(abs(r.batteryWatts).rounded())) W"
     }

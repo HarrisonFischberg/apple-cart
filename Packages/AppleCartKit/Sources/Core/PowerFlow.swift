@@ -23,7 +23,7 @@ extension MenuBarReadout {
         // Plugged in but the Mac is running from the battery (a held or paused charge): an arrow down, not a pause.
         let draining = r.isPluggedIn && !r.isCharging && r.batteryWatts < -0.5
         let badge: BatteryBadge = !r.isPluggedIn ? .discharge : (chargeHeld || !r.isCharging) ? (draining ? .plugDrain : .plugPaused) : .plugBolt
-        return BatteryGlyph(level: Double(min(max(r.percent, 0), 100)) / 100, badge: badge)
+        return BatteryGlyph(level: min(max(r.shownPercent, 0), 100) / 100, badge: badge)
     }
 }
 
