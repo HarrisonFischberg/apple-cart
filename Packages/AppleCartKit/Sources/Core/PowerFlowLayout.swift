@@ -59,8 +59,8 @@ public struct FlowLayout: Equatable, Sendable {
     static let inset: CGFloat = 4
 
     /// Map height: room for the hub over the battery, or for the leaf column, whichever is taller.
-    public static func height(leaves n: Int) -> CGFloat {
-        max(inset * 2 + hub.height + 28 + below.height, CGFloat(n) * leaf.height + CGFloat(max(0, n - 1)) * leafGap)
+    public static func height(leaves n: Int, battery: Bool = true) -> CGFloat {
+        max(inset * 2 + hub.height + (battery ? 28 + below.height : 0), CGFloat(n) * leaf.height + CGFloat(max(0, n - 1)) * leafGap)
     }
 
     /// Vertical centres of `widths.count` ribbons stacked on one tile edge, centred on `mid`, never wider than `span`.
@@ -78,12 +78,17 @@ public struct FlowLayout: Equatable, Sendable {
 
     /// Leaves: each reported or dashed Mac-side stream, then the remainder ("more") when it is at least 1 W.
     public static func make(state: FlowState, flows: PowerFlows, streams: [PowerStream], rest: Double?, width w: CGFloat) -> FlowLayout {
-        var leaves: [(FlowNodeID, Double?)] = streams.map { (.stream($0.title), $0.watts) }
-        if let rest, rest >= PowerFlows.hideBelow { leaves.append((.more, rest)) }
-        let h = height(leaves: leaves.count)
+        // Only streams macOS actually reports get a tile: no dash tiles. "Rest of Mac" only appears next to other
+        // streams, since on its own it would just repeat the Mac's total.
+        var leaves: [(FlowNodeID, Double?)] = streams.compactMap { $0.watts == nil ? nil : (.stream($0.title), $0.watts) }
+        if !leaves.isEmpty, let rest, rest >= PowerFlows.hideBelow { leaves.append((.more, rest)) }
+        // A battery that is full and idle has nothing to say, so it gets no tile.
+        let showBattery = state != .pluggedIdle
+        let h = height(leaves: leaves.count, battery: showBattery)
 
         let hub = CGRect(x: (w - Self.hub.width) / 2, y: inset, width: Self.hub.width, height: Self.hub.height)
         let below = CGRect(x: hub.minX, y: h - inset - Self.below.height, width: Self.below.width, height: Self.below.height)
+        let hubRect = hub
         let sourceSlot = CGRect(x: 0, y: hub.midY - source.height / 2, width: source.width, height: source.height)
         let parkedSlot = CGRect(x: 0, y: h - inset - parked.height, width: parked.width, height: parked.height)
 
@@ -92,7 +97,7 @@ public struct FlowLayout: Equatable, Sendable {
         let onBattery = state == .onBattery
         // On battery the battery takes the source slot and the charger is parked, dimmed and unlinked.
         nodes.append(Node(id: .charger, rect: onBattery ? parkedSlot : sourceSlot, dimmed: onBattery))
-        nodes.append(Node(id: .battery, rect: onBattery ? sourceSlot : below))
+        if showBattery { nodes.append(Node(id: .battery, rect: onBattery ? sourceSlot : below)) }
 
         func right(_ r: CGRect, _ y: CGFloat) -> CGPoint { CGPoint(x: r.maxX, y: y) }
         func left(_ r: CGRect, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX, y: y) }

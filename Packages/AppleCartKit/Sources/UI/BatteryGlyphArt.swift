@@ -103,8 +103,10 @@ public enum BatteryGlyphImage {
         nub(x: body.maxX + 0.9)
         let inner = body.insetBy(dx: 2, dy: 2)
         var edge = inner.minX
-        // On battery the body stays hollow, a clear outline with a dash, so it reads as unplugged.
-        if g.level > 0 && g.badge != .discharge {
+        // Plugged in (plug with pause bars or a bolt) and on battery (a dash) both draw a clear, hollow body with the
+        // badge as solid ink; the percentage text carries the level.
+        let hollow = g.badge == .discharge || g.badge.isWide
+        if g.level > 0 && !hollow {
             NSColor.black.setFill()
             let w = max(inner.height, inner.width * g.level)
             edge = inner.minX + w
@@ -112,13 +114,13 @@ public enum BatteryGlyphImage {
         }
         guard g.badge != .none else { return }
         // The two-glyph badge only fits inside a nearly full fill; on a lower charge it shrinks to one glyph.
-        let wideFits = g.badge.isWide && edge >= body.midX + inner.height * 0.95 + 1
+        let wideFits = g.badge.isWide && (hollow || edge >= body.midX + inner.height * 0.95 + 1)
         let kind = g.badge.isWide && !wideFits ? g.badge.single : g.badge
         let box = NSRect(x: 0, y: 0, width: kind.isWide ? inner.height * 1.9 : inner.height, height: inner.height)
         // On a low charge the badge goes in the middle of the empty part so it is never half cut.
-        let cx = edge >= body.midX + box.width / 2 + 1 ? body.midX : (edge + inner.maxX) / 2
+        let cx = hollow || edge >= body.midX + box.width / 2 + 1 ? body.midX : (edge + inner.maxX) / 2
         let path = NSBezierPath(cgPath: BadgeShape.path(kind, in: box.offsetBy(dx: cx - box.midX, dy: inner.midY - box.midY)))
-        if g.badge == .discharge {
+        if hollow {
             NSColor.black.setFill()
             path.fill()
         } else if cx == body.midX && g.level > 0 {
