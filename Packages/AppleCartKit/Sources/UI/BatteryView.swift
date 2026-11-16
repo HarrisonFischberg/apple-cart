@@ -49,7 +49,7 @@ public struct BatteryView: View {
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
         switch w {
         case .charge: summary(r); chargeBar(r)
-        case .powerFlow: PowerFlowMap(reading: r)
+        case .powerFlow: PowerFlowMap(reading: r, active: active)
         case .details: details(r)
         case .history: graph
         case .energyApps: apps
