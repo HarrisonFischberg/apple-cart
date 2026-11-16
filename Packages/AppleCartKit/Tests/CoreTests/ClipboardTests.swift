@@ -5,9 +5,9 @@ import Testing
 @MainActor
 private final class FakeBoard: PasteboardAccess {
     var changeCount = 1
-    var text: String?, image: Data?, types: [String] = [], source: String?
+    var text: String?, image: Data?, types: [String] = [], source: String?, previous: String?
     var pastes = 0, canPaste = true, cleared = 0
-    func snapshot() -> PasteboardSnapshot { .init(changeCount: changeCount, types: types, text: text, imageData: image, sourceBundleID: source) }
+    func snapshot() -> PasteboardSnapshot { .init(changeCount: changeCount, types: types, text: text, imageData: image, sourceBundleID: source, previousBundleID: previous) }
     func write(text: String) { self.text = text; image = nil; types = []; changeCount += 1 }
     func write(imageData: Data) { image = imageData; text = nil; changeCount += 1 }
     func clear() { text = nil; image = nil; cleared += 1; changeCount += 1 }
@@ -51,6 +51,9 @@ private func make(_ b: FakeBoard, clock: Clock = Clock(), sleep: @escaping @Send
         b.copy("c", from: "com.bank"); h.check()
         #expect(h.items.count == 1)
         #expect(Set(d.stringArray(forKey: "clipboard.excluded") ?? []) == ["com.bank"])
+        // Copied in the bank app, then switched to the browser before the next poll.
+        b.previous = "com.bank"; b.copy("d", from: "com.browser"); h.check()
+        #expect(h.items.count == 1)
     }
 
     @Test func retentionDropsOldItemsButPinnedStayAndEverythingPersists() {
@@ -89,6 +92,22 @@ private func make(_ b: FakeBoard, clock: Clock = Clock(), sleep: @escaping @Send
         #expect(h.items.count == 1)
     }
 
+    @Test func deletedScreenshotLeavesDiskWhenUndoEndsOrToolStops() async throws {
+        let b = FakeBoard(); let (h, dir, _) = make(b, sleep: { _ in })
+        b.image = Data(repeating: 7, count: 100); b.changeCount += 1; h.check()
+        let f = dir.appendingPathComponent(try #require(h.items.first?.imageFile)).path
+        h.delete(h.items[0])
+        #expect(FileManager.default.fileExists(atPath: f)) // Undo can still bring it back
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(h.lastDeleted.isEmpty && !FileManager.default.fileExists(atPath: f))
+
+        let b2 = FakeBoard(); let (h2, dir2, _) = make(b2) // undo window never ends by itself here
+        b2.image = Data(repeating: 7, count: 100); b2.changeCount += 1; h2.check()
+        let f2 = dir2.appendingPathComponent(try #require(h2.items.first?.imageFile)).path
+        h2.delete(h2.items[0]); h2.stop()
+        #expect(h2.lastDeleted.isEmpty && !FileManager.default.fileExists(atPath: f2))
+    }
+
     @Test func linkCleanerRemovesTrackingOnly() {
         #expect(LinkCleaner.clean("https://a.com/p?id=3&utm_source=x&fbclid=abc") == "https://a.com/p?id=3")
         #expect(LinkCleaner.clean("https://a.com/p?utm_medium=y") == "https://a.com/p")
@@ -117,7 +136,11 @@ private func make(_ b: FakeBoard, clock: Clock = Clock(), sleep: @escaping @Send
         b2.copy("one"); h2.check(); b2.copy("two") // copied again before the timer ends
         try await Task.sleep(for: .milliseconds(200))
         #expect(b2.cleared == 0)
-        h.screenLocked(); #expect(b.cleared == 2)
+        // Screen lock clears only while the tool is on.
+        let b3 = FakeBoard(); let (h3, _, _) = make(b3)
+        h3.setAutoClear(true)
+        h3.screenLocked(); #expect(b3.cleared == 0)
+        h3.start(); h3.screenLocked(); #expect(b3.cleared == 1); h3.stop()
     }
 
     @Test func pollRunsOnlyWhileOnAndPasteReportsMissingAccessibility() {

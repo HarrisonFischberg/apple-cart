@@ -19,8 +19,12 @@ public struct PasteboardSnapshot: Sendable {
     public var text: String?
     public var imageData: Data?
     public var sourceBundleID: String?
-    public init(changeCount: Int, types: [String] = [], text: String? = nil, imageData: Data? = nil, sourceBundleID: String? = nil) {
+    /// The app that was in front until moments ago: a copy made just before switching apps may belong to it.
+    public var previousBundleID: String?
+    public init(changeCount: Int, types: [String] = [], text: String? = nil, imageData: Data? = nil, sourceBundleID: String? = nil,
+                previousBundleID: String? = nil) {
         self.changeCount = changeCount; self.types = types; self.text = text; self.imageData = imageData; self.sourceBundleID = sourceBundleID
+        self.previousBundleID = previousBundleID
     }
 }
 
@@ -75,6 +79,7 @@ public final class ClipboardHistory: Tool {
     @ObservationIgnored private var lastSeen: Int
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var clearTask: Task<Void, Never>?
+    @ObservationIgnored private var undoExpiry: Task<Void, Never>?
 
     public init(pasteboard: PasteboardAccess, folder: URL, defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
                 sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
@@ -99,7 +104,7 @@ public final class ClipboardHistory: Tool {
         }
     }
 
-    public func stop() { poll?.cancel(); poll = nil; clearTask?.cancel(); clearTask = nil }
+    public func stop() { poll?.cancel(); poll = nil; clearTask?.cancel(); clearTask = nil; discardUndo() }
 
     public var isPolling: Bool { poll != nil }
 
@@ -114,7 +119,7 @@ public final class ClipboardHistory: Tool {
 
     private func ingest(_ s: PasteboardSnapshot) {
         guard sensitivePasteboardTypes.isDisjoint(with: s.types) else { return }
-        if let src = s.sourceBundleID, excluded.contains(src) { return }
+        for src in [s.sourceBundleID, s.previousBundleID] { if let src, excluded.contains(src) { return } }
         var item: ClipItem
         if let raw = s.text?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             guard raw.count <= Self.maxTextLength else { return }
@@ -148,7 +153,7 @@ public final class ClipboardHistory: Tool {
 
     /// Called when the screen locks.
     public func screenLocked() {
-        guard autoClear else { return }
+        guard autoClear, isPolling else { return }
         pasteboard.clear(); lastSeen = pasteboard.changeCount
     }
 
@@ -193,6 +198,13 @@ public final class ClipboardHistory: Tool {
         items.removeAll { i in gone.contains { $0.id == i.id } }
         lastDeleted = gone // image files stay until the next prune so Undo can bring them back
         save()
+        // The undo window ends by itself so a deleted screenshot does not stay on disk for days.
+        undoExpiry?.cancel()
+        undoExpiry = Task { [weak self, sleep] in
+            do { try await sleep(10) } catch { return }
+            guard let self, self.lastDeleted.map(\.id) == gone.map(\.id) else { return }
+            self.discardUndo()
+        }
     }
 
     /// Forget what could be undone and delete the screenshot files of removed items now.

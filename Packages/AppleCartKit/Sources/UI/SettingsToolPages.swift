@@ -375,6 +375,7 @@ private struct ClipboardOptions: View {
             }
             SettingsRow("Ignore an app") { Button("Choose…") { pickApp() } }
         }
+        Text("This goes by the app in front when you copy.").hint()
         SettingsCard("Saved items") {
             SettingsRow("Clear history", detail: "Pinned items stay.") {
                 Button("Clear history", role: .destructive) { history.clearAll() }

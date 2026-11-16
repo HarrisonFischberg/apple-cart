@@ -7,11 +7,29 @@ import Core
 final class SystemPasteboard: PasteboardAccess {
     private let board = NSPasteboard.general
     var changeCount: Int { board.changeCount }
+    private var front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    private var previousFront: String?
+    private var frontChanged = Date.distantPast
+
+    init() {
+        // The pasteboard does not say who wrote to it: remember the app that was in front just before a switch.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.previousFront = self.front; self.front = id; self.frontChanged = Date()
+            }
+        }
+    }
 
     func snapshot() -> PasteboardSnapshot {
-        let png = board.data(forType: .png) ?? board.data(forType: .tiff).flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) }
+        // A TIFF already over the limit is not encoded: the result would be thrown away after a main-thread stall.
+        let png = board.data(forType: .png) ?? board.data(forType: .tiff).flatMap {
+            $0.count <= ClipboardHistory.maxImageBytes ? NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) : nil
+        }
+        let previous = Date().timeIntervalSince(frontChanged) <= 1 ? previousFront : nil // 1 s covers the 0.5 s poll
         return PasteboardSnapshot(changeCount: board.changeCount, types: board.types?.map(\.rawValue) ?? [], text: board.string(forType: .string),
-                                  imageData: png, sourceBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+                                  imageData: png, sourceBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier, previousBundleID: previous)
     }
 
     func write(text: String) { board.clearContents(); board.setString(text, forType: .string) }
