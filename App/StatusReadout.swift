@@ -16,9 +16,8 @@ final class StatusReadout {
     private let glyphStyle: GlyphStyleSettings
     private var holding = false
     /// Space left on each side of the item's content.
-    private static let sideMargin: CGFloat = 2
-    /// What the system adds to an item's length for its window (8 pt on each side).
-    private static let systemPadding: CGFloat = 16
+    /// Off the button's fitting width: its own padding is about 3 pt a side.
+    private static let trim: CGFloat = 4
 
     init(item: NSStatusItem? = nil, button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings, glyphStyle: GlyphStyleSettings) {
         self.item = item
@@ -66,12 +65,12 @@ final class StatusReadout {
         if !parts.isEmpty && button?.image != nil { title.append(gap) }
         button?.attributedTitle = title
         button?.imagePosition = parts.isEmpty ? .imageOnly : button?.image == nil ? .noImage : .imageTrailing
-        // The system draws every item in a window 16 pt wider than its length, plus the button's own padding, so the default
-        // leaves about 8 pt of air on each side. Measured here: variable length gave a 78 pt window for 62 pt of content.
-        // Shrink the length so only `sideMargin` is left on each side. Never below the content, so nothing clips.
+        // The system draws each item in a window 16 pt wider than its length, outside the button, so that air cannot be
+        // removed from here (a smaller length clips the text and the battery; measured: 62 pt fitting, 78 pt window).
+        // What can go is the button's own padding: trim a little off the fitting width, never below the content itself.
         if let button, let item {
-            let fitting = ceil(button.fittingSize.width)
-            item.length = max(fitting + Self.sideMargin * 2 - Self.systemPadding, 8)
+            let content = ceil(title.size().width + (button.image?.size.width ?? 0))
+            item.length = max(ceil(button.fittingSize.width) - Self.trim, content + 2)
         }
     }
 }
