@@ -122,6 +122,8 @@ public final class FanRunner {
     @ObservationIgnored private var lastSample: FanSample?
     /// A manual speed started at this time and its response has not been confirmed yet.
     @ObservationIgnored private var verifySince: Date?
+    /// When this check first started; a moving target may extend the window only up to twice `responseWindow` from here.
+    @ObservationIgnored private var verifyFirst: Date?
     /// We handed a manual mode we did not set back to macOS once already this session.
     @ObservationIgnored private var handedBackForeign = false
     @ObservationIgnored private var applyInFlight = false
@@ -172,7 +174,7 @@ public final class FanRunner {
         fresh.releasedUntil = policy.releasedUntil
         fresh.heatLatched = policy.heatLatched
         policy = fresh
-        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil
+        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil; verifyFirst = nil
         await evaluate(lastSample)
     }
 
@@ -180,7 +182,7 @@ public final class FanRunner {
     /// when nothing of ours is held, so a manual mode left by anyone goes back to macOS too.
     public func applySystem() async {
         settings.setActive(.system)
-        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil
+        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil; verifyFirst = nil
         var fresh = FanPolicyState()
         fresh.releasedUntil = policy.releasedUntil
         fresh.heatLatched = policy.heatLatched
@@ -233,7 +235,7 @@ public final class FanRunner {
     }
 
     private func clearCommandState() {
-        sentRPM = nil; sentAt = nil; verifySince = nil
+        sentRPM = nil; sentAt = nil; verifySince = nil; verifyFirst = nil
         policy = FanPolicyState()
         state.holdingRPM = nil; state.holdingPercent = nil; state.holdingMode = .system
         state.commandFailed = false; state.waitingForWake = false; state.decision = nil
@@ -279,7 +281,8 @@ public final class FanRunner {
         switch result {
         case .applied:
             // A fresh start, or a new target while still checking: the fan gets the full window to reach it.
-            if sentRPM == nil || (verifySince != nil && sentRPM != rpm) { verifySince = now() }
+            if sentRPM == nil { verifySince = now(); verifyFirst = now() }
+            else if verifySince != nil, sentRPM != rpm, let first = verifyFirst, now().timeIntervalSince(first) < 2 * Self.responseWindow { verifySince = now() }
             sentRPM = rpm; sentAt = now()
             state.holdingRPM = rpm; state.holdingMode = mode; state.holdingPercent = percent
             state.commandFailed = false; state.waitingForWake = false
@@ -302,7 +305,7 @@ public final class FanRunner {
             guard let rpm else { return false }
             return rpm > 0 && abs(rpm - Double(target)) <= Double(target) * Self.responseTolerance
         }
-        if ok { verifySince = nil; return false }
+        if ok { verifySince = nil; verifyFirst = nil; return false }
         guard now().timeIntervalSince(since) >= Self.responseWindow else { return false }
         state.fanNotResponding = true
         state.decision = nil
@@ -316,7 +319,7 @@ public final class FanRunner {
         guard sentRPM != nil || manualMayBeLive else { return }
         let result = await controller.resetFan()
         if result == .applied || !manualMayBeLive {
-            sentRPM = nil; sentAt = nil; maybeManualUntil = nil; verifySince = nil
+            sentRPM = nil; sentAt = nil; maybeManualUntil = nil; verifySince = nil; verifyFirst = nil
             if result == .applied { state.commandFailed = false }
         } else {
             state.commandFailed = true // manual may still be live: send the reset again next pass

@@ -45,6 +45,7 @@ public final class AdapterGuard: @unchecked Sendable {
     private let now: @Sendable () -> Date
     private let monotonic: @Sendable () -> Double
     private let log: @Sendable (String) -> Void
+    private let settle: @Sendable () -> Void
     private let lock = NSLock()
     private var smc: SMCWriting?
     private var lease: LeaseTimer?
@@ -60,7 +61,9 @@ public final class AdapterGuard: @unchecked Sendable {
     /// `connect` opens the SMC; it is called again after an I/O failure, so a broken connection is reopened.
     public init(connect: @escaping @Sendable () throws -> SMCWriting, schedule: @escaping LeaseScheduler,
                 now: @escaping @Sendable () -> Date = Date.init, monotonic: @escaping @Sendable () -> Double = monotonicSeconds,
-                log: @escaping @Sendable (String) -> Void = { _ in }) {
+                log: @escaping @Sendable (String) -> Void = { _ in },
+                settle: @escaping @Sendable () -> Void = { Thread.sleep(forTimeInterval: 0.15) }) {
+        self.settle = settle
         self.connect = connect
         self.schedule = schedule
         self.now = now
@@ -69,8 +72,9 @@ public final class AdapterGuard: @unchecked Sendable {
     }
 
     public convenience init(smc: SMCWriting, schedule: @escaping LeaseScheduler, now: @escaping @Sendable () -> Date = Date.init,
-                            monotonic: @escaping @Sendable () -> Double = monotonicSeconds, log: @escaping @Sendable (String) -> Void = { _ in }) {
-        self.init(connect: { smc }, schedule: schedule, now: now, monotonic: monotonic, log: log)
+                            monotonic: @escaping @Sendable () -> Double = monotonicSeconds, log: @escaping @Sendable (String) -> Void = { _ in },
+                            settle: @escaping @Sendable () -> Void = { Thread.sleep(forTimeInterval: 0.15) }) {
+        self.init(connect: { smc }, schedule: schedule, now: now, monotonic: monotonic, log: log, settle: settle)
     }
 
     /// Helper start: whatever a previous run left behind, the adapter goes back on.
@@ -96,7 +100,8 @@ public final class AdapterGuard: @unchecked Sendable {
         mayBeCut = true
         do {
             try write(SMCWhitelist.adapterOff)
-            // An SMC that accepts the write but ignores it must not let the app claim a hold.
+            // An SMC that accepts the write but ignores it must not let the app claim a hold. It applies a write asynchronously, so give it a moment.
+            settle()
             guard try read() == SMCWhitelist.adapterOff else {
                 log("adapter off did not stick; restoring")
                 _ = restoreLocked(reason: "cut not applied")
