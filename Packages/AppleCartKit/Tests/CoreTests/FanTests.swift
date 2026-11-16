@@ -372,6 +372,22 @@ private final class FanRig {
         #expect(!rig.runner.state.fanNotResponding)
     }
 
+    @Test func watchdogWindowRestartsWhenTheCurveMovesTheTarget() async {
+        let rig = FanRig()
+        rig.fanObeys = false // still spinning up: reads below either target
+        await rig.runner.setToolEnabled(true)
+        rig.settings.applyCurve(.default)
+        await rig.feed(soc: 75)
+        guard case .set(let first)? = rig.controller.calls.last else { Issue.record("no first apply"); return }
+        await rig.feed(soc: 85, after: 10) // warming up: the curve raises the target 10 s in
+        guard case .set(let second)? = rig.controller.calls.last, second != first else { Issue.record("target did not move"); return }
+        rig.controller.clear()
+        await rig.feed(soc: 85, after: 5) // 15 s after the first target, 5 s after the new one
+        #expect(!rig.controller.calls.contains(.reset) && !rig.runner.state.fanNotResponding)
+        await rig.feed(soc: 85, after: 10) // a full window on the new target and still nothing
+        #expect(rig.controller.calls.contains(.reset) && rig.runner.state.fanNotResponding)
+    }
+
     @Test func fanThatRespondsPassesTheWatchdog() async {
         let rig = FanRig()
         await rig.holding()

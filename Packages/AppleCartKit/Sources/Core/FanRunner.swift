@@ -278,7 +278,8 @@ public final class FanRunner {
         guard toolEnabled else { if await controller.resetFan() == .applied { maybeManualUntil = nil }; return }
         switch result {
         case .applied:
-            if sentRPM == nil { verifySince = now() } // a fresh start: check the fan really follows
+            // A fresh start, or a new target while still checking: the fan gets the full window to reach it.
+            if sentRPM == nil || (verifySince != nil && sentRPM != rpm) { verifySince = now() }
             sentRPM = rpm; sentAt = now()
             state.holdingRPM = rpm; state.holdingMode = mode; state.holdingPercent = percent
             state.commandFailed = false; state.waitingForWake = false
