@@ -74,7 +74,8 @@ private final class Counter: @unchecked Sendable {
         let k = KeepAwake(assertions: fake, readBattery: { readings[min(box.next(), readings.count - 1)] },
                           checkEvery: .milliseconds(5), chargeLimit: { limit })
         k.start(o)
-        try? await Task.sleep(for: .milliseconds(150))
+        // Busy main actor in parallel suites can delay checks: wait until it ends or give up after 2 s.
+        for _ in 0..<80 where k.isActive { try? await Task.sleep(for: .milliseconds(25)) }
         return (k, fake)
     }
 
