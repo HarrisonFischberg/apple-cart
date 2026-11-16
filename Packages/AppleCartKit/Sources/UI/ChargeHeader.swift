@@ -4,15 +4,17 @@ import SwiftUI
 /// Top row of the panel while Battery is on: Limit on the left, Top Up and Settings on the right.
 struct ChargeHeader: View {
     let settings: ChargeLimitSettings
-    let controllerAvailable: Bool
+    let limiter: ChargeLimiter?
     let openSettings: () -> Void
     @State private var showLimit = false
 
     var body: some View {
+        let state = limiter?.state ?? ChargeLimitState()
         VStack(spacing: 0) {
             row
-            if settings.topUpActive && !controllerAvailable {
-                Text(settings.caption(controllerAvailable: false)).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+            if state.chargingNotResumed || (settings.topUpActive && state.helperStatus != .ready) {
+                Label(state.reasonText, systemImage: state.chargingNotResumed ? "exclamationmark.triangle.fill" : "info.circle")
+                    .font(.system(size: 12)).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 16).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -25,11 +27,12 @@ struct ChargeHeader: View {
                 .accessibilityValue("\(settings.limit) percent")
                 .accessibilityHint("Choose the highest charge level")
                 .popover(isPresented: $showLimit, arrowEdge: .bottom) {
-                    LimitPopover(settings: settings, controllerAvailable: controllerAvailable)
+                    LimitPopover(settings: settings, limiter: limiter)
                 }
             Spacer(minLength: 0)
             pill(settings.topUpActive ? "Topping up" : "Top Up (+)", symbol: nil, selected: settings.topUpActive) {
                 settings.setTopUp(!settings.topUpActive)
+                Task { await limiter?.reevaluate() }
             }
             .disabled(settings.limit >= 100 && !settings.topUpActive)
             .accessibilityLabel("Top Up to 100 percent")
@@ -81,27 +84,28 @@ private struct PressFade: ButtonStyle {
     }
 }
 
-/// Chips for the upper charge limit plus one honest caption.
+/// Chips for the upper charge limit plus one honest caption from the runner's confirmed state.
 struct LimitPopover: View {
     let settings: ChargeLimitSettings
-    let controllerAvailable: Bool
+    let limiter: ChargeLimiter?
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Stop charging at").font(.system(size: 13, weight: .semibold))
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(ChargeLimitSettings.choices, id: \.self) { p in
-                    Button("\(p)%") { settings.setLimit(p) }
+                ForEach(ChargeLimitSettings.choices.filter { $0 >= settings.minimum }, id: \.self) { p in
+                    Button("\(p)%") { settings.setLimit(p); Task { await limiter?.reevaluate() } }
                         .buttonStyle(ChipStyle(selected: settings.limit == p))
                         .accessibilityLabel("\(p) percent")
                         .accessibilityAddTraits(settings.limit == p ? .isSelected : [])
                 }
             }
-            Text(settings.caption(controllerAvailable: controllerAvailable))
+            let state = limiter?.state ?? ChargeLimitState()
+            Text(state.reasonText)
                 .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            if settings.topUpActive && !controllerAvailable {
-                Text("Top Up is on. It also takes effect once the helper is installed.").hint().fixedSize(horizontal: false, vertical: true)
+            if settings.topUpActive && state.helperStatus != .ready {
+                Text("Top Up is on. It takes effect once the helper is ready.").hint().fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14).frame(width: 240)

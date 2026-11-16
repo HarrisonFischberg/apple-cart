@@ -11,10 +11,13 @@ settings:
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    # The one place the team ID lives. The XPC code-signing requirements on both ends read it from Info.plist
+    # (ACTeamID). Change it here when the account moves to Rare Creatures LLC.
+    AC_TEAM_ID: KTV2G3Z883
   configs:
     Debug:
       CODE_SIGN_IDENTITY: "Apple Development"
-      DEVELOPMENT_TEAM: KTV2G3Z883
+      DEVELOPMENT_TEAM: $(AC_TEAM_ID)
 packages:
   AppleCartKit:
     path: Packages/AppleCartKit
@@ -22,12 +25,27 @@ targets:
   AppleCart:
     type: application
     platform: macOS
-    sources: [App]
+    sources:
+      - App
+      # SMAppService.daemon(plistName:) looks here.
+      - path: Helper/LaunchDaemons/app.rarecreatures.applecart.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
     dependencies:
       - package: AppleCartKit
         product: Core
       - package: AppleCartKit
         product: UI
+      - package: AppleCartKit
+        product: HelperProtocol
+      # Root helper, embedded at Contents/MacOS/AppleCartHelper (the launchd plist's BundleProgram).
+      - target: AppleCartHelper
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
       # Sparkle 2.10.1, fetched by scripts/fetch-sparkle.sh (the SwiftPM binary download stalls here).
       - framework: Vendor/Sparkle.xcframework
         embed: true
@@ -41,12 +59,37 @@ targets:
         # Appcast lives on the public repo's Releases. Provisional until the public name is chosen.
         SUFeedURL: https://github.com/HarrisonFischberg/apple-cart/releases/latest/download/appcast.xml
         SUEnableAutomaticChecks: false
+        ACTeamID: $(AC_TEAM_ID)
         # SUPublicEDKey is added when the update signing key exists (launch blocker). Without it the updater stays off.
     settings:
       base:
         # Provisional until the public name is chosen (launch blocker 9).
         PRODUCT_BUNDLE_IDENTIFIER: app.rarecreatures.applecart
         PRODUCT_NAME: AppleCart
+  AppleCartHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Helper
+        excludes: ["LaunchDaemons/**", "Info.plist"]
+    dependencies:
+      - package: AppleCartKit
+        product: HelperCore
+      - package: AppleCartKit
+        product: HelperProtocol
+    info:
+      path: Helper/Info.plist
+      properties:
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleName: AppleCartHelper
+        ACTeamID: $(AC_TEAM_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.rarecreatures.applecart.helper
+        PRODUCT_NAME: AppleCartHelper
+        # A bare executable carries its Info.plist (bundle ID, team ID) inside the binary.
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        SKIP_INSTALL: YES
 schemes:
   AppleCart:
     build:

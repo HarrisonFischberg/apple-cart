@@ -38,9 +38,8 @@ public struct PanelView: View {
     let toolView: (FeatureID) -> AnyView?
     let firstRun: FirstRunModel?
     let readout: ReadoutSettings?
-    let battery: BatterySampler?
     let chargeLimit: ChargeLimitSettings?
-    let chargeControlAvailable: Bool
+    let chargeLimiter: ChargeLimiter?
 
     @FocusState private var focused: FeatureID?
 
@@ -48,10 +47,9 @@ public struct PanelView: View {
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
                 toolView: @escaping (FeatureID) -> AnyView? = { _ in nil },
                 firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil,
-                battery: BatterySampler? = nil, chargeLimit: ChargeLimitSettings? = nil, chargeControlAvailable: Bool = false) {
-        self.battery = battery
+                chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil) {
         self.chargeLimit = chargeLimit
-        self.chargeControlAvailable = chargeControlAvailable
+        self.chargeLimiter = chargeLimiter
         self.firstRun = firstRun
         self.readout = readout
         self.launcher = launcher
@@ -93,7 +91,6 @@ public struct PanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
         .onChange(of: launcher.allTiles) { selectFirstIfNone() }
-        .onChange(of: battery?.latest, initial: true) { chargeLimit?.observe(battery?.latest) }
         .onExitCommand { collapse() }
     }
 
@@ -106,7 +103,7 @@ public struct PanelView: View {
 
     @ViewBuilder private var header: some View {
         if let chargeLimit, launcher.allTiles.contains(.battery) {
-            ChargeHeader(settings: chargeLimit, controllerAvailable: chargeControlAvailable, openSettings: openSettings)
+            ChargeHeader(settings: chargeLimit, limiter: chargeLimiter, openSettings: openSettings)
         } else {
             HStack {
                 Color.clear.frame(width: 44, height: 44) // balances the Settings button so the name stays centered

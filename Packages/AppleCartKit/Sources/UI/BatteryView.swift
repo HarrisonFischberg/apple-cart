@@ -6,10 +6,14 @@ import SwiftUI
 public struct BatteryView: View {
     let sampler: BatterySampler
     let active: Bool
+    let limiter: ChargeLimiter?
+    let chargeLimit: ChargeLimitSettings?
 
-    public init(sampler: BatterySampler, active: Bool) {
+    public init(sampler: BatterySampler, active: Bool, limiter: ChargeLimiter? = nil, chargeLimit: ChargeLimitSettings? = nil) {
         self.sampler = sampler
         self.active = active
+        self.limiter = limiter
+        self.chargeLimit = chargeLimit
     }
 
     public var body: some View {
@@ -50,7 +54,8 @@ public struct BatteryView: View {
         }
     }
 
-    /// Full-width charge bar; the badge sits at the trailing end (limit marker is reserved for the charge limit feature).
+    /// Full-width charge bar; the badge sits at the trailing end. With charge control it is also the limit control:
+    /// a handle at the limit, dragged to set it, and a dashed marker at the lower edge of the sailing range.
     private func chargeBar(_ r: BatteryReading) -> some View {
         let g = MenuBarReadout.glyph(for: r)
         let low = !r.isPluggedIn && r.percent <= 20
@@ -70,6 +75,7 @@ public struct BatteryView: View {
         .frame(height: 22)
         .accessibilityElement()
         .accessibilityLabel("Charge \(r.percent) percent")
+        .overlay { if let chargeLimit { LimitHandle(settings: chargeLimit, changed: { Task { await limiter?.reevaluate() } }) } }
     }
 
     private func details(_ r: BatteryReading) -> some View {
@@ -132,7 +138,9 @@ public struct BatteryView: View {
     }
 
     private func state(_ r: BatteryReading) -> String {
-        if r.isCharging { "Charging" } else if r.isPluggedIn { "Plugged in, not charging" } else { "On battery" }
+        // Only the runner's confirmed hold says "Paused"; while it holds macOS reports battery power.
+        if let n = limiter?.state.holdingAt { "Paused at \(n)%" }
+        else if r.isCharging { "Charging" } else if r.isPluggedIn { "Plugged in, not charging" } else { "On battery" }
     }
 
     private func flow(_ r: BatteryReading) -> String {
@@ -143,5 +151,46 @@ public struct BatteryView: View {
         HStack { Text(title); Spacer(); Text(value ?? "—").foregroundStyle(Palette.secondary).monospacedDigit() }
             .font(.callout)
             .accessibilityElement(children: .combine)
+    }
+}
+
+/// Drag handle and sailing marker drawn over the charge bar. Snaps to 5% steps and respects the below-80 rule.
+private struct LimitHandle: View {
+    let settings: ChargeLimitSettings
+    let changed: () -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let x = { (p: Int) in w * CGFloat(p) / 100 }
+            if settings.limit < 100 {
+                Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h - 3)) }
+                    .stroke(Color.primary.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                    .accessibilityHidden(true)
+            }
+            Capsule().fill(Color.white).frame(width: 6, height: h + 8)
+                .overlay(Capsule().strokeBorder(Color.black.opacity(0.25)))
+                .frame(width: 44, height: 44).contentShape(Rectangle()) // 44 pt target
+                .position(x: min(max(x(settings.limit), 3), w - 3), y: h / 2)
+                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("chargeBar"))
+                    .onChanged { v in
+                        let p = settings.clamped(Int((v.location.x / max(w, 1) * 100).rounded()))
+                        if p != settings.limit { settings.setLimit(p) }
+                    }
+                    .onEnded { _ in changed() })
+                .help("Drag to set the charge limit")
+                .accessibilityElement()
+                .accessibilityLabel("Charge limit")
+                .accessibilityValue("\(settings.limit) percent")
+                .accessibilityAdjustableAction { dir in
+                    switch dir {
+                    case .increment: settings.setLimit(settings.limit + ChargeLimitSettings.step)
+                    case .decrement: settings.setLimit(settings.limit - ChargeLimitSettings.step)
+                    @unknown default: return
+                    }
+                    changed()
+                }
+        }
+        .coordinateSpace(.named("chargeBar"))
     }
 }

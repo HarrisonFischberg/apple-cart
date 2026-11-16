@@ -8,8 +8,27 @@ public struct SettingsTools {
     public var breaks: BreakReminders
     public var quickToggles: QuickToggles
     public var updateChecker: UpdateChecker
-    public init(clipboard: ClipboardHistory, breaks: BreakReminders, quickToggles: QuickToggles, updateChecker: UpdateChecker) {
+    public var chargeLimit: ChargeLimitSettings?
+    public var chargeLimiter: ChargeLimiter?
+    public var chargeHelper: ChargeHelperActions?
+    public var battery: BatterySampler?
+    public init(clipboard: ClipboardHistory, breaks: BreakReminders, quickToggles: QuickToggles, updateChecker: UpdateChecker,
+                chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil, chargeHelper: ChargeHelperActions? = nil,
+                battery: BatterySampler? = nil) {
         self.clipboard = clipboard; self.breaks = breaks; self.quickToggles = quickToggles; self.updateChecker = updateChecker
+        self.chargeLimit = chargeLimit; self.chargeLimiter = chargeLimiter; self.chargeHelper = chargeHelper; self.battery = battery
+    }
+}
+
+/// Install, repair and remove the root charging helper (SMAppService lives in the app). Each returns an error message or nil.
+public struct ChargeHelperActions {
+    public var install: @MainActor () async -> String?
+    public var repair: @MainActor () async -> String?
+    public var remove: @MainActor () async -> String?
+    public var openLoginItems: @MainActor () -> Void
+    public init(install: @escaping @MainActor () async -> String?, repair: @escaping @MainActor () async -> String?,
+                remove: @escaping @MainActor () async -> String?, openLoginItems: @escaping @MainActor () -> Void) {
+        self.install = install; self.repair = repair; self.remove = remove; self.openLoginItems = openLoginItems
     }
 }
 
@@ -36,6 +55,10 @@ struct ToolSettingsPage: View {
             }
             .disabled(!on).opacity(on ? 1 : 0.45)
             if available && !on { Text("Turn this tool on to change its options.").hint() }
+            // Outside the dimmed group: removing the helper must work with the tool off too.
+            if id == .battery, let limiter = tools.chargeLimiter, let actions = tools.chargeHelper {
+                ChargeHelperCard(limiter: limiter, actions: actions)
+            }
         }
         .task { await permissions.refresh() }
     }
@@ -62,7 +85,11 @@ struct ToolSettingsPage: View {
         switch id {
         case .battery:
             SettingsCard("Menu bar") { ReadoutRow(readout: readout) }
-            Text("Charge limit is set from the panel.").hint()
+            if let s = tools.chargeLimit {
+                ChargeControlOptions(settings: s, limiter: tools.chargeLimiter, battery: tools.battery)
+            } else {
+                Text("Charge limit is set from the panel.").hint()
+            }
         case .keepAwake: KeepAwakeOptions()
         case .clipboard: ClipboardOptions(history: tools.clipboard)
         case .breakReminders: BreakOptions(reminders: tools.breaks)
@@ -102,6 +129,129 @@ struct ToolSettingsPage: View {
         case .notGranted: Label("Not granted", systemImage: "circle").foregroundStyle(Palette.secondary)
         case .unknown: Text("Checking…").foregroundStyle(Palette.secondary)
         }
+    }
+}
+
+/// Charge Control: typed limit, below-80 rule, Automatic Discharge, Sailing Mode and Heat Protection (stored only).
+struct ChargeControlOptions: View {
+    let settings: ChargeLimitSettings
+    let limiter: ChargeLimiter?
+    let battery: BatterySampler?
+
+    var body: some View {
+        SettingsCard("Charge control") {
+            SettingsRow("Charge limit", detail: "\(settings.minimum)-100%, in steps of 5. Also set from the panel.") {
+                HStack(spacing: 4) {
+                    TextField("Charge limit", value: Binding(get: { settings.limit }, set: { settings.setLimit($0); changed() }), format: .number)
+                        .multilineTextAlignment(.trailing).frame(width: 56).textFieldStyle(.roundedBorder)
+                        .accessibilityValue("\(settings.limit) percent")
+                    Text("%").foregroundStyle(Palette.secondary)
+                }
+            }
+            SettingsRow("Allow charge limits below 80%") {
+                Toggle("Allow charge limits below 80%", isOn: Binding(get: { settings.allowBelow80 }, set: { settings.setAllowBelow80($0); changed() }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.allowBelow80 {
+                Label("Below 80% you have less battery when you unplug. Apple's own Charge Limit does not go below 80%.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            SettingsRow("Automatic discharge", detail: "Above the limit while plugged in, run from the battery down to the limit. On this Mac a pause also runs from the battery, so the level drifts down either way.") {
+                Toggle("Automatic discharge", isOn: Binding(get: { settings.autoDischarge }, set: { settings.setAutoDischarge($0); changed() }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            SettingsRow("Sailing mode", detail: "After reaching the limit, wait until the battery drops by the difference before charging again.") {
+                Toggle("Sailing mode", isOn: Binding(get: { settings.sailing }, set: { settings.setSailing($0); changed() }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.sailing {
+                SettingsRow("Difference", detail: "Will sail to \(settings.sailFloor)%") {
+                    Stepper("\(settings.sailingDifference) %", value: Binding(get: { settings.sailingDifference }, set: { settings.setSailingDifference($0); changed() }),
+                            in: ChargeLimitSettings.sailingRange).fixedSize()
+                }
+            }
+            heat
+        }
+        .task {
+            battery?.hold("chargeSettings") // for the current temperature
+        }
+        .onDisappear { battery?.release("chargeSettings") }
+    }
+
+    @ViewBuilder private var heat: some View {
+        if let t = battery?.latest?.temperatureC {
+            SettingsRow("Heat protection", detail: "Now \(Self.temp(t)). Saved only: pausing for heat is not built yet.") {
+                Toggle("Heat protection", isOn: Binding(get: { settings.heatProtection }, set: { settings.setHeatProtection($0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            if settings.heatProtection {
+                SettingsRow("Max temperature") {
+                    Stepper(Self.temp(settings.heatMaxC), value: Binding(get: { settings.heatMaxC }, set: { settings.setHeatMaxC($0) }),
+                            in: ChargeLimitSettings.heatRangeC, step: 1).fixedSize()
+                }
+            }
+        } else {
+            SettingsRow("Heat protection", detail: "Not available on this Mac.") {
+                Toggle("Heat protection", isOn: .constant(false)).toggleStyle(.switch).labelsHidden().disabled(true)
+            }
+        }
+    }
+
+    /// Stored in Celsius, shown in the user's unit.
+    static func temp(_ c: Double) -> String {
+        Measurement(value: c, unit: UnitTemperature.celsius).formatted(.measurement(width: .abbreviated, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))))
+    }
+
+    private func changed() { Task { await limiter?.reevaluate() } }
+}
+
+struct ChargeHelperCard: View {
+    let limiter: ChargeLimiter
+    let actions: ChargeHelperActions
+    @State private var working = false
+    @State private var error: String?
+
+    var body: some View {
+        let status = limiter.state.helperStatus
+        SettingsCard("Charging helper") {
+            SettingsRow("Status", detail: detail(status)) {
+                HStack(spacing: 10) {
+                    if status == .notInstalled {
+                        button("Install", actions.install)
+                    } else {
+                        if status == .needsApproval { Button("Open Login Items") { actions.openLoginItems() }.buttonStyle(ChipStyle()).frame(width: 150) }
+                        if status == .outdated || status == .unreachable { button("Repair", actions.repair) }
+                        button("Remove", actions.remove)
+                    }
+                }
+                .disabled(working)
+            }
+        }
+        if let error { Text(error).hint() }
+        Text("The helper runs on this Mac only and never uses the network. It can only pause or resume the charger, and the charger comes back on by itself if Apple Cart stops. Remove turns charging back to normal first.").hint()
+            .task { await limiter.refreshHelperStatus() }
+    }
+
+    private func detail(_ s: ChargeHelperStatus) -> String {
+        switch s {
+        case .notInstalled: "Not installed. The charge limit needs it."
+        case .needsApproval: "Installed. Approve Apple Cart in Login Items to turn it on."
+        case .ready: "Installed and working."
+        case .outdated: "Out of date. Repair installs the version that came with this app."
+        case .unreachable: "Installed but not answering. Try Repair."
+        }
+    }
+
+    private func button(_ title: String, _ action: @escaping @MainActor () async -> String?) -> some View {
+        Button(title) {
+            working = true
+            Task {
+                error = await action()
+                await limiter.refreshHelperStatus()
+                working = false
+            }
+        }
+        .buttonStyle(ChipStyle()).frame(width: 110)
     }
 }
 
