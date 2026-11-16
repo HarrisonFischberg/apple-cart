@@ -22,6 +22,11 @@ private func battery(percent: Int, plugged: Bool) -> BatteryReading {
     BatteryReading(properties: ["CurrentCapacity": percent, "ExternalConnected": plugged ? 1 : 0])!
 }
 
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock(); private var n = 0
+    func next() -> Int { lock.lock(); defer { lock.unlock() }; n += 1; return n - 1 }
+}
+
 @MainActor
 @Suite struct KeepAwakeTests {
     @Test func assertionExistsOnlyWhileActive() {
@@ -61,6 +66,63 @@ private func battery(percent: Int, plugged: Bool) -> BatteryReading {
         k2.start(.init(stopBelowPercent: 20))
         try? await Task.sleep(for: .milliseconds(100))
         #expect(!k2.isActive && fake.live.isEmpty && k2.lastStopReason == "Battery reached 20%")
+    }
+
+    private func run(_ o: KeepAwakeOptions, limit: Int = 100, _ readings: [BatteryReading]) async -> (KeepAwake, FakeAssertions) {
+        let fake = FakeAssertions()
+        let box = Counter()
+        let k = KeepAwake(assertions: fake, readBattery: { readings[min(box.next(), readings.count - 1)] },
+                          checkEvery: .milliseconds(5), chargeLimit: { limit })
+        k.start(o)
+        try? await Task.sleep(for: .milliseconds(150))
+        return (k, fake)
+    }
+
+    @Test func endsWhenTheChargerIsUnplugged() async {
+        let (k, fake) = await run(.init(stopOnUnplug: true), [battery(percent: 50, plugged: true), battery(percent: 50, plugged: false)])
+        #expect(!k.isActive && fake.live.isEmpty && k.lastStopReason == "Charger unplugged")
+        // Started on battery: never saw a charger, so the option waits instead of ending at once.
+        let (k2, _) = await run(.init(stopOnUnplug: true), [battery(percent: 50, plugged: false)])
+        #expect(k2.isActive); k2.stop()
+    }
+
+    @Test func levelRangeUpTo95OnlyOnBattery() async {
+        let (k, _) = await run(.init(stopBelowPercent: 95), [battery(percent: 90, plugged: false)])
+        #expect(!k.isActive && k.lastStopReason == "Battery reached 95%")
+        let (k2, _) = await run(.init(stopBelowPercent: 95), [battery(percent: 90, plugged: true)])
+        #expect(k2.isActive); k2.stop()
+    }
+
+    @Test func endsAtTheChargeLimitWhilePlugged() async {
+        let (k, _) = await run(.init(stopAtChargeLimit: true), limit: 80, [battery(percent: 79, plugged: true), battery(percent: 80, plugged: true)])
+        #expect(!k.isActive && k.lastStopReason == "Charge limit reached")
+        let (k2, _) = await run(.init(stopAtChargeLimit: true), limit: 80, [battery(percent: 90, plugged: false)])
+        #expect(k2.isActive); k2.stop()
+        let (k3, _) = await run(.init(stopAtChargeLimit: true), limit: 100, [battery(percent: 99, plugged: true)])
+        #expect(k3.isActive); k3.stop()
+        let (k4, _) = await run(.init(stopAtChargeLimit: true), limit: 100, [battery(percent: 100, plugged: true)])
+        #expect(!k4.isActive)
+    }
+
+    @Test func customDurationMathAndStoredOptions() throws {
+        #expect(KeepAwakeOptions.customSeconds(45, hours: false) == 2700)
+        #expect(KeepAwakeOptions.customSeconds(3, hours: true) == 10800)
+        #expect(KeepAwakeOptions.customSeconds(0, hours: false) == nil && KeepAwakeOptions.customSeconds(-5, hours: true) == nil)
+        #expect(KeepAwakeOptions.customSeconds(9999, hours: true) == KeepAwakeOptions.maxCustomSeconds)
+        let d = try #require(UserDefaults(suiteName: "keepawake-test-" + UUID().uuidString))
+        #expect(KeepAwakeOptions.stored(duration: 60, defaults: d) == .init(duration: 60))
+        d.set(true, forKey: "keepAwake.useLevel"); d.set(99, forKey: "keepAwake.level")
+        d.set(true, forKey: "keepAwake.endOnUnplug"); d.set(true, forKey: "keepAwake.untilLimit")
+        #expect(KeepAwakeOptions.stored(duration: nil, defaults: d) == .init(stopBelowPercent: 95, stopOnUnplug: true, stopAtChargeLimit: true))
+    }
+
+    @Test func replacingASessionDropsTheOldConditions() async {
+        let fake = FakeAssertions()
+        let k = KeepAwake(assertions: fake, readBattery: { battery(percent: 50, plugged: true) }, checkEvery: .milliseconds(5), chargeLimit: { 40 })
+        k.start(.init(stopAtChargeLimit: true)); k.start(.init(keepDisplayOn: true))
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(k.isActive && fake.live.count == 1 && k.options == .init(keepDisplayOn: true))
+        k.stop()
     }
 
     @Test func refusedAssertionIsReportedNotHidden() {

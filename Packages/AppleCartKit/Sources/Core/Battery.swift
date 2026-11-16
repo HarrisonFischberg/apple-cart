@@ -77,6 +77,8 @@ public struct EnergyUser: Sendable, Equatable, Identifiable {
     public let pid: Int
     public let name: String
     public let cpu: Double
+    /// True when the process lives in an app bundle (a user app), false for daemons and bare tools.
+    public var isApp = false
 }
 
 public enum EnergyUsers {
@@ -87,14 +89,15 @@ public enum EnergyUsers {
             guard parts.count == 3, let pid = Int(parts[0]), let cpu = Double(parts[1]) else { return nil }
             let path = String(parts[2])
             var name = (path as NSString).lastPathComponent
-            if let app = path.components(separatedBy: "/").first(where: { $0.hasSuffix(".app") }) { name = String(app.dropLast(4)) }
-            return EnergyUser(pid: pid, name: name, cpu: cpu)
+            var isApp = false
+            if let app = path.components(separatedBy: "/").first(where: { $0.hasSuffix(".app") }) { name = String(app.dropLast(4)); isApp = true }
+            return EnergyUser(pid: pid, name: name, cpu: cpu, isApp: isApp)
         }
         // Several processes of one app add up.
         var byName: [String: EnergyUser] = [:]
         for u in users {
             let old = byName[u.name]
-            byName[u.name] = EnergyUser(pid: old?.pid ?? u.pid, name: u.name, cpu: (old?.cpu ?? 0) + u.cpu)
+            byName[u.name] = EnergyUser(pid: old?.pid ?? u.pid, name: u.name, cpu: (old?.cpu ?? 0) + u.cpu, isApp: (old?.isApp ?? false) || u.isApp)
         }
         return byName.values.sorted { $0.cpu > $1.cpu }.prefix(limit).map { $0 }
     }
@@ -108,7 +111,7 @@ public enum EnergyUsers {
         guard (try? p.run()) != nil else { return [] }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        return parse(String(decoding: data, as: UTF8.self))
+        return parse(String(decoding: data, as: UTF8.self), limit: 40) // the view filters and shows the top few
     }
 }
 

@@ -6,6 +6,7 @@ import SwiftUI
 public struct BatteryView: View {
     let sampler: BatterySampler
     let active: Bool
+    @AppStorage(MenuBarReadout.hardwarePercentKey) private var showHardwarePercent = false
 
     public init(sampler: BatterySampler, active: Bool) {
         self.sampler = sampler
@@ -22,7 +23,7 @@ public struct BatteryView: View {
                         PowerFlowMap(reading: r)
                         details(r)
                         graph
-                        apps
+                        EnergyAppsSection(users: sampler.energyUsers)
                     }
                     .toolCard()
                 } else if active {
@@ -41,7 +42,12 @@ public struct BatteryView: View {
 
     private func summary(_ r: BatteryReading) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit()
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit()
+                if showHardwarePercent {
+                    Text("Battery reports \(MenuBarReadout.hardwarePercentText(r))").font(.caption).foregroundStyle(Palette.secondary).monospacedDigit()
+                }
+            }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 StatusText(state(r))
@@ -117,17 +123,6 @@ public struct BatteryView: View {
         case ..<(6 * 3600): return (.hour, 1)
         case ..<(12 * 3600): return (.hour, 3)
         default: return (.hour, 6)
-        }
-    }
-
-    private var apps: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel("Using the most energy")
-            if sampler.energyUsers.isEmpty { Text("Measuring…").hint() }
-            ForEach(sampler.energyUsers) { u in
-                HStack { Text(u.name).lineLimit(1); Spacer(); Text(String(format: "%.0f%% CPU", u.cpu)).monospacedDigit().foregroundStyle(Palette.secondary) }
-                    .font(.callout)
-            }
         }
     }
 

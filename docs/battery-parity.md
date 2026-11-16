@@ -21,13 +21,13 @@ TODO = not started.
 | MagSafe LED control (green at limit, orange charging) | TODO (T012) | Needs a write probe first; the LED key reads here, never written | yes |
 | Low Power Mode control (per power source) | TODO | Always off / on / battery only / adapter only; energy mode on newer chips | yes |
 | Live status icons (charging, paused, discharging, on battery) | PART: glyph has plug, bolt, pause bars; paused never triggers | Drive pause and discharge states from the runner | yes |
-| Disable sleep until the limit is reached | PART: Keep awake can stop at a battery level | Add "until limit reached" and display, mute and lock-on-lid options | no |
-| Sleep control (30 min / 1 h / 3 h / forever / custom, re-enable at 5-95%, end on unplug) | PART: Keep awake has 15 m to 8 h, forever, stop at level | Add custom duration, 5-95% range, "end when unplugged" | no |
-| Hardware battery percentage next to the macOS one | PART: "True charge" in Details | Optional second number in the menu bar and panel | no |
+| Disable sleep until the limit is reached | PART: "Until limit reached", display on and re-enable at level are built; mute and lock-on-lid left out (no safe public API) | Mute and lock-on-lid options | no |
+| Sleep control (30 min / 1 h / 3 h / forever / custom, re-enable at 5-95%, end on unplug) | HAVE: chips 15 m to 8 h and forever, custom minutes or hours, re-enable at 5-95%, end on unplug | Done | no |
+| Hardware battery percentage next to the macOS one | HAVE: setting adds "Battery reports 99.4%" in the panel header and "80% (99.4%)" in the menu bar; "--" when unreadable | Done | no |
 | Menu bar customization (icons, live values, spacing 0-20, update 2-20 s, right-click actions) | PART: readout choice plus 5 glyph styles | Item catalog, update interval, spacing, right-click actions | no |
 | Popover customization (add, remove, reorder widgets) | TODO | Edit mode on the Battery screen | no |
 | Power flow (adapter, battery, Mac; SoC, Display, USB, Other; hide under 1 W; weak charger case) | PART: adapter, Mac, battery ribbons | Add breakdown where macOS reports it; weak-charger state; hide small streams | no |
-| Apps using significant energy (Low, Medium, High thresholds, background option, Quit button) | PART: top 5 by CPU | Threshold setting, background toggle, Quit action | no |
+| Apps using significant energy (Low, Medium, High thresholds, background option, Quit button) | HAVE: Low 5% / Medium 20% / High 40% CPU threshold, background toggle, polite Quit (never Finder, Dock or Apple Cart), max 5 rows. Based on CPU, not energy impact (not public) | Done | no |
 | Apple Shortcuts actions (get percent, limit, state, temperature; set limit; pause; top up; discharge; LED; calibration) | TODO | App Intents for each | read actions no, write actions yes |
 | Fast user switching | n/a for now | Install per user; note in docs | no |
 

@@ -34,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// No root helper exists yet, so nothing can limit charging; the UI says so.
     private let chargeController: ChargeController = NoopChargeController()
     private let systemSampler = SystemSampler()
-    private let keepAwake = KeepAwake()
+    // A fresh ChargeLimitSettings reads the saved limit (and Top Up) every check, so it is never stale.
+    private let keepAwake = KeepAwake(chargeLimit: { ChargeLimitSettings().effectiveLimit })
     private let quickToggles = QuickToggles(prefs: SystemPreferences())
     private let volumeGuard = VolumeGuard(audio: CoreAudioOutput(),
                                           maxPercent: { UserDefaults.standard.object(forKey: "volumeGuard.max") as? Int ?? 70 })
