@@ -55,6 +55,8 @@ public final class BatteryWidgetSettings {
     /// The one instance the panel and Settings share.
     public static let shared = BatteryWidgetSettings()
     public private(set) var layout: BatteryWidgetLayout
+    /// Edit mode of the panel's Battery screen; the Edit button lives in the section header, outside the card.
+    public var editing = false
     public var showPercentage: Bool { didSet { defaults.set(showPercentage, forKey: "popover.showPercentage") } }
     public var openInEditMode: Bool { didSet { defaults.set(openInEditMode, forKey: "popover.openInEditMode") } }
     public var showOnStartup: Bool { didSet { defaults.set(showOnStartup, forKey: Self.startupKey) } }

@@ -95,6 +95,7 @@ extension PowerFlows {
                 PowerStream(title: "USB", watts: r.usbOutWatts),
                 PowerStream(title: "Other", watts: otherWatts),
                 PowerStream(title: "Charger loss", watts: r.isPluggedIn ? r.adapterLossWatts : nil)]
-            .filter { $0.watts.map { $0 >= hideBelow } ?? true }
+            // A device on a USB-C port is a real outside consumer, so it shows however little it draws; the rest hide under 1 W.
+            .filter { s in s.watts.map { s.title == "USB" ? $0 > 0 : $0 >= hideBelow } ?? true }
     }
 }

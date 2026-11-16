@@ -60,6 +60,8 @@ public struct PanelView: View {
         self.toolView = toolView
     }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public var body: some View {
         let tiles = launcher.allTiles
         VStack(spacing: 0) {
@@ -72,12 +74,16 @@ public struct PanelView: View {
             } else {
                 strip(tiles)
                 if let route = panel.route {
-                    Text(route.title.uppercased())
-                        .font(.system(size: 12, weight: .semibold)).tracking(0.6)
-                        .foregroundStyle(Palette.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20).padding(.top, 14)
-                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: 12) {
+                        Text(route.title.uppercased())
+                            .font(.system(size: 12, weight: .semibold)).tracking(0.6)
+                            .foregroundStyle(Palette.secondary)
+                            .accessibilityAddTraits(.isHeader)
+                        if route == .battery { batteryEditButtons }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: 28)
+                    .padding(.horizontal, 20).padding(.top, 14)
                     (toolView(route) ?? AnyView(ToolPlaceholder(id: route)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -92,6 +98,19 @@ public struct PanelView: View {
         .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
         .onChange(of: launcher.allTiles) { selectFirstIfNone() }
         .onExitCommand { collapse() }
+    }
+
+    /// Edit sits in the section header, not inside the card. Reset appears while editing.
+    private var batteryEditButtons: some View {
+        let widgets = BatteryWidgetSettings.shared
+        return HStack(spacing: 14) {
+            if widgets.editing { Button("Reset") { widgets.update { $0.reset() } }.buttonStyle(.plain).foregroundStyle(Palette.accent) }
+            Button(widgets.editing ? "Done" : "Edit") { withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { widgets.editing.toggle() } }
+                .buttonStyle(.plain).foregroundStyle(Palette.accent)
+                .accessibilityLabel(widgets.editing ? "Done editing widgets" : "Edit widgets")
+        }
+        .font(.callout.weight(.medium))
+        .frame(minHeight: 44)
     }
 
     /// A tool is always chosen while any tool is on; closing the panel clears it, so reselect.
@@ -170,18 +189,6 @@ public struct PanelView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button { panel.keepOpen.toggle() } label: {
-                Image(systemName: panel.keepOpen ? "pin.fill" : "pin").font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(panel.keepOpen ? Palette.accent : Color.primary)
-                    .frame(width: 56, height: 44)
-                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Keep open")
-            .accessibilityValue(panel.keepOpen ? "On" : "Off")
-            .help("Keep the panel open when you click elsewhere")
             footerButton("Quit", symbol: "power", action: quit)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)

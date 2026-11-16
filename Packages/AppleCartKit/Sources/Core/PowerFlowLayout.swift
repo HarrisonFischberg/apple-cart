@@ -78,10 +78,9 @@ public struct FlowLayout: Equatable, Sendable {
 
     /// Leaves: each reported or dashed Mac-side stream, then the remainder ("more") when it is at least 1 W.
     public static func make(state: FlowState, flows: PowerFlows, streams: [PowerStream], rest: Double?, width w: CGFloat) -> FlowLayout {
-        // Only streams macOS actually reports get a tile: no dash tiles. "Rest of Mac" only appears next to other
-        // streams, since on its own it would just repeat the Mac's total.
-        var leaves: [(FlowNodeID, Double?)] = streams.compactMap { $0.watts == nil ? nil : (.stream($0.title), $0.watts) }
-        if !leaves.isEmpty, let rest, rest >= PowerFlows.hideBelow { leaves.append((.more, rest)) }
+        // Only streams macOS actually reports get a tile: no dash tiles. The Mac's own use is the middle tile and is
+        // never split out into a "Rest of Mac" tile; only outside consumers (USB) are drawn beside it.
+        let leaves: [(FlowNodeID, Double?)] = streams.compactMap { $0.watts == nil ? nil : (.stream($0.title), $0.watts) }
         // A battery that is full and idle has nothing to say, so it gets no tile.
         let showBattery = state != .pluggedIdle
         let h = height(leaves: leaves.count, battery: showBattery)

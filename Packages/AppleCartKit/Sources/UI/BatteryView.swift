@@ -7,9 +7,7 @@ public struct BatteryView: View {
     let sampler: BatterySampler
     let active: Bool
     @AppStorage(MenuBarReadout.hardwarePercentKey) private var showHardwarePercent = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var widgets = BatteryWidgetSettings.shared
-    @State private var editing = false
     @State private var didOpenEditing = false
     let limiter: ChargeLimiter?
     let chargeLimit: ChargeLimitSettings?
@@ -26,8 +24,7 @@ public struct BatteryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
                     VStack(alignment: .leading, spacing: 12) {
-                        editBar
-                        if editing {
+                        if widgets.editing {
                             editList
                         } else {
                             ForEach(widgets.layout.visible) { widget($0, r) }
@@ -44,7 +41,7 @@ public struct BatteryView: View {
             .toolPage()
         }
         .task(id: active) {
-            if active, widgets.openInEditMode, !didOpenEditing { editing = true; didOpenEditing = true }
+            if active, widgets.openInEditMode, !didOpenEditing { widgets.editing = true; didOpenEditing = true }
             if active { sampler.hold("batteryView") } else { sampler.release("batteryView") }
         }
         .onDisappear { sampler.release("batteryView") }
@@ -58,18 +55,6 @@ public struct BatteryView: View {
         case .history: graph
         case .energyApps: apps
         }
-    }
-
-    private var editBar: some View {
-        HStack {
-            if editing { Button("Reset") { widgets.update { $0.reset() } }.buttonStyle(.plain).foregroundStyle(Palette.accent).frame(minWidth: 44, minHeight: 44) }
-            Spacer()
-            Button(editing ? "Done" : "Edit") { withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { editing.toggle() } }
-                .buttonStyle(.plain).foregroundStyle(Palette.accent).frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel(editing ? "Done editing widgets" : "Edit widgets")
-        }
-        .font(.callout.weight(.medium))
-        .padding(.vertical, -10)
     }
 
     /// Drag the handle to reorder; the arrows and the accessibility actions do the same without dragging.

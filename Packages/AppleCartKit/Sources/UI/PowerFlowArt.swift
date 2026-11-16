@@ -16,7 +16,7 @@ struct PowerFlowArt: View {
     private var state: FlowState { FlowState(reading) }
     private var streams: [PowerStream] { PowerFlows.streams(reading) }
     private var rest: Double? { PowerFlows.rest(reading, streams: streams) }
-    private var leafCount: Int { streams.count + ((rest ?? 0) >= PowerFlows.hideBelow ? 1 : 0) }
+    private var leafCount: Int { streams.count }
 
     private func layout(_ w: CGFloat) -> FlowLayout {
         FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w)

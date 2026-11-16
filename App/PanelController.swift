@@ -2,6 +2,7 @@ import AppKit
 import Core
 import SwiftUI
 import UI
+import os
 
 /// Non-activating panel: clicking inside never closes it, Esc and outside clicks do (unless Keep open).
 final class PanelWindow: NSPanel {
@@ -55,7 +56,9 @@ final class PanelController {
 
     var isShown: Bool { window?.isVisible == true }
 
-    func toggle() { isShown ? close() : show() }
+    private let log = Logger(subsystem: "app.rarecreatures.applecart", category: "panel")
+
+    func toggle() { log.debug("toggle, shown=\(self.isShown)"); isShown ? close() : show() }
 
     func show() {
         let win = window ?? makeWindow()
@@ -125,6 +128,7 @@ final class PanelController {
     }
 
     private func outsideClick() {
+        log.debug("outsideClick at \(NSStringFromPoint(NSEvent.mouseLocation))")
         // A click on our own status item is handled by its button (it toggles). Closing here too made the
         // button reopen the panel right after, which looked like a flash.
         if let button = anchor, let bw = button.window {
