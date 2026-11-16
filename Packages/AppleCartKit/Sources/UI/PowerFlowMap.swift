@@ -55,6 +55,43 @@ struct PowerFlowMap: View {
     private func thickness(_ w: Double) -> CGFloat { max(3, min(24, CGFloat(w) * 0.24)) }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            map
+            if PowerFlows.chargerTooWeak(reading) {
+                Label("The charger is too weak for what this Mac is doing. The battery is covering the rest.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout).foregroundStyle(Color.orange)
+                    .accessibilityElement(children: .combine)
+            }
+            streams
+        }
+    }
+
+    /// Where the Mac's power goes, as far as macOS reports it: a bar per stream sized against the Mac's load; a dash when not reported.
+    private var streams: some View {
+        let list = PowerFlows.streams(reading)
+        let total = max(reading.systemWatts ?? 0, 1)
+        return VStack(spacing: 6) {
+            ForEach(list) { st in
+                HStack(spacing: 10) {
+                    Text(st.title).font(.callout).frame(width: 84, alignment: .leading)
+                    GeometryReader { geo in
+                        Capsule().fill(.primary.opacity(0.08))
+                        if let w = st.watts {
+                            Capsule().fill(Palette.accent.opacity(0.85)).frame(width: max(6, geo.size.width * min(1, w / total)))
+                        }
+                    }
+                    .frame(height: 8)
+                    Text(st.watts.map { PowerFlow.watts($0) } ?? "—").font(.callout).monospacedDigit().foregroundStyle(Palette.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                }
+                .frame(minHeight: 22)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(st.title) \(st.watts.map { PowerFlow.watts($0) } ?? "not reported by macOS")")
+            }
+        }
+    }
+
+    private var map: some View {
         GeometryReader { geo in
             let s = Spots(width: geo.size.width)
             ZStack(alignment: .topLeading) {

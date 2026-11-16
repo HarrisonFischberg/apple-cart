@@ -7,6 +7,10 @@ public struct BatteryView: View {
     let sampler: BatterySampler
     let active: Bool
     @AppStorage(MenuBarReadout.hardwarePercentKey) private var showHardwarePercent = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var widgets = BatteryWidgetSettings.shared
+    @State private var editing = false
+    @State private var didOpenEditing = false
 
     public init(sampler: BatterySampler, active: Bool) {
         self.sampler = sampler
@@ -18,12 +22,13 @@ public struct BatteryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
                     VStack(alignment: .leading, spacing: 12) {
-                        summary(r)
-                        chargeBar(r)
-                        PowerFlowMap(reading: r)
-                        details(r)
-                        graph
-                        EnergyAppsSection(users: sampler.energyUsers)
+                        editBar
+                        if editing {
+                            editList
+                        } else {
+                            ForEach(widgets.layout.visible) { widget($0, r) }
+                            if widgets.layout.visible.isEmpty { Text("All widgets are hidden. Use Edit to show some.").hint() }
+                        }
                     }
                     .toolCard()
                 } else if active {
@@ -35,15 +40,65 @@ public struct BatteryView: View {
             .toolPage()
         }
         .task(id: active) {
+            if active, widgets.openInEditMode, !didOpenEditing { editing = true; didOpenEditing = true }
             if active { sampler.hold("batteryView") } else { sampler.release("batteryView") }
         }
         .onDisappear { sampler.release("batteryView") }
     }
 
+    @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
+        switch w {
+        case .charge: summary(r); chargeBar(r)
+        case .powerFlow: PowerFlowMap(reading: r)
+        case .details: details(r)
+        case .history: graph
+        case .energyApps: apps
+        }
+    }
+
+    private var editBar: some View {
+        HStack {
+            if editing { Button("Reset") { widgets.update { $0.reset() } }.buttonStyle(.plain).foregroundStyle(Palette.accent).frame(minWidth: 44, minHeight: 44) }
+            Spacer()
+            Button(editing ? "Done" : "Edit") { withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { editing.toggle() } }
+                .buttonStyle(.plain).foregroundStyle(Palette.accent).frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel(editing ? "Done editing widgets" : "Edit widgets")
+        }
+        .font(.callout.weight(.medium))
+        .padding(.vertical, -10)
+    }
+
+    /// Drag the handle to reorder; the arrows and the accessibility actions do the same without dragging.
+    private var editList: some View {
+        let order = widgets.layout.order
+        return List {
+            ForEach(order) { w in
+                let i = order.firstIndex(of: w) ?? 0
+                HStack(spacing: 10) {
+                    Image(systemName: "line.3.horizontal").foregroundStyle(Palette.secondary).frame(width: 24, height: 44).accessibilityHidden(true)
+                    Text(w.title)
+                    Spacer()
+                    Toggle(w.title, isOn: Binding(get: { !widgets.layout.hidden.contains(w) }, set: { on in widgets.update { $0.setVisible(w, on) } }))
+                        .labelsHidden().toggleStyle(.switch)
+                }
+                .frame(minHeight: 44)
+                .accessibilityElement(children: .combine)
+                .accessibilityAction(named: "Move up") { widgets.update { $0.move(w, to: i - 1) } }
+                .accessibilityAction(named: "Move down") { widgets.update { $0.move(w, to: i + 1) } }
+            }
+            .onMove { from, to in
+                guard let f = from.first else { return }
+                widgets.update { $0.move(order[f], to: f < to ? to - 1 : to) }
+            }
+        }
+        .listStyle(.plain).scrollContentBackground(.hidden)
+        .frame(height: CGFloat(order.count) * 52)
+    }
+
     private func summary(_ r: BatteryReading) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit()
+                if widgets.showPercentage { Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit() }
                 if showHardwarePercent {
                     Text("Battery reports \(MenuBarReadout.hardwarePercentText(r))").font(.caption).foregroundStyle(Palette.secondary).monospacedDigit()
                 }
@@ -126,9 +181,9 @@ public struct BatteryView: View {
         }
     }
 
-    private func state(_ r: BatteryReading) -> String {
-        if r.isCharging { "Charging" } else if r.isPluggedIn { "Plugged in, not charging" } else { "On battery" }
-    }
+    private var apps: some View { EnergyAppsSection(users: sampler.energyUsers) }
+
+    private func state(_ r: BatteryReading) -> String { r.stateText }
 
     private func flow(_ r: BatteryReading) -> String {
         abs(r.batteryWatts) < 0.05 ? "Battery idle" : String(format: "%@%.1f W %@", r.batteryWatts > 0 ? "+" : "−", abs(r.batteryWatts), r.batteryWatts > 0 ? "into battery" : "from battery")

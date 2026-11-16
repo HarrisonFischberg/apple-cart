@@ -26,8 +26,11 @@ final class StatusReadout {
 
     private func track() {
         let wanted = withObservationTracking {
-            let on = registry.isEnabled(.battery) && settings.readout != .off
+            let on = registry.isEnabled(.battery) && !settings.items.isEmpty
             _ = sampler.latest
+            _ = settings.spacing
+            _ = settings.showGlyph
+            sampler.interval = .seconds(settings.updateSeconds)
             _ = glyphStyle.style
             return on
         } onChange: { [weak self] in
@@ -39,10 +42,20 @@ final class StatusReadout {
         }
         let reading = wanted ? sampler.latest : nil
         // Percent text first, then the battery glyph (the glyph carries the plug / bolt / pause state).
-        button?.image = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading), style: glyphStyle.style) // no reading: neutral app icon
+        let parts = MenuBarItem.segments(settings.items, for: reading)
+        let glyph = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading), style: glyphStyle.style) // no reading: neutral app icon
+        // Never leave the item empty: with no text the icon stays, so there is always something to click.
+        button?.image = settings.showGlyph || parts.isEmpty ? glyph : nil
         BatterySampler.log.debug("status icon updated plugged=\(reading?.isPluggedIn ?? false)")
-        let text = settings.readout.text(for: reading)
-        button?.title = text.isEmpty ? "" : text + " "
-        button?.imagePosition = text.isEmpty ? .imageOnly : .imageTrailing
+        // The item spacing is a kern on the gap between values, and between the text and the icon.
+        let gap = NSAttributedString(string: " ", attributes: [.kern: CGFloat(settings.spacing)])
+        let title = NSMutableAttributedString()
+        for (i, part) in parts.enumerated() {
+            if i > 0 { title.append(gap) }
+            title.append(NSAttributedString(string: part))
+        }
+        if !parts.isEmpty && button?.image != nil { title.append(gap) }
+        button?.attributedTitle = title
+        button?.imagePosition = parts.isEmpty ? .imageOnly : button?.image == nil ? .noImage : .imageTrailing
     }
 }

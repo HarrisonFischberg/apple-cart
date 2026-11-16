@@ -45,6 +45,7 @@ public struct GeneralSettingsView: View {
                 }
             }
             Text("A check contacts only this app's update list on GitHub, which sees your IP address and the app version.").hint()
+            ShortcutsCard()
             SettingsCard("Your data") {
                 SettingsRow("Delete all app data", detail: "Removes every setting and saved item (clipboard history, battery history) from this Mac, then quits.") {
                     Button("Delete…", role: .destructive, action: actions.deleteAllData).buttonStyle(ChipStyle()).frame(width: 120)
@@ -52,20 +53,6 @@ public struct GeneralSettingsView: View {
             }
         }
         .onAppear { login.refresh() }
-    }
-}
-
-struct MenuBarSettingsView: View {
-    let readout: ReadoutSettings
-    var glyphStyle: GlyphStyleSettings?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            PageTitle("Menu bar")
-            SettingsCard("Battery readout") { ReadoutRow(readout: readout) }
-            if let glyphStyle { SettingsCard("Battery look") { GlyphStylePicker(settings: glyphStyle) } }
-            Text("Click the icon to open the panel. Right-click it for Settings and Quit.").hint()
-        }
     }
 }
 
