@@ -36,11 +36,10 @@ final class PanelController {
 
     init(registry: FeatureRegistry, store: SettingsStore, anchor: NSStatusBarButton?, openSettings: @escaping () -> Void,
          firstRun: FirstRunModel, readout: ReadoutSettings,
-         battery: BatterySampler, chargeLimit: ChargeLimitSettings, chargeController: ChargeController,
+         chargeLimit: ChargeLimitSettings, chargeLimiter: ChargeLimiter,
          toolView: @escaping (FeatureID, PanelModel) -> AnyView?) {
-        self.battery = battery
         self.chargeLimit = chargeLimit
-        self.chargeController = chargeController
+        self.chargeLimiter = chargeLimiter
         self.firstRun = firstRun
         self.readout = readout
         launcher = LauncherModel(registry: registry, store: store)
@@ -49,9 +48,8 @@ final class PanelController {
         self.toolViewFactory = toolView
     }
     private let firstRun: FirstRunModel
-    private let battery: BatterySampler
     private let chargeLimit: ChargeLimitSettings
-    private let chargeController: ChargeController
+    private let chargeLimiter: ChargeLimiter
     private let readout: ReadoutSettings
     private let toolViewFactory: (FeatureID, PanelModel) -> AnyView?
 
@@ -83,7 +81,7 @@ final class PanelController {
                              quit: { NSApp.terminate(nil) },
                              toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) },
                              firstRun: firstRun, readout: readout,
-                             battery: battery, chargeLimit: chargeLimit, chargeControlAvailable: chargeController.isAvailable)
+                             chargeLimit: chargeLimit, chargeLimiter: chargeLimiter)
         let win = PanelWindow(content: NSHostingView(rootView: view))
         win.onCancel = { [weak self] in self?.close() }
         return win

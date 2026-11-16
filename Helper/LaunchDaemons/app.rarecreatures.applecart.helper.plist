@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>app.rarecreatures.applecart.helper</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/AppleCartHelper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>app.rarecreatures.applecart.helper</key>
+		<true/>
+	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>app.rarecreatures.applecart</string>
+	</array>
+	<!-- Starts at boot so a cut left by a crash or power loss is undone (the helper writes CHIE=00 at start). -->
+	<key>RunAtLoad</key>
+	<true/>
+	<!-- Relaunch after a crash or kill (which again restores the adapter); a clean exit on SIGTERM stays down. -->
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+</dict>
+</plist>

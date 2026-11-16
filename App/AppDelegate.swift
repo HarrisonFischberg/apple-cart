@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = UserDefaultsSettingsStore()
     private lazy var registry: FeatureRegistry = {
         let r = FeatureRegistry(store: store)
-        r.register(.battery) { BatteryTool() } // the readout only runs while a view holds the sampler
+        r.register(.battery) { [chargeLimiter, battery] in BatteryTool(limiter: chargeLimiter, battery: battery) }
         r.register(.system) { SystemTool() }
         r.register(.keepAwake) { [keepAwake] in KeepAwakeTool(keepAwake) }
         r.register(.quickToggles) { QuickTogglesTool() }
@@ -31,8 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private let battery = BatterySampler()
     private let chargeLimit = ChargeLimitSettings()
-    /// No root helper exists yet, so nothing can limit charging; the UI says so.
-    private let chargeController: ChargeController = NoopChargeController()
+    private let chargeController: ChargeController = HelperChargeController()
+    /// The single writer to the root helper.
+    private lazy var chargeLimiter = ChargeLimiter(settings: chargeLimit, controller: chargeController)
     private let systemSampler = SystemSampler()
     // A fresh ChargeLimitSettings reads the saved limit (and Top Up) every check, so it is never stale.
     private let keepAwake = KeepAwake(chargeLimit: { ChargeLimitSettings().effectiveLimit })
@@ -74,7 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         breakBanners.onSnooze = { [breaks] in breaks.snooze($0) }
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.pause() } }
-        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.resume() } }
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self, breaks] _ in
+            MainActor.assumeIsolated {
+                breaks.resume()
+                // The helper put the charger back on before sleep; check it and watch that charging resumes.
+                if let limiter = self?.chargeLimiter { Task { await limiter.systemDidWake() } }
+            }
+        }
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [clipboard] _ in
             MainActor.assumeIsolated { clipboard.screenLocked() }
         }
@@ -87,10 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
-                                          battery: battery, chargeLimit: chargeLimit, chargeController: chargeController,
-                                          toolView: { [weak self, battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
+                                          chargeLimit: chargeLimit, chargeLimiter: chargeLimiter,
+                                          toolView: { [weak self, battery, chargeLimit, chargeLimiter, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
             switch id {
-            case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))
+            case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery, limiter: chargeLimiter, chargeLimit: chargeLimit))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
             case .keepAwake: AnyView(KeepAwakeView(keepAwake: keepAwake))
             case .quickToggles: AnyView(QuickTogglesView(toggles: quickToggles))
@@ -145,6 +152,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkForUpdates() { updater.checkForUpdates() }
 
+    /// Put the charger back on before quitting instead of waiting for the helper's lease to run out.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Task {
+            await chargeLimiter.shutdown()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     private func sendDebugLogs() {
         Task {
             let checker = SystemPermissionChecker()
@@ -168,11 +184,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .critical
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         for id in registry.enabled { registry.setEnabled(false, for: id) } // stop every tool first so nothing rewrites its data
-        let fm = FileManager.default
-        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart")
-        let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart")
-        AppDataEraser(defaultsDomain: Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart", folders: [support, caches]).eraseAll()
-        NSApp.terminate(nil)
+        Task {
+            await chargeLimiter.shutdown() // charger back to normal (resetAll) before the data goes
+            let fm = FileManager.default
+            let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart")
+            let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart")
+            AppDataEraser(defaultsDomain: Bundle.main.bundleIdentifier ?? "app.rarecreatures.applecart", folders: [support, caches]).eraseAll()
+            NSApp.terminate(nil)
+        }
     }
 
     @objc private func openSettings() {
@@ -191,7 +210,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 general: GeneralActions(updatesConfigured: updater.isConfigured, checkForUpdates: { [updater] in updater.checkForUpdates() },
                                         automaticChecks: { [updater] in updater.automaticChecks }, setAutomaticChecks: { [updater] in updater.automaticChecks = $0 },
                                         sendDebugLogs: { [weak self] in self?.sendDebugLogs() }, deleteAllData: { [weak self] in self?.deleteAllData() }),
-                tools: SettingsTools(clipboard: clipboard, breaks: breaks, quickToggles: quickToggles, updateChecker: updateChecker),
+                tools: SettingsTools(clipboard: clipboard, breaks: breaks, quickToggles: quickToggles, updateChecker: updateChecker,
+                                     chargeLimit: chargeLimit, chargeLimiter: chargeLimiter,
+                                     chargeHelper: ChargeHelperActions(
+                                        install: { await ChargeHelperInstaller.install() },
+                                        repair: { await ChargeHelperInstaller.repair() },
+                                        remove: { [chargeController] in await ChargeHelperInstaller.remove(controller: chargeController) },
+                                        openLoginItems: { ChargeHelperInstaller.openLoginItems() }),
+                                     battery: battery),
                 glyphStyle: glyphStyle,
                 open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
