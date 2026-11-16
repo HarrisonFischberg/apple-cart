@@ -19,7 +19,7 @@ public enum FeatureID: String, CaseIterable, Sendable, Codable {
         case .updates: "Updates"
         case .quickToggles: "Quick toggles"
         case .volumeGuard: "Volume guard"
-        case .fanSafeMode: "Fan safe mode"
+        case .fanSafeMode: "Fan speed" // raw value kept so saved settings still match
         case .cleaningMode: "Cleaning mode"
         case .notifications: "Notifications"
         case .flushDNS: "Flush DNS"

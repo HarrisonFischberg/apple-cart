@@ -12,11 +12,13 @@ public struct SettingsTools {
     public var chargeLimiter: ChargeLimiter?
     public var chargeHelper: ChargeHelperActions?
     public var battery: BatterySampler?
+    public var fanRunner: FanRunner?
     public init(clipboard: ClipboardHistory, breaks: BreakReminders, quickToggles: QuickToggles, updateChecker: UpdateChecker,
-                chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil, chargeHelper: ChargeHelperActions? = nil,
-                battery: BatterySampler? = nil) {
+                chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil, fanRunner: FanRunner? = nil,
+                chargeHelper: ChargeHelperActions? = nil, battery: BatterySampler? = nil) {
         self.clipboard = clipboard; self.breaks = breaks; self.quickToggles = quickToggles; self.updateChecker = updateChecker
         self.chargeLimit = chargeLimit; self.chargeLimiter = chargeLimiter; self.chargeHelper = chargeHelper; self.battery = battery
+        self.fanRunner = fanRunner
     }
 }
 
@@ -57,7 +59,10 @@ struct ToolSettingsPage: View {
             if available && !on { Text("Turn this tool on to change its options.").hint() }
             // Outside the dimmed group: removing the helper must work with the tool off too.
             if id == .battery, let limiter = tools.chargeLimiter, let actions = tools.chargeHelper {
-                ChargeHelperCard(limiter: limiter, actions: actions)
+                ChargeHelperCard(status: limiter.state.helperStatus, refresh: { await limiter.refreshHelperStatus() }, actions: actions)
+            }
+            if id == .fanSafeMode, let runner = tools.fanRunner, let actions = tools.chargeHelper {
+                ChargeHelperCard(status: runner.state.helperStatus, refresh: { await runner.refreshHelperStatus() }, actions: actions, fans: true)
             }
         }
         .task { await permissions.refresh() }
@@ -102,7 +107,9 @@ struct ToolSettingsPage: View {
         case .flushDNS: note("Nothing to set. macOS asks for your administrator password each time you flush.")
         case .uninstaller, .cleaner, .diskMap: note("Nothing to set. Nothing is removed until you review a list and confirm it in the panel.")
         case .copyText, .readQR: note("Nothing else to set. Drag a box in the panel or use the shortcut.")
-        case .fanSafeMode, .notifications: note("Not built yet.")
+        case .fanSafeMode:
+            if let runner = tools.fanRunner { FanOptions(settings: runner.settings) } else { note("Fan speed is set from the panel.") }
+        case .notifications: note("Not built yet.")
         }
     }
 
@@ -204,15 +211,18 @@ struct ChargeControlOptions: View {
     private func changed() { Task { await limiter?.reevaluate() } }
 }
 
+/// Install, repair and remove the root helper. It is shared: the Battery page shows it for the charge limit, the Fan
+/// speed page for the fans (a version 2 helper still charges but is out of date for fans).
 struct ChargeHelperCard: View {
-    let limiter: ChargeLimiter
+    let status: ChargeHelperStatus
+    let refresh: @MainActor () async -> Void
     let actions: ChargeHelperActions
+    var fans = false
     @State private var working = false
     @State private var error: String?
 
     var body: some View {
-        let status = limiter.state.helperStatus
-        SettingsCard("Charging helper") {
+        SettingsCard(fans ? "Helper" : "Charging helper") {
             SettingsRow("Status", detail: detail(status)) {
                 HStack(spacing: 10) {
                     if status == .notInstalled {
@@ -227,18 +237,20 @@ struct ChargeHelperCard: View {
             }
         }
         if let error { Text(error).hint() }
-        Text("The helper runs on this Mac only and never uses the network. It can only pause or resume the charger, and the charger comes back on by itself if Apple Cart stops. Remove turns charging back to normal first.").hint()
-            .task { await limiter.refreshHelperStatus() }
+        Text(fans
+             ? "The same helper as the charge limit. It runs on this Mac only and never uses the network. It can only pause or resume the charger and set the fans, and both go back to macOS by themselves if Apple Cart stops. Remove hands everything back first."
+             : "The helper runs on this Mac only and never uses the network. It can only pause or resume the charger, and the charger comes back on by itself if Apple Cart stops. Remove turns charging back to normal first.").hint()
+            .task { await refresh() }
     }
 
     private func detail(_ s: ChargeHelperStatus) -> String {
         switch s {
-        case .notInstalled: "Not installed. The charge limit needs it."
+        case .notInstalled: fans ? "Not installed. Fan control needs it." : "Not installed. The charge limit needs it."
         case .needsApproval: "Installed. Approve Apple Cart in Login Items to turn it on."
         case .ready: "Installed and working."
         case .outdated: "Out of date. Repair installs the version that came with this app."
         case .unreachable: "Installed but not answering. Try Repair. It only works in a build signed with the Apple Cart team."
-        case .unsupported: "Not supported on this Mac. Charge control needs a charger key this Mac does not have."
+        case .unsupported: fans ? "Fan control is not supported on this Mac." : "Not supported on this Mac. Charge control needs a charger key this Mac does not have."
         }
     }
 
@@ -247,11 +259,27 @@ struct ChargeHelperCard: View {
             working = true
             Task {
                 error = await action()
-                await limiter.refreshHelperStatus()
+                await refresh()
                 working = false
             }
         }
         .buttonStyle(ChipStyle()).frame(width: 110)
+    }
+}
+
+/// Fan speed: Resume and the safety rules. The mode, speed and curve are set in the panel.
+private struct FanOptions: View {
+    let settings: FanSettings
+
+    var body: some View {
+        SettingsCard("Fan speed") {
+            SettingsRow("Mode", detail: "Choose System, Manual or Curve in the panel.") { Text(settings.active.title).foregroundStyle(Palette.secondary) }
+            SettingsRow("Resume after restart or sleep", detail: "Off: every restart and sleep gives the fans back to macOS until you apply again.") {
+                Toggle("Resume after restart or sleep", isOn: Binding(get: { settings.resume }, set: { settings.setResume($0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+        }
+        Text("Fans return to macOS when Apple Cart quits, when the Mac sleeps, when a temperature cannot be read and whenever anything fails. At 90 °C, or when macOS reports thermal pressure, macOS takes the fans for at least 2 minutes. A manual speed never goes below the fan's slowest running speed.").hint()
     }
 }
 

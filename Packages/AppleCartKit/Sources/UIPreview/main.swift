@@ -87,7 +87,7 @@ MainActor.assumeIsolated {
     @MainActor final class PrevLogin: LoginItem { var isEnabled = true; func set(_ on: Bool) throws { isEnabled = on } }
     let settingsStore = DemoStore(); settingsStore.ids = [.battery, .system, .keepAwake, .clipboard, .readQR]
     let settingsReg = FeatureRegistry(store: settingsStore)
-    for id in FeatureID.allCases where id != .fanSafeMode && id != .notifications { settingsReg.register(id) { DemoTool() } }
+    for id in FeatureID.allCases where id != .notifications { settingsReg.register(id) { DemoTool() } }
     let settingsPerms = PermissionsModel(checker: DemoChecker(), registry: settingsReg)
     let readoutSettings = ReadoutSettings(store: settingsStore)
     let sampler = BatterySampler(interval: .seconds(1))

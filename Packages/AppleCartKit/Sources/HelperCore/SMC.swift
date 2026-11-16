@@ -12,8 +12,75 @@ public enum SMCWhitelist {
     }
 }
 
+/// The only fan keys the helper may touch. Writes: each fan's mode key (0 = macOS, 1 = manual), its target rpm (a float in
+/// a sane range; FanGuard clamps it to the fan's own minimum and maximum first) and the unlock key Ftst (0 or 1), which is
+/// written only on Macs that have it. Reads: these plus the fan count, actual, minimum and maximum rpm. Nothing else.
+public enum FanWhitelist {
+    public static let maxFans = 10
+    public static let countKey = "FNum"
+    public static let unlockKey = "Ftst"
+    public static let manualMode: UInt8 = 1
+    public static let systemMode: UInt8 = 0
+    /// Lowercase "md" is what Apple silicon reports (Mac17,2); "Md" is the older spelling. Whichever exists is used.
+    public static func modeKeys(_ fan: Int) -> [String] { ["F\(fan)md", "F\(fan)Md"] }
+    public static func targetKey(_ fan: Int) -> String { "F\(fan)Tg" }
+    public static func actualKey(_ fan: Int) -> String { "F\(fan)Ac" }
+    public static func minimumKey(_ fan: Int) -> String { "F\(fan)Mn" }
+    public static func maximumKey(_ fan: Int) -> String { "F\(fan)Mx" }
+
+    private static func fanKey(_ key: String, suffixes: [String]) -> Bool {
+        let c = Array(key.utf8)
+        guard c.count == 4, c[0] == UInt8(ascii: "F"), (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(c[1]) else { return false }
+        return suffixes.contains(String(decoding: c[2...], as: UTF8.self))
+    }
+
+    public static func allowsRead(key: String) -> Bool {
+        key == countKey || key == unlockKey || fanKey(key, suffixes: ["md", "Md", "Tg", "Ac", "Mn", "Mx"])
+    }
+
+    public static func allowsWrite(key: String, bytes: [UInt8]) -> Bool {
+        if key == unlockKey || fanKey(key, suffixes: ["md", "Md"]) { return bytes == [systemMode] || bytes == [manualMode] }
+        if fanKey(key, suffixes: ["Tg"]) {
+            guard let rpm = FanBytes.float(bytes) else { return false }
+            return rpm.isFinite && rpm >= 1 && rpm <= 10_000
+        }
+        return false
+    }
+}
+
+/// SMC "flt " values are 4 bytes, little endian (F0Mn reads 00 d0 10 45 = 2317 rpm on Mac17,2).
+public enum FanBytes {
+    public static func float(_ b: [UInt8]) -> Double? {
+        guard b.count == 4 else { return nil }
+        return Double(Float(bitPattern: UInt32(b[0]) | UInt32(b[1]) << 8 | UInt32(b[2]) << 16 | UInt32(b[3]) << 24))
+    }
+
+    public static func bytes(_ value: Double) -> [UInt8] {
+        let u = Float(value).bitPattern
+        return [0, 8, 16, 24].map { UInt8(truncatingIfNeeded: u >> UInt32($0)) }
+    }
+}
+
+/// An SMC key's type as the SMC reports it, e.g. "flt " size 4 or "ui8 " size 1.
+public struct SMCKeyType: Equatable, Sendable {
+    public var type: String
+    public var size: Int
+    public init(_ type: String, _ size: Int) { self.type = type; self.size = size }
+    public static let float = SMCKeyType("flt ", 4)
+    public static let uint8 = SMCKeyType("ui8 ", 1)
+}
+
+/// Narrow SMC surface for fans: key types, raw reads and whitelisted raw writes. Fakes implement this in tests.
+public protocol FanSMC: Sendable {
+    func fanKeyType(_ key: String) throws -> SMCKeyType
+    func fanRead(_ key: String) throws -> [UInt8]
+    func fanWrite(_ key: String, _ bytes: [UInt8]) throws
+}
+
 public enum SMCError: Error, Equatable {
     case refused, unavailable, io(Int32), smc(UInt8), keyMissing
+    /// The key exists but its type or size is not what the write sequence expects: refused, nothing written.
+    case typeMismatch
 
     /// The SMC answers a key-info call for an absent key with result 0x84 (kSMCKeyNotFound).
     public static let keyNotFound: UInt8 = 0x84
@@ -29,7 +96,7 @@ public protocol SMCWriting: Sendable {
 }
 
 /// AppleSMC user client, same struct layout and selectors as spikes/smc-probe/main.swift. Needs root to write.
-public final class SMCConnection: SMCWriting, @unchecked Sendable {
+public final class SMCConnection: SMCWriting, FanSMC, @unchecked Sendable {
     private struct Vers { var major: UInt8 = 0, minor: UInt8 = 0, build: UInt8 = 0, reserved: UInt8 = 0; var release: UInt16 = 0 }
     private struct PLimit { var version: UInt16 = 0, length: UInt16 = 0; var cpu: UInt32 = 0, gpu: UInt32 = 0, mem: UInt32 = 0 }
     private struct KeyInfo { var dataSize: UInt32 = 0, dataType: UInt32 = 0; var attrs: UInt8 = 0 }
@@ -54,6 +121,7 @@ public final class SMCConnection: SMCWriting, @unchecked Sendable {
     deinit { if conn != 0 { IOServiceClose(conn) } }
 
     private static func fourCC(_ s: String) -> UInt32 { s.utf8.reduce(0) { $0 << 8 | UInt32($1) } }
+    private static func name(_ v: UInt32) -> String { String(decoding: (0..<4).map { UInt8((v >> UInt32(24 - 8 * $0)) & 0xff) }, as: UTF8.self) }
 
     private func call(_ input: inout KeyData) throws {
         var out = KeyData(); var size = MemoryLayout<KeyData>.size
@@ -86,6 +154,40 @@ public final class SMCConnection: SMCWriting, @unchecked Sendable {
         try oneByteInfo(k)
         var d = KeyData(); d.key = k; d.info.dataSize = 1; d.data8 = Self.writeBytes
         d.bytes.0 = UInt64(value)
+        try call(&d)
+    }
+
+    private func keyInfo(_ key: UInt32) throws -> KeyInfo {
+        var d = KeyData(); d.key = key; d.data8 = Self.readInfo
+        do { try call(&d) } catch let e as SMCError { throw SMCError.fromKeyInfo(e) }
+        return d.info
+    }
+
+    public func fanKeyType(_ key: String) throws -> SMCKeyType {
+        guard FanWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        lock.lock(); defer { lock.unlock() }
+        let i = try keyInfo(Self.fourCC(key))
+        return SMCKeyType(Self.name(i.dataType), Int(i.dataSize))
+    }
+
+    public func fanRead(_ key: String) throws -> [UInt8] {
+        guard FanWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        lock.lock(); defer { lock.unlock() }
+        let k = Self.fourCC(key)
+        let i = try keyInfo(k)
+        guard (1...32).contains(i.dataSize) else { throw SMCError.typeMismatch }
+        var d = KeyData(); d.key = k; d.info.dataSize = i.dataSize; d.data8 = Self.readBytes
+        try call(&d)
+        return withUnsafeBytes(of: d.bytes) { Array($0.prefix(Int(i.dataSize))) }
+    }
+
+    public func fanWrite(_ key: String, _ bytes: [UInt8]) throws {
+        guard FanWhitelist.allowsWrite(key: key, bytes: bytes) else { throw SMCError.refused }
+        lock.lock(); defer { lock.unlock() }
+        let k = Self.fourCC(key)
+        guard Int(try keyInfo(k).dataSize) == bytes.count else { throw SMCError.typeMismatch }
+        var d = KeyData(); d.key = k; d.info.dataSize = UInt32(bytes.count); d.data8 = Self.writeBytes
+        withUnsafeMutableBytes(of: &d.bytes) { raw in for (j, b) in bytes.enumerated() { raw[j] = b } }
         try call(&d)
     }
 }

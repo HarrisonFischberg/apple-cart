@@ -8,7 +8,14 @@ public enum HelperIdentity {
     public static let machService = "app.rarecreatures.applecart.helper"
     public static let plistName = "app.rarecreatures.applecart.helper.plist"
     /// Bump when the XPC surface or helper behavior changes; the app shows "outdated" on a mismatch.
-    public static let version = 2
+    /// 3 added fan control (setFan, resetFan, fanStatus).
+    public static let version = 3
+    /// The charger calls (status, setAdapter, resetAll) are unchanged since 2, so a version 2 helper still drives the
+    /// charge limit; only fan control needs `version`. A helper newer than the app is outdated for both.
+    public static let chargeVersions = 2...version
+
+    public static func supportsCharging(helperVersion v: Int) -> Bool { chargeVersions.contains(v) }
+    public static func supportsFans(helperVersion v: Int) -> Bool { v == version }
     /// Info.plist key that carries the team ID from the AC_TEAM_ID build setting (the one place it lives).
     public static let teamIDInfoKey = "ACTeamID"
 }
@@ -24,6 +31,8 @@ public enum HelperIdentity {
     case sleeping = 5
     /// This Mac has no CHIE key (or no SMC): charge control cannot work here.
     case unsupported = 6
+    /// The SMC took the write but reads back something else (fan mode did not switch); the helper restored.
+    case notApplied = 7
 }
 
 /// The whole XPC surface. Inputs are clamped on the helper side; nothing here is ever run as a shell string.
@@ -35,6 +44,16 @@ public enum HelperIdentity {
     func setAdapter(enabled: Bool, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void)
     /// Adapter on, lease cancelled. Called on tool off, delete all data and helper removal.
     func resetAll(reply: @escaping @Sendable (Int) -> Void)
+
+    /// Version 3. Every fan to manual at `rpm` for at most `leaseSeconds` (clamped like AdapterLease); the helper clamps
+    /// rpm into each fan's own [minimum, maximum] read from the SMC and hands the fans back to macOS when the lease ends.
+    /// rpm 0 or less means "nothing manual": the same as resetFan.
+    func setFan(rpm: Int, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void)
+    /// Version 3. Fans back to macOS (system control), lease cancelled.
+    func resetFan(reply: @escaping @Sendable (Int) -> Void)
+    /// Version 3. supported, fan count, actual rpm (fastest fan), minimum rpm (highest fan minimum), maximum rpm (lowest fan
+    /// maximum), manual active, manual target rpm (0 if none), lease seconds left, error code.
+    func fanStatus(reply: @escaping @Sendable (Bool, Int, Int, Int, Int, Bool, Int, Int, Int) -> Void)
 }
 
 public enum AdapterLease {

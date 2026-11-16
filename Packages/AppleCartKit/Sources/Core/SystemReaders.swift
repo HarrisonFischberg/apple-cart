@@ -18,6 +18,9 @@ public final class LiveSystemSource: SystemSource, @unchecked Sendable {
                               uptime: SystemReader.uptime())
     }
 
+    /// CPU and GPU die temperatures alone (the fan runner reads these every 5 s without the rest of the snapshot).
+    public func chipTemperatures() -> (cpu: Double?, gpu: Double?) { temperatures() }
+
     private func temperatures() -> (cpu: Double?, gpu: Double?) {
         lock.lock(); defer { lock.unlock() }
         guard let smc = SMCReader() else { return (nil, nil) }
@@ -165,6 +168,24 @@ struct SMCReader {
         guard type(key) == "ui8 " else { return nil }
         var d = KeyData(); d.key = Self.fourCC(key); d.info.dataSize = 1; d.data8 = Self.readBytes
         return call(d).map { UInt8(truncatingIfNeeded: $0.bytes.0) }
+    }
+}
+
+/// Fan count, actual speeds and running range from the SMC, read only and unprivileged. Measured on an M5 (Mac17,2,
+/// macOS 27.2): FNum ui8 = 1, F0Ac float (0 when the fan is stopped), F0Mn float 2317, F0Mx float 6550.
+public enum FanSensors {
+    /// Nil when the SMC cannot be opened; an empty reading when this Mac reports no fan.
+    public static func read() -> FanReading? {
+        guard let smc = SMCReader() else { return nil }
+        let count = min(Int(smc.uint8("FNum") ?? 0), 10)
+        func float(_ k: String) -> Double? { smc.type(k) == "flt " ? smc.float(k) : nil }
+        let rpms = (0..<count).map { float("F\($0)Ac").map { max(0, $0) } }
+        let mins = (0..<count).compactMap { float("F\($0)Mn") }, maxs = (0..<count).compactMap { float("F\($0)Mx") }
+        var range: FanRange?
+        if count > 0, mins.count == count, maxs.count == count, let lo = mins.max(), let hi = maxs.min(), lo > 0, hi > lo {
+            range = FanRange(minRPM: Int(lo.rounded(.up)), maxRPM: Int(hi.rounded(.down)))
+        }
+        return FanReading(rpms: rpms, range: range)
     }
 }
 

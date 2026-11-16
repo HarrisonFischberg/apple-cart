@@ -87,7 +87,7 @@ extension FeatureID {
         case .updates: "Check macOS and Homebrew for updates."
         case .quickToggles: "Hidden Finder and Dock options in one place."
         case .volumeGuard: "Lowers the volume when you switch speakers or plug in headphones."
-        case .fanSafeMode: "Not built yet."
+        case .fanSafeMode: "Leave the fans to macOS, or set one speed or a temperature curve."
         case .cleaningMode: "Locks the keyboard and trackpad while you wipe them."
         case .notifications: "Not built yet."
         case .flushDNS: "Clears the DNS cache when a site still goes to an old address."

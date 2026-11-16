@@ -8,7 +8,7 @@ public enum ChargeLimits {
 }
 
 public enum FanLimits {
-    /// Fan safe mode only raises speed above the system curve, never below it.
+    /// A manual fan target never goes below the fan's own minimum running speed or above its maximum (both read from the SMC).
     public static func clampedMinimum(requested: Int, systemMinimum: Int, hardwareMaximum: Int) -> Int {
         min(max(requested, systemMinimum), hardwareMaximum)
     }

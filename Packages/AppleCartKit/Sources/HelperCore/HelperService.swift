@@ -39,7 +39,8 @@ public struct ClientGate: Sendable {
 /// The exported XPC object: maps the narrow protocol onto the guard. Inputs are clamped by the guard.
 public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Sendable {
     let adapter: AdapterGuard
-    public init(adapter: AdapterGuard) { self.adapter = adapter }
+    let fan: FanGuard?
+    public init(adapter: AdapterGuard, fan: FanGuard? = nil) { self.adapter = adapter; self.fan = fan }
 
     public func version(reply: @escaping @Sendable (Int) -> Void) { reply(HelperIdentity.version) }
 
@@ -55,6 +56,19 @@ public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Senda
 
     public func resetAll(reply: @escaping @Sendable (Int) -> Void) {
         reply(adapter.restore(reason: "reset all").rawValue)
+    }
+
+    public func setFan(rpm: Int, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void) {
+        reply((fan?.setFan(rpm: rpm, leaseSeconds: leaseSeconds) ?? .unsupported).rawValue)
+    }
+
+    public func resetFan(reply: @escaping @Sendable (Int) -> Void) {
+        reply((fan?.restore(reason: "reset fan") ?? .unsupported).rawValue)
+    }
+
+    public func fanStatus(reply: @escaping @Sendable (Bool, Int, Int, Int, Int, Bool, Int, Int, Int) -> Void) {
+        guard let s = fan?.status() else { return reply(false, 0, -1, 0, 0, false, 0, 0, HelperErrorCode.unsupported.rawValue) }
+        reply(s.supported, s.count, s.actualRPM, s.minimumRPM, s.maximumRPM, s.manual, s.targetRPM, s.leaseRemaining, s.code.rawValue)
     }
 }
 
@@ -72,14 +86,14 @@ public final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unc
         connection.setCodeSigningRequirement(requirement) // the system re-checks on every message
         connection.exportedInterface = NSXPCInterface(with: AppleCartHelperXPC.self)
         connection.exportedObject = service
-        Self.attachRestore(to: connection, adapter: service.adapter)
+        Self.attachRestore(to: connection, adapter: service.adapter, fan: service.fan)
         connection.resume()
         return true
     }
 
-    /// The app went away (quit, crash, killed): put the adapter back now instead of waiting for the lease.
-    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard) {
-        connection.invalidationHandler = { adapter.restore(reason: "connection invalidated") }
-        connection.interruptionHandler = { adapter.restore(reason: "connection interrupted") }
+    /// The app went away (quit, crash, killed): put the adapter back and the fans to macOS now instead of waiting for the lease.
+    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard, fan: FanGuard? = nil) {
+        connection.invalidationHandler = { adapter.restore(reason: "connection invalidated"); fan?.restore(reason: "connection invalidated") }
+        connection.interruptionHandler = { adapter.restore(reason: "connection interrupted"); fan?.restore(reason: "connection interrupted") }
     }
 }

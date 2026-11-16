@@ -1,5 +1,6 @@
 // Apple Cart root helper (launchd daemon registered with SMAppService.daemon). It can only turn the
-// charger (SMC key CHIE) off on a lease or back on; every way out puts the charger back on.
+// charger (SMC key CHIE) off on a lease or back on, and put the fans in manual mode on a lease or back to macOS
+// (FanWhitelist keys only); every way out puts the charger back on and the fans back to macOS.
 import Foundation
 import HelperCore
 import HelperProtocol
@@ -12,17 +13,25 @@ let adapter = AdapterGuard(
     schedule: { seconds, fire in DispatchLeaseTimer(seconds: seconds, queue: queue, fire: fire) },
     log: { Logger(subsystem: HelperIdentity.helperBundleID, category: "helper").notice("\($0, privacy: .public)") })
 adapter.start()
+let fan = FanGuard(
+    connect: { try SMCConnection() },
+    schedule: { seconds, fire in DispatchLeaseTimer(seconds: seconds, queue: queue, fire: fire) },
+    log: { Logger(subsystem: HelperIdentity.helperBundleID, category: "fan").notice("\($0, privacy: .public)") })
+fan.start()
 
 // launchd stops us with SIGTERM (unregister, shutdown); Ctrl-C when run by hand. Restore, then exit.
 // A failed restore exits non-zero so KeepAlive (SuccessfulExit = false) starts us again to retry.
 let signalSources = [SIGTERM, SIGINT].map { sig in
     signal(sig, SIG_IGN)
     let src = DispatchSource.makeSignalSource(signal: sig, queue: queue)
-    src.setEventHandler { exit(adapter.restore(reason: "signal \(sig)") == .smcFailed ? 1 : 0) }
+    src.setEventHandler {
+        let charger = adapter.restore(reason: "signal \(sig)"), fans = fan.restore(reason: "signal \(sig)")
+        exit(charger == .smcFailed || fans == .smcFailed ? 1 : 0)
+    }
     src.resume()
     return src
 }
-let power = SystemPowerWatcher(adapter: adapter, queue: queue)
+let power = SystemPowerWatcher(adapter: adapter, fan: fan, queue: queue)
 if power == nil {
     Logger(subsystem: HelperIdentity.helperBundleID, category: "helper")
         .error("IORegisterForSystemPower failed: no restore before sleep; the wall-clock lease still ends any cut")
@@ -31,7 +40,7 @@ if power == nil {
 let gate = ClientGate(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String)
 let listener = NSXPCListener(machServiceName: HelperIdentity.machService)
 if let requirement = gate.requirement { listener.setConnectionCodeSigningRequirement(requirement) }
-let delegate = HelperListenerDelegate(gate: gate, service: HelperService(adapter: adapter))
+let delegate = HelperListenerDelegate(gate: gate, service: HelperService(adapter: adapter, fan: fan))
 listener.delegate = delegate
 listener.resume()
 withExtendedLifetime((signalSources, power, delegate)) { dispatchMain() }
