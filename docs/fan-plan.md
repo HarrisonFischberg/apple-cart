@@ -119,3 +119,14 @@ Repair. Fan calls are never sent to a version 2 helper.
    stop there (report notApplied/log lines). If anything looks wrong, quit Apple Cart (fans go back within the call) or
    wait 90 s for the lease, or Remove the helper.
 6. Optional: Apply again, then sleep the Mac; on wake the panel should show System and the log "fans to system (system will sleep)".
+
+## Live result with the helper v3 (2026-11-16, owner present, MacBook Pro M5, macOS 27)
+
+- Manual Min applied from the app: helper log `write F0md [1]: ok`, `write F0Tg [0,208,16,69]: ok`; the first target read-back after 150 ms
+  read 0.0, the single retry wrote it again and the next read-back was 2317.0; `fans manual at 2317 rpm, lease 90 s`. The panel showed about
+  2300 rpm and the owner confirmed the fan running.
+- The lease was renewed by the app about every 30 s (a second `setFan` at +32 s).
+- "Apply system control" returned the fans: `write F0md [0]: ok`, `fans to system (reset fan)`; F0Md 0, F0Tg 0, F0Ac 0 and the panel said
+  "Fan off".
+- Still unverified: higher targets under load, the 90 C release in practice, sleep with a manual mode held, two-fan Macs, other chips.
+
