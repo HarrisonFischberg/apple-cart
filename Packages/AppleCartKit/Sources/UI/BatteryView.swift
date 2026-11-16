@@ -272,8 +272,8 @@ private struct LimitHandle: View {
             let w = geo.size.width, h = geo.size.height
             let x = { (p: Int) in w * CGFloat(p) / 100 }
             if settings.limit < 100, settings.effectiveSailing {
-                // The lower edge of the sailing range: a dashed line through the bar, labelled when it will not touch the limit label.
-                Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h + 4)) }
+                // The lower edge of the sailing range: a dashed line inside the bar, labelled below when it will not touch the limit label.
+                Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h - 3)) }
                     .stroke(Color.primary.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .accessibilityHidden(true)
                 if settings.limit - settings.sailFloor >= 8 {
