@@ -53,10 +53,10 @@ public struct KeepAwakeView: View {
                         Text(remaining(end, ctx.date)).font(.system(size: 15, weight: .medium)).monospacedDigit()
                     }
                 } else {
-                    Text("Active until you turn it off").font(.system(size: 15, weight: .medium))
+                    Text("Keeping your Mac awake").font(.system(size: 15, weight: .medium))
                 }
             } else {
-                Text("Sleeps as usual").font(.system(size: 15, weight: .medium))
+                Text("Keep awake is off").font(.system(size: 15, weight: .medium))
                 if let why = keepAwake.lastStopReason { Text(why).font(.callout).foregroundStyle(Palette.secondary) }
             }
         }
