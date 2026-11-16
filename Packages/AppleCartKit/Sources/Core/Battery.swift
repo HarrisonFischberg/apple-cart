@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import IOKit.ps
 import Observation
 
 /// One reading of the battery, all values straight from the system.
@@ -118,6 +119,8 @@ public final class BatterySampler {
     public private(set) var energyUsers: [EnergyUser] = []
     @ObservationIgnored private var holders: Set<String> = []
     @ObservationIgnored private var timer: Task<Void, Never>?
+    @ObservationIgnored private var powerSource: CFRunLoopSource?
+    @ObservationIgnored private var settle: Task<Void, Never>?
     @ObservationIgnored private let interval: Duration
     @ObservationIgnored private let read: @Sendable () -> BatteryReading?
 
@@ -132,6 +135,7 @@ public final class BatterySampler {
         holders.insert(name)
         guard timer == nil else { return }
         sample()
+        watchPowerSource()
         timer = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: self?.interval ?? .seconds(5))
@@ -143,13 +147,45 @@ public final class BatterySampler {
 
     public func release(_ name: String) {
         holders.remove(name)
-        if holders.isEmpty { timer?.cancel(); timer = nil }
+        if holders.isEmpty {
+            timer?.cancel(); timer = nil
+            settle?.cancel(); settle = nil
+            if let src = powerSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes); powerSource = nil }
+        }
     }
 
-    private func sample() {
+    /// macOS tells us the moment the charger is plugged in or removed, so the icon follows at once
+    /// instead of waiting for the next timer tick.
+    private func watchPowerSource() {
+        guard powerSource == nil else { return }
+        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        guard let src = IOPSNotificationCreateRunLoopSource({ ctx in
+            guard let ctx else { return }
+            let me = Unmanaged<BatterySampler>.fromOpaque(ctx).takeUnretainedValue()
+            MainActor.assumeIsolated { me.powerChanged() }
+        }, ctx)?.takeRetainedValue() else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+        powerSource = src
+    }
+
+    /// Read now, then again as the charger's numbers settle (charging state and watts lag the plug by a second or two).
+    private func powerChanged() {
+        sample(withEnergyUsers: false)
+        settle?.cancel()
+        settle = Task { [weak self] in
+            for ms in [400, 800, 1500] {
+                try? await Task.sleep(for: .milliseconds(ms))
+                guard !Task.isCancelled else { return }
+                self?.sample(withEnergyUsers: false)
+            }
+        }
+    }
+
+    private func sample(withEnergyUsers: Bool = true) {
         guard let r = read() else { return }
         latest = r
         history.add(r)
+        guard withEnergyUsers else { return }
         Task.detached { [weak self] in
             let users = EnergyUsers.current()
             await MainActor.run { self?.energyUsers = users }
