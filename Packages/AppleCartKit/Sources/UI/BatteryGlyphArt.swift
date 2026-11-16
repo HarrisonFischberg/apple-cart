@@ -8,7 +8,7 @@ enum BadgeShape {
         let p = CGMutablePath()
         switch badge {
         case .none: break
-        case .plugPaused, .plugBolt: break
+        case .plugPaused, .plugBolt, .plugDrain: break
         case .plug: // big rounded head, small prongs, stubby tail
             p.addRect(CGRect(x: 2.8, y: 7.7, width: 1.3, height: 2.3))
             p.addRect(CGRect(x: 5.9, y: 7.7, width: 1.3, height: 2.3))
@@ -20,15 +20,19 @@ enum BadgeShape {
             p.closeSubpath()
         case .discharge: // a plain dash: running on the battery
             p.addRoundedRect(in: CGRect(x: 1.6, y: 4, width: 6.8, height: 2), cornerWidth: 1, cornerHeight: 1)
+        case .drain: // an arrow pointing down: the battery is being drawn on
+            p.addRect(CGRect(x: 4.1, y: 5.2, width: 1.8, height: 4.8))
+            p.addLines(between: [CGPoint(x: 1.2, y: 5.6), CGPoint(x: 8.8, y: 5.6), CGPoint(x: 5, y: 0.2)])
+            p.closeSubpath()
         case .paused:
             p.addRect(CGRect(x: 2, y: 1, width: 2.2, height: 8))
             p.addRect(CGRect(x: 5.8, y: 1, width: 2.2, height: 8))
         }
-        if badge == .plugPaused || badge == .plugBolt {
+        if badge == .plugPaused || badge == .plugBolt || badge == .plugDrain {
             // two glyphs side by side on a 20 x 10 grid: a plug, then pause bars or a bolt
             let s = min(rect.width / 2, rect.height) / 10
             let t = CGAffineTransform(translationX: rect.midX - 10 * s, y: rect.midY - 5 * s)
-            let rightKind: BatteryBadge = badge == .plugPaused ? .paused : .bolt
+            let rightKind: BatteryBadge = badge == .plugPaused ? .paused : badge == .plugDrain ? .drain : .bolt
             let left = path(.plug, in: CGRect(x: 0, y: 0, width: 10 * s, height: 10 * s)).copy(using: [t]) ?? CGMutablePath()
             let right = path(rightKind, in: CGRect(x: 10.4 * s, y: 0, width: 10 * s, height: 10 * s)).copy(using: [t]) ?? CGMutablePath()
             let all = CGMutablePath(); all.addPath(left); all.addPath(right)

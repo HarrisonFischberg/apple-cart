@@ -11,7 +11,7 @@ struct PowerFlowMap: View {
     var body: some View {
         let streams = PowerFlows.streams(reading)
         VStack(alignment: .leading, spacing: 8) {
-            PowerFlowArt(reading: reading, active: active)
+            PowerFlowArt(reading: reading, active: active, pausedAt: pausedAt)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(reading, streams: streams, rest: PowerFlows.rest(reading, streams: streams))
                     .replacingOccurrences(of: "the charger is too weak", with: pausedAt == nil ? "the charger is too weak" : "charging is paused"))

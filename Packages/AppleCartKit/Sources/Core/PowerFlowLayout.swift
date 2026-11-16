@@ -77,7 +77,7 @@ public struct FlowLayout: Equatable, Sendable {
     }
 
     /// Leaves: each reported or dashed Mac-side stream, then the remainder ("more") when it is at least 1 W.
-    public static func make(state: FlowState, flows: PowerFlows, streams: [PowerStream], rest: Double?, width w: CGFloat) -> FlowLayout {
+    public static func make(state: FlowState, flows: PowerFlows, streams: [PowerStream], rest: Double?, width w: CGFloat, held: Bool = false) -> FlowLayout {
         // Only streams macOS actually reports get a tile: no dash tiles. The Mac's own use is the middle tile and is
         // never split out into a "Rest of Mac" tile; only outside consumers (USB) are drawn beside it.
         let leaves: [(FlowNodeID, Double?)] = streams.compactMap { $0.watts == nil ? nil : (.stream($0.title), $0.watts) }
@@ -114,10 +114,10 @@ public struct FlowLayout: Equatable, Sendable {
                               end: left(below, below.midY), watts: flows.chargerToBattery))
         case .pluggedIdle, .noData:
             links.append(Link(id: FlowLinkID(.charger, .mac), kind: .supply, start: right(sourceSlot, sourceSlot.midY),
-                              end: left(hub, hub.midY), watts: state == .noData ? nil : flows.chargerToMac))
+                              end: left(hub, hub.midY), watts: state == .noData ? nil : held ? 0 : flows.chargerToMac))
         case .chargerTooWeak:
             links.append(Link(id: FlowLinkID(.charger, .mac), kind: .supply, start: right(sourceSlot, sourceSlot.midY),
-                              end: left(hub, hub.midY), watts: flows.chargerToMac))
+                              end: left(hub, hub.midY), watts: held ? 0 : flows.chargerToMac))
             links.append(Link(id: FlowLinkID(.battery, .mac), kind: .drain, start: CGPoint(x: below.midX, y: below.minY),
                               end: CGPoint(x: hub.midX, y: hub.maxY), watts: flows.batteryToMac, vertical: true))
         }

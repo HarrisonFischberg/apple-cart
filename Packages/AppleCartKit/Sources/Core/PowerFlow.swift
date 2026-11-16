@@ -1,10 +1,10 @@
 import Foundation
 
-public enum BatteryBadge: Equatable, Sendable { case none, plug, bolt, paused, discharge, plugPaused, plugBolt
+public enum BatteryBadge: Equatable, Sendable { case none, plug, bolt, paused, discharge, drain, plugPaused, plugBolt, plugDrain
     /// One-glyph form for the small styles and places that have room for only a single badge.
-    public var single: BatteryBadge { self == .plugPaused ? .paused : self == .plugBolt ? .bolt : self }
+    public var single: BatteryBadge { self == .plugPaused ? .paused : self == .plugBolt ? .bolt : self == .plugDrain ? .drain : self }
     /// True when the badge is two glyphs side by side and needs a wide box.
-    public var isWide: Bool { self == .plugPaused || self == .plugBolt }
+    public var isWide: Bool { self == .plugPaused || self == .plugBolt || self == .plugDrain }
 }
 
 /// What the menu bar battery glyph shows: fill level plus one badge inside the outline.
@@ -20,7 +20,9 @@ extension MenuBarReadout {
     /// No reading gives an empty outline: nothing is invented.
     public static func glyph(for r: BatteryReading?, chargeHeld: Bool = false) -> BatteryGlyph {
         guard let r else { return BatteryGlyph(level: 0, badge: .none) }
-        let badge: BatteryBadge = !r.isPluggedIn ? .discharge : (chargeHeld || !r.isCharging) ? .plugPaused : .plugBolt
+        // Plugged in but the Mac is running from the battery (a held or paused charge): an arrow down, not a pause.
+        let draining = r.isPluggedIn && !r.isCharging && r.batteryWatts < -0.5
+        let badge: BatteryBadge = !r.isPluggedIn ? .discharge : (chargeHeld || !r.isCharging) ? (draining ? .plugDrain : .plugPaused) : .plugBolt
         return BatteryGlyph(level: Double(min(max(r.percent, 0), 100)) / 100, badge: badge)
     }
 }

@@ -6,6 +6,8 @@ import SwiftUI
 struct PowerFlowArt: View {
     let reading: BatteryReading?
     let active: Bool
+    /// The charge limit is holding the charger off at this percent.
+    var pausedAt: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var from: FlowLayout?
@@ -19,7 +21,7 @@ struct PowerFlowArt: View {
     private var leafCount: Int { streams.count }
 
     private func layout(_ w: CGFloat) -> FlowLayout {
-        FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w)
+        FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w, held: pausedAt != nil)
     }
 
     private var tick: Animation? { reduceMotion ? nil : .smooth(duration: FlowMotion.transition) }
@@ -159,6 +161,7 @@ struct PowerFlowArt: View {
             guard let r, r.isPluggedIn else {
                 return TileContent(symbol: "powerplug", value: "—", caption: r == nil ? "No data" : "Unplugged", tint: Palette.secondary)
             }
+            if let n = pausedAt { return TileContent(symbol: "powerplug", value: PowerFlow.watts(0), caption: "Held at \(n)%", tint: Palette.secondary) }
             let rating = r.adapterWatts.map { "of \($0) W" } ?? "Charger"
             guard let m = flows.chargerToMac else {
                 return TileContent(symbol: "powerplug.fill", value: r.adapterWatts.map { "\($0) W" } ?? "—", caption: "Charger rating", tint: Palette.amber)

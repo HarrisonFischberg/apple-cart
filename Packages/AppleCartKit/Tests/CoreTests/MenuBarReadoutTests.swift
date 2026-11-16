@@ -73,6 +73,10 @@ private func full(percent: Int = 80, amps: Int64 = 0, plugged: Bool = true, char
         #expect(MenuBarReadout.glyph(for: full(charging: true)).badge == .plugBolt)
         #expect(MenuBarReadout.glyph(for: full(charging: true), chargeHeld: true).badge == .plugPaused)
         #expect(MenuBarReadout.glyph(for: full(plugged: false), chargeHeld: true).badge == .discharge)
+        // plugged in but running from the battery (a held charge): the drain arrow, not the pause bars
+        #expect(MenuBarReadout.glyph(for: full(amps: -1500), chargeHeld: true).badge == .plugDrain)
+        #expect(MenuBarReadout.glyph(for: full(amps: -1500)).badge == .plugDrain)
+        #expect(BatteryBadge.plugDrain.single == .drain && BatteryBadge.plugDrain.isWide)
     }
 
     @Test func levelAndNoDataAreHonest() {
