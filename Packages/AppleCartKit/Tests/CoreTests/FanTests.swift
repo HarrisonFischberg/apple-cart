@@ -158,11 +158,18 @@ final class FakeFanController: FanController, @unchecked Sendable {
     var resetResult: ChargeApplyResult = .applied
     /// What a fan that obeys would be turning at now (0 after a reset).
     var commandedRPM = 0.0
+    /// Runs inside setFan, to simulate a status poll racing the set.
+    var duringSet: (@MainActor () async -> Void)?
     var calls: [Call] { lock.lock(); defer { lock.unlock() }; return _calls }
     func clear() { lock.lock(); _calls = []; lock.unlock() }
     private func record(_ c: Call) { lock.lock(); _calls.append(c); lock.unlock() }
     func status() async -> FanHelperReport { report }
-    func setFan(rpm: Int) async -> ChargeApplyResult { record(.set(rpm)); if result == .applied { commandedRPM = Double(rpm) }; return result }
+    func setFan(rpm: Int) async -> ChargeApplyResult {
+        record(.set(rpm))
+        if let duringSet { await duringSet() }
+        if result == .applied { commandedRPM = Double(rpm) }
+        return result
+    }
     func resetFan() async -> ChargeApplyResult { record(.reset); commandedRPM = 0; return resetResult }
 }
 
@@ -251,7 +258,7 @@ private final class FanRig {
         await rig.holding()
         rig.controller.result = .failed("x")
         await rig.feed(after: 30)
-        #expect(rig.controller.calls == [.set(4450), .reset])
+        #expect(rig.controller.calls == [.set(4450), .reset], "\(rig.controller.calls)")
         #expect(rig.runner.state.commandFailed && rig.runner.state.holdingRPM == nil)
         #expect(rig.runner.state.subtitle == "System")
     }
@@ -387,6 +394,62 @@ private final class FanRig {
         await rig.runner.applyChanged() // the owner takes over on purpose
         #expect(rig.controller.calls == [.set(4450)])
         #expect(!rig.runner.state.otherAppControls)
+    }
+
+    @Test func ourOwnApplyIsNeverTakenForAnotherApp() async {
+        let rig = FanRig()
+        await rig.runner.setToolEnabled(true)
+        rig.controller.clear()
+        // Our set's reply is lost (it may still have landed) and the reset after it succeeds, so nothing of ours is
+        // "live" any more; a status poll racing that set still sees manual mode.
+        rig.controller.report = FanHelperReport(.ready, manual: true, targetRPM: 4450)
+        rig.controller.result = .failed("timeout")
+        rig.controller.duringSet = { [runner = rig.runner] in await runner.refreshHelperStatus() }
+        rig.settings.applyManual(percent: 50)
+        await rig.feed()
+        rig.controller.duringSet = nil
+        #expect(rig.controller.calls == [.set(4450), .reset])
+        rig.settings.setActive(.system) // the owner gives up; only the helper's stale "manual" is left
+        rig.clock += 5
+        await rig.runner.refreshHelperStatus()
+        rig.clock += 10
+        await rig.runner.refreshHelperStatus()
+        #expect(!rig.runner.state.otherAppControls) // within 20 s of our own apply: ours, not another app's
+        rig.controller.clear()
+        await rig.feed()
+        #expect(rig.controller.calls.isEmpty) // and no "hand back" reset fired at it either
+        rig.clock += 10
+        await rig.runner.refreshHelperStatus() // 25 s later it is someone else's: handed back once
+        rig.controller.clear()
+        await rig.feed()
+        #expect(rig.controller.calls == [.reset])
+        rig.clock += 31
+        await rig.runner.refreshHelperStatus()
+        #expect(rig.runner.state.otherAppControls)
+    }
+
+    @Test func systemNeedsApplyLikeTheOtherModes() async {
+        let rig = FanRig()
+        await rig.runner.setToolEnabled(true)
+        rig.settings.applyManual(percent: FanPreset.max.percent)
+        await rig.runner.applyChanged()
+        await rig.feed()
+        #expect(rig.runner.state.holdingRPM == 6550 && rig.runner.state.subtitle == "Manual 100%")
+        rig.controller.clear()
+        // Selecting the System segment is view state only (FanSpeedView.choose touches neither settings nor the runner):
+        // the next passes keep Max and send nothing new.
+        await rig.feed(after: 5); await rig.feed(after: 5)
+        #expect(rig.controller.calls.isEmpty && rig.settings.active == .manual)
+        #expect(rig.runner.state.subtitle == "Manual 100%") // confirmed state, not the selected segment
+        await rig.runner.applySystem() // "Apply system control"
+        #expect(rig.controller.calls == [.reset])
+        #expect(rig.settings.active == .system && rig.runner.state.holdingRPM == nil && rig.runner.state.subtitle == "System")
+        rig.controller.clear()
+        await rig.feed(after: 5)
+        #expect(rig.controller.calls.isEmpty)
+        // Applying System with nothing of ours held still sends the reset (the owner asked for it).
+        await rig.runner.applySystem()
+        #expect(rig.controller.calls == [.reset])
     }
 
     @Test func fanTextShowsFanOff() {

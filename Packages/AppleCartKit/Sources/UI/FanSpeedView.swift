@@ -36,10 +36,10 @@ public struct FanSpeedView: View {
                     Text(state.statusText).font(.system(size: 13)).foregroundStyle(Palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityLabel("Status: \(state.statusText)")
-                    ModePicker(selection: tab, choose: choose)
+                    ModePicker(selection: tab, pending: tab != settings.active, choose: choose)
                         .disabled(!ready)
                     switch tab {
-                    case .system: EmptyView()
+                    case .system: systemEditor
                     case .manual: manualEditor
                     case .curve: curveEditor
                     }
@@ -100,11 +100,25 @@ public struct FanSpeedView: View {
         }
     }
 
+    /// Picking a segment only changes what the card shows; nothing is sent until Apply, for System too.
     private func choose(_ m: FanControlMode) {
         withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { tab = m }
-        guard m == .system, settings.active != .system else { return }
-        settings.setActive(.system)
-        Task { await runner.applyChanged() }
+    }
+
+    private func applySystem() {
+        tab = .system
+        Task { await runner.applySystem() }
+    }
+
+    // MARK: System
+
+    private var systemEditor: some View {
+        let applied = settings.active == .system && state.holdingRPM == nil
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("macOS decides the fan speed, including keeping the fan off when the Mac is cool.")
+                .font(.system(size: 14)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            applyButton(applied ? "Applied" : "Apply system control", applied: applied, returnLink: false) { applySystem() }
+        }
     }
 
     // MARK: Manual
@@ -267,7 +281,7 @@ public struct FanSpeedView: View {
         .frame(minHeight: 44)
     }
 
-    private func applyButton(_ title: String, applied: Bool, action: @escaping () -> Void) -> some View {
+    private func applyButton(_ title: String, applied: Bool, returnLink: Bool = true, action: @escaping () -> Void) -> some View {
         VStack(spacing: 6) {
             Button(action: action) {
                 Text(title).font(.system(size: 16, weight: .medium)).frame(maxWidth: .infinity, minHeight: 44)
@@ -278,8 +292,8 @@ public struct FanSpeedView: View {
             .buttonStyle(.plain)
             .disabled(applied || !ready)
             .opacity(!ready ? 0.5 : 1)
-            if applied {
-                Button("Return to System") { choose(.system) }
+            if applied && returnLink {
+                Button("Return to System") { applySystem() }
                     .buttonStyle(.plain).foregroundStyle(Palette.accent).frame(minHeight: 44)
             }
         }
@@ -291,13 +305,32 @@ public struct FanSpeedView: View {
     }
 }
 
-/// System | Manual | Curve, the selected segment a lighter raised pill.
+/// System | Manual | Curve, the selected segment a lighter raised pill. `pending`: the selected segment is not the mode
+/// that is applied, so it carries a small "Not applied yet" note.
 private struct ModePicker: View {
     let selection: FanControlMode
+    var pending = false
     let choose: (FanControlMode) -> Void
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
+        VStack(spacing: 4) {
+            segments
+            if pending {
+                HStack(spacing: 0) {
+                    ForEach(FanControlMode.allCases, id: \.self) { m in
+                        Text(m == selection ? "Not applied yet" : " ").font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.amberText).frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(selection.title) is not applied yet")
+            }
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(FanControlMode.allCases, id: \.self) { m in
                 Button { choose(m) } label: {
@@ -314,7 +347,7 @@ private struct ModePicker: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selection == m ? .isSelected : [])
-                .accessibilityHint(m == .system ? "Gives the fans back to macOS now" : "Opens the \(m.title.lowercased()) settings. Nothing changes until you apply.")
+                .accessibilityHint("Shows the \(m.title.lowercased()) settings. Nothing changes until you apply.")
             }
         }
         .padding(.horizontal, 4)

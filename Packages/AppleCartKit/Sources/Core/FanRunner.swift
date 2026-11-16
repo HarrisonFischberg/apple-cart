@@ -105,6 +105,9 @@ public final class FanRunner {
     /// After a manual speed starts, every fan must be within `responseTolerance` of the target by then.
     public static let responseWindow: TimeInterval = 15
     public static let responseTolerance = 0.2
+    /// A manual mode seen this soon after our own apply (or while it is in flight) is taken as ours, never another app's:
+    /// a status poll can race the set.
+    public static let ownApplyGrace: TimeInterval = 20
 
     public private(set) var state = FanState()
     public let settings: FanSettings
@@ -121,6 +124,8 @@ public final class FanRunner {
     @ObservationIgnored private var verifySince: Date?
     /// We handed a manual mode we did not set back to macOS once already this session.
     @ObservationIgnored private var handedBackForeign = false
+    @ObservationIgnored private var applyInFlight = false
+    @ObservationIgnored private var ownApplyAt: Date?
     @ObservationIgnored private var busy = false
     @ObservationIgnored private var again = false
 
@@ -171,6 +176,25 @@ public final class FanRunner {
         await evaluate(lastSample)
     }
 
+    /// "Apply system control" (or Return to System): the owner hands the fans back on purpose. Always sends resetFan, even
+    /// when nothing of ours is held, so a manual mode left by anyone goes back to macOS too.
+    public func applySystem() async {
+        settings.setActive(.system)
+        state.fanNotResponding = false; state.otherAppControls = false; handedBackForeign = false; verifySince = nil
+        var fresh = FanPolicyState()
+        fresh.releasedUntil = policy.releasedUntil
+        fresh.heatLatched = policy.heatLatched
+        policy = fresh
+        let result = await controller.resetFan()
+        if result == .applied {
+            sentRPM = nil; sentAt = nil; maybeManualUntil = nil
+            state.holdingRPM = nil; state.holdingPercent = nil; state.holdingMode = .system; state.commandFailed = false
+        } else if result != .unavailable {
+            state.commandFailed = true // the next pass sends the reset again while manual may be live
+        }
+        await evaluate(lastSample)
+    }
+
     public func refreshHelperStatus() async {
         statusCheckedAt = now()
         let report = await controller.status()
@@ -178,7 +202,8 @@ public final class FanRunner {
         guard report.status == .ready else { return }
         if report.manual == false, sentRPM != nil {
             sentRPM = nil; sentAt = nil; state.holdingRPM = nil // lease, sleep or restart undid it; the next pass decides again
-        } else if report.manual == true, sentRPM == nil, !manualMayBeLive {
+        } else if report.manual == true, sentRPM == nil, !manualMayBeLive, !applyInFlight,
+                  ownApplyAt.map({ now().timeIntervalSince($0) >= Self.ownApplyGrace }) ?? true {
             // Manual mode we did not set. Hand it back once; if it comes back, another app wants it: leave it alone.
             if handedBackForeign { state.otherAppControls = true } else {
                 handedBackForeign = true
@@ -245,7 +270,11 @@ public final class FanRunner {
             return
         }
         maybeManualUntil = now().addingTimeInterval(Self.leaseSeconds)
+        applyInFlight = true
+        ownApplyAt = now()
         let result = await controller.setFan(rpm: rpm)
+        applyInFlight = false
+        ownApplyAt = now()
         guard toolEnabled else { if await controller.resetFan() == .applied { maybeManualUntil = nil }; return }
         switch result {
         case .applied:

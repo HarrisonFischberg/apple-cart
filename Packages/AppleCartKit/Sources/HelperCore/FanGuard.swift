@@ -38,6 +38,8 @@ public final class FanGuard: @unchecked Sendable {
     private let now: @Sendable () -> Date
     private let monotonic: @Sendable () -> Double
     private let log: @Sendable (String) -> Void
+    /// A short pause between the writes and their read-back (the SMC applies a mode change asynchronously).
+    private let settle: @Sendable () -> Void
     private let lock = NSLock()
     private var smc: FanSMC?
     private var layout: Layout?
@@ -52,9 +54,13 @@ public final class FanGuard: @unchecked Sendable {
     /// True after a manual write was attempted (or a mode key read non-zero) until a restore succeeds.
     private var mayBeManual = false
 
+    public static let settleSeconds = 0.15
+
     public init(connect: @escaping @Sendable () throws -> FanSMC, schedule: @escaping LeaseScheduler,
                 now: @escaping @Sendable () -> Date = Date.init, monotonic: @escaping @Sendable () -> Double = monotonicSeconds,
-                log: @escaping @Sendable (String) -> Void = { _ in }) {
+                log: @escaping @Sendable (String) -> Void = { _ in },
+                settle: @escaping @Sendable () -> Void = { Thread.sleep(forTimeInterval: FanGuard.settleSeconds) }) {
+        self.settle = settle
         self.connect = connect
         self.schedule = schedule
         self.now = now
@@ -63,8 +69,9 @@ public final class FanGuard: @unchecked Sendable {
     }
 
     public convenience init(smc: FanSMC, schedule: @escaping LeaseScheduler, now: @escaping @Sendable () -> Date = Date.init,
-                            monotonic: @escaping @Sendable () -> Double = monotonicSeconds, log: @escaping @Sendable (String) -> Void = { _ in }) {
-        self.init(connect: { smc }, schedule: schedule, now: now, monotonic: monotonic, log: log)
+                            monotonic: @escaping @Sendable () -> Double = monotonicSeconds, log: @escaping @Sendable (String) -> Void = { _ in },
+                            settle: @escaping @Sendable () -> Void = { Thread.sleep(forTimeInterval: FanGuard.settleSeconds) }) {
+        self.init(connect: { smc }, schedule: schedule, now: now, monotonic: monotonic, log: log, settle: settle)
     }
 
     /// Helper start: if a previous run left a fan in manual mode, hand it back to macOS.
@@ -92,7 +99,9 @@ public final class FanGuard: @unchecked Sendable {
         mayBeManual = true
         do {
             if let unlock = layout.unlockKey { try write(unlock, [FanWhitelist.manualMode]) }
-            // Target first, so the fan never sits in manual mode at a stale target; then the mode; then verify both.
+            // Mode first, then the target. Verified on Mac17,2 / macOS 27: a target written while the mode is 0 is accepted
+            // and then cleared to 0 when the mode switches to 1; mode 1 then target 2317 spun the fan from 0 to 2318 rpm.
+            for fan in layout.fans { try write(fan.modeKey, [FanWhitelist.manualMode]) }
             var targets: [Int: Double] = [:]
             for fan in layout.fans {
                 let clamped = Double(FanLimits.clampedMinimum(requested: rpm, systemMinimum: Int(fan.minimumRPM.rounded(.up)),
@@ -100,11 +109,18 @@ public final class FanGuard: @unchecked Sendable {
                 try write(FanWhitelist.targetKey(fan.index), FanBytes.bytes(clamped))
                 targets[fan.index] = clamped
             }
-            for fan in layout.fans { try write(fan.modeKey, [FanWhitelist.manualMode]) }
+            settle()
             for fan in layout.fans {
-                let mode = try read(fan.modeKey)
                 let wanted = targets[fan.index] ?? 0
-                let back = FanBytes.float(try read(FanWhitelist.targetKey(fan.index)))
+                var back = FanBytes.float(try read(FanWhitelist.targetKey(fan.index)))
+                if back.map({ !Self.targetMatches($0, wanted) }) ?? true {
+                    // One more try: the SMC may still have been switching modes when the first target landed.
+                    log("fan \(fan.index) target reads back \(back.map { "\($0)" } ?? "?"); writing it once more")
+                    try write(FanWhitelist.targetKey(fan.index), FanBytes.bytes(wanted))
+                    settle()
+                    back = FanBytes.float(try read(FanWhitelist.targetKey(fan.index)))
+                }
+                let mode = try read(fan.modeKey)
                 log("fan \(fan.index) reads back mode \(mode), target \(back.map { "\($0)" } ?? "?") (wrote \(Int(wanted)))")
                 guard mode == [FanWhitelist.manualMode], let back, Self.targetMatches(back, wanted) else { throw FanWriteError.notApplied }
             }

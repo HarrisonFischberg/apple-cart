@@ -17,6 +17,10 @@ final class FakeFanSMC: FanSMC, @unchecked Sendable {
     var failWriteKey: String?
     /// The target key reads back this rpm whatever was written.
     var targetReadsBack: Double?
+    /// Seen on Mac17,2 / macOS 27: switching a fan's mode from 0 to 1 clears its target to 0.
+    var modeSwitchClearsTarget = true
+    /// The next target writes are taken but read back 0 (dropped while the mode settles).
+    var dropTargetWrites = 0
 
     init(fans: Int = 1, unlock: Bool = false) {
         keys = ["FNum": (.uint8, [UInt8(fans)])]
@@ -58,20 +62,25 @@ final class FakeFanSMC: FanSMC, @unchecked Sendable {
         let shown = k.type == .float ? "\(Int(FanBytes.float(bytes) ?? -1))" : "\(bytes[0])"
         writes.append("\(key)=\(shown)")
         if ignoreModeWrites && key.hasSuffix("md") { return }
+        if key.hasSuffix("Tg"), dropTargetWrites > 0 { dropTargetWrites -= 1; keys[key] = (k.type, FanBytes.bytes(0)); return }
+        if modeSwitchClearsTarget, key.hasSuffix("md"), k.bytes == [0], bytes == [1] {
+            let tg = "F\(key.dropFirst().prefix(1))Tg"
+            if let t = keys[tg] { keys[tg] = (t.type, FanBytes.bytes(0)) }
+        }
         keys[key] = (k.type, bytes)
     }
 }
 
 private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFanSMC, FakeTimers, Clock) {
     let timers = FakeTimers(), clock = Clock()
-    return (FanGuard(smc: smc, schedule: timers.scheduler, now: { clock.now }, monotonic: { clock.mono }), smc, timers, clock)
+    return (FanGuard(smc: smc, schedule: timers.scheduler, now: { clock.now }, monotonic: { clock.mono }, settle: {}), smc, timers, clock)
 }
 
 @Suite struct FanGuardTests {
     @Test func manualWritesModeThenClampedTargetUnderALease() {
         let (g, smc, timers, _) = makeFanGuard()
         #expect(g.setFan(rpm: 3500, leaseSeconds: 90) == .ok)
-        #expect(smc.writes == ["F0Tg=3500", "F0md=1"]) // target first, never manual at a stale target
+        #expect(smc.writes == ["F0md=1", "F0Tg=3500"]) // mode first: a target written at mode 0 is cleared by the switch
         #expect(timers.live.count == 1 && timers.live[0].seconds == 90)
         let s = g.status()
         #expect(s.manual && s.targetRPM == 3500 && s.minimumRPM == 2317 && s.maximumRPM == 6550 && s.count == 1)
@@ -80,7 +89,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func rpmIsClampedIntoTheFansOwnRange() {
         let (g, smc, _, _) = makeFanGuard()
         _ = g.setFan(rpm: 1000, leaseSeconds: 90)
-        #expect(smc.writes.first == "F0Tg=2317") // never below the minimum running speed
+        #expect(smc.writes.last(where: { $0.hasPrefix("F0Tg") }) == "F0Tg=2317") // never below the minimum running speed
         _ = g.setFan(rpm: 99_999, leaseSeconds: 90)
         #expect(smc.writes.last(where: { $0.hasPrefix("F0Tg") }) == "F0Tg=6550") // never above the maximum
     }
@@ -193,16 +202,52 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
         #expect(FanGuard.targetMatches(5000, 5049) && !FanGuard.targetMatches(5000, 5060) && !FanGuard.targetMatches(.nan, 3000))
     }
 
+    @Test func targetWrittenBeforeTheModeWouldBeLostSoTheModeGoesFirst() {
+        // The fake clears the target on the 0 -> 1 mode switch, as the Mac did: mode-first must still verify.
+        let (g, smc, _, _) = makeFanGuard()
+        #expect(g.setFan(rpm: 2317, leaseSeconds: 30) == .ok)
+        #expect(FanBytes.float(smc.value("F0Tg") ?? []) == 2317 && smc.value("F0md") == [1])
+        // Renewing while already manual writes the target again and keeps it.
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 30) == .ok)
+        #expect(FanBytes.float(smc.value("F0Tg") ?? []) == 3000)
+    }
+
+    @Test func aDroppedTargetIsWrittenOnceMoreThenGivenUp() {
+        let (g, smc, _, _) = makeFanGuard()
+        smc.dropTargetWrites = 1
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .ok)
+        #expect(smc.writes == ["F0md=1", "F0Tg=3000", "F0Tg=3000"])
+        let (g2, smc2, _, _) = makeFanGuard()
+        smc2.dropTargetWrites = 2
+        #expect(g2.setFan(rpm: 3000, leaseSeconds: 90) == .notApplied)
+        #expect(smc2.writes == ["F0md=1", "F0Tg=3000", "F0Tg=3000", "F0md=0"])
+        #expect(smc2.value("F0md") == [0])
+    }
+
+    @Test func settlesBeforeReadingBack() {
+        let smc = FakeFanSMC(), timers = FakeTimers()
+        nonisolated(unsafe) var settles = 0
+        let g = FanGuard(smc: smc, schedule: timers.scheduler, settle: { settles += 1 })
+        #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .ok)
+        #expect(settles == 1)
+        #expect(FanGuard.settleSeconds == 0.15)
+    }
+
     @Test func halfSuccessIsRestored() {
-        // The target lands and the mode write throws.
+        // The mode lands and the target write throws (the case the review found missing).
+        let (g1, smc1, timers1, _) = makeFanGuard()
+        smc1.failWriteKey = "F0Tg"
+        #expect(g1.setFan(rpm: 3000, leaseSeconds: 90) == .smcFailed)
+        #expect(smc1.writes == ["F0md=1", "F0md=0"] && smc1.value("F0md") == [0])
+        #expect(timers1.live.isEmpty)
+        // Fan 0 switches to manual and fan 1's mode write throws.
         let (g, smc, _, _) = makeFanGuard(FakeFanSMC(fans: 2))
         smc.failWriteKey = "F1md"
         #expect(g.setFan(rpm: 3000, leaseSeconds: 90) == .smcFailed)
         #expect(smc.value("F0md") == [0]) // F0 had switched to manual: back to macOS
         #expect(smc.writes.contains("F0md=1") && smc.writes.last(where: { $0.hasPrefix("F0md") }) == "F0md=0")
-        // The mode lands and a later target write throws (second fan's target).
+        // Both modes land and the second fan's target write throws.
         let (g2, smc2, timers2, _) = makeFanGuard(FakeFanSMC(fans: 2))
-        smc2.keys["F0md"] = (.uint8, [0])
         smc2.failWriteKey = "F1Tg"
         #expect(g2.setFan(rpm: 3000, leaseSeconds: 90) == .smcFailed)
         #expect(smc2.value("F0md") == [0] && smc2.value("F1md") == [0])
@@ -242,7 +287,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func everyFanIsDrivenAndRestored() {
         let (g, smc, _, _) = makeFanGuard(FakeFanSMC(fans: 2))
         _ = g.setFan(rpm: 3000, leaseSeconds: 90)
-        #expect(smc.writes == ["F0Tg=3000", "F1Tg=3000", "F0md=1", "F1md=1"])
+        #expect(smc.writes == ["F0md=1", "F1md=1", "F0Tg=3000", "F1Tg=3000"])
         _ = g.restore(reason: "test")
         #expect(smc.writes.suffix(2) == ["F0md=0", "F1md=0"])
     }
@@ -250,7 +295,7 @@ private func makeFanGuard(_ smc: FakeFanSMC = FakeFanSMC()) -> (FanGuard, FakeFa
     @Test func unlockKeyIsUsedOnlyWhenPresent() {
         let (g, smc, _, _) = makeFanGuard(FakeFanSMC(unlock: true))
         _ = g.setFan(rpm: 3000, leaseSeconds: 90)
-        #expect(smc.writes == ["Ftst=1", "F0Tg=3000", "F0md=1"])
+        #expect(smc.writes == ["Ftst=1", "F0md=1", "F0Tg=3000"])
         _ = g.restore(reason: "test")
         #expect(smc.writes.suffix(2) == ["F0md=0", "Ftst=0"])
     }
