@@ -155,7 +155,7 @@ public struct BatteryView: View {
                 Capsule().fill(LinearGradient(colors: [tint, low ? Color.red : Palette.flowLight], startPoint: .leading, endPoint: .trailing))
                     .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.38), .clear], startPoint: .top, endPoint: .center))
                         .padding(.horizontal, 5).padding(.top, 2))
-                    .shadow(color: tint.opacity(0.45), radius: 6)
+                    .shadow(color: tint.opacity(0.4), radius: 5, x: -2, y: 3) // glow leans back and down so the end of the fill is exactly the level
                     .frame(width: max(geo.size.height, geo.size.width * g.level))
                     .opacity(g.level > 0 ? 1 : 0)
             }
@@ -272,9 +272,15 @@ private struct LimitHandle: View {
             let w = geo.size.width, h = geo.size.height
             let x = { (p: Int) in w * CGFloat(p) / 100 }
             if settings.limit < 100, settings.effectiveSailing {
-                Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h - 3)) }
-                    .stroke(Color.primary.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                // The lower edge of the sailing range: a dashed line through the bar, labelled when it will not touch the limit label.
+                Path { p in p.move(to: CGPoint(x: x(settings.sailFloor), y: 3)); p.addLine(to: CGPoint(x: x(settings.sailFloor), y: h + 4)) }
+                    .stroke(Color.primary.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .accessibilityHidden(true)
+                if settings.limit - settings.sailFloor >= 8 {
+                    Text("\(settings.sailFloor)%").font(.system(size: 11, weight: .medium)).monospacedDigit().foregroundStyle(Palette.secondary)
+                        .fixedSize().position(x: min(max(x(settings.sailFloor), 14), w - 14), y: h + 13)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
             }
             let markerX = min(max(x(settings.limit), 2), w - 2)
             Path { p in // a small notch over the marker
