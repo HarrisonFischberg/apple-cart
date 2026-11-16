@@ -570,6 +570,15 @@ private final class Rig {
         #expect(rig.controller.calls.last == .allow)
     }
 
+    @Test func theEmergencyFloorIsNotHeldByTheMinuteHold() async {
+        let rig = Rig(limit: 0) // the owner's 0-100% slider allows it
+        await rig.on()
+        await rig.feed(reading(6))
+        #expect(rig.controller.calls == [.hold(0)])
+        await rig.feed(reading(5), after: 10) // at the floor inside the first minute: charge now
+        #expect(rig.controller.calls.last == .allow)
+    }
+
     @Test func heatAtTheLimitKeepsTheLimitWordingAndWantsReadingsAtOneHundred() async {
         let rig = Rig()
         rig.settings.setHeatProtection(true)

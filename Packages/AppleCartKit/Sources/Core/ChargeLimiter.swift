@@ -200,7 +200,8 @@ public final class ChargeLimiter {
         // A cut that has only just begun is not released for a one-point wobble of the reading (the battery's own figure
         // jitters by a point or two): holding for a minute first keeps it from switching on and off every few seconds.
         if decision == .allowCharging, lastCut != nil, let started = cutStartedAt, now().timeIntervalSince(started) < Self.minHold,
-           let seen, seen.isPluggedIn, seen.limitLevel > settings.effectiveLimit - 3, settings.effectiveLimit < 100 {
+           let seen, seen.isPluggedIn, seen.limitLevel > settings.effectiveLimit - 3, settings.effectiveLimit < 100,
+           seen.limitLevel > ChargePolicy.emergencyFloor { // the floor's "charge now" always wins
             decision = .holdCharging(at: settings.effectiveLimit)
         }
         let freshReading = r.map { abs(now().timeIntervalSince($0.date)) <= Self.freshReading } ?? false
