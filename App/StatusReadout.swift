@@ -16,7 +16,9 @@ final class StatusReadout {
     private let glyphStyle: GlyphStyleSettings
     private var holding = false
     /// Space left on each side of the item's content.
-    private static let sideMargin: CGFloat = 3
+    private static let sideMargin: CGFloat = 2
+    /// What the system adds to an item's length for its window (8 pt on each side).
+    private static let systemPadding: CGFloat = 16
 
     init(item: NSStatusItem? = nil, button: NSStatusBarButton?, sampler: BatterySampler, registry: FeatureRegistry, settings: ReadoutSettings, glyphStyle: GlyphStyleSettings) {
         self.item = item
@@ -64,8 +66,12 @@ final class StatusReadout {
         if !parts.isEmpty && button?.image != nil { title.append(gap) }
         button?.attributedTitle = title
         button?.imagePosition = parts.isEmpty ? .imageOnly : button?.image == nil ? .noImage : .imageTrailing
-        // Fit the item to its content with a small margin; the system's default margin around it is wider than needed.
-        let width = title.size().width + (button?.image?.size.width ?? 0)
-        item?.length = ceil(width) + Self.sideMargin * 2 + (button?.image != nil && !parts.isEmpty ? 4 : 0)
+        // The system draws every item in a window 16 pt wider than its length, plus the button's own padding, so the default
+        // leaves about 8 pt of air on each side. Measured here: variable length gave a 78 pt window for 62 pt of content.
+        // Shrink the length so only `sideMargin` is left on each side. Never below the content, so nothing clips.
+        if let button, let item {
+            let fitting = ceil(button.fittingSize.width)
+            item.length = max(fitting + Self.sideMargin * 2 - Self.systemPadding, 8)
+        }
     }
 }

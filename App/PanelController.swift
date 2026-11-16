@@ -66,7 +66,6 @@ final class PanelController {
         let win = window ?? makeWindow()
         window = win
         position(win)
-        panel.expanded = win.frame.width > PanelView.size.width + 40
         if launcher.allTiles.contains(.battery) { panel.open(.battery) } // Battery is the opening screen every time
         win.makeKeyAndOrderFront(nil)
         panel.isOpen = true
@@ -89,18 +88,27 @@ final class PanelController {
         return CGSize(width: min(max(w, PanelView.size.width), visible.width - 16), height: min(max(h, PanelView.size.height), visible.height - 16))
     }
 
-    /// Normal size and large size, keeping the top edge where it is.
-    private func toggleSize() {
+    private var dragStart: (frame: NSRect, mouse: NSPoint)?
+
+    /// The corner grip: the top-left corner stays put, the bottom-right follows the pointer. Never below the normal size.
+    private func resizeDragged() {
         guard let win = window else { return }
+        if dragStart == nil { dragStart = (win.frame, NSEvent.mouseLocation); LiveResize.shared.active = true }
+        guard let start = dragStart else { return }
         let visible = (win.screen ?? NSScreen.main)?.visibleFrame ?? .zero
-        let target = panel.expanded ? PanelView.size
-            : CGSize(width: min(PanelView.expandedSize.width, visible.width - 16), height: min(PanelView.expandedSize.height, visible.height - 16))
-        var frame = win.frame
-        frame.origin.y = frame.maxY - target.height
-        frame.size = target
-        frame.origin.x = min(max(frame.origin.x - (target.width - win.frame.width) / 2, visible.minX + 8), visible.maxX - target.width - 8)
-        frame.origin.y = max(frame.origin.y, visible.minY + 8)
-        win.setFrame(frame, display: true, animate: false) // an animated resize relays the whole panel every frame
+        let m = NSEvent.mouseLocation
+        let w = min(max(start.frame.width + (m.x - start.mouse.x), PanelView.size.width), visible.maxX - start.frame.minX - 8)
+        let h = min(max(start.frame.height + (start.mouse.y - m.y), PanelView.size.height), start.frame.maxY - visible.minY - 8)
+        win.setFrame(NSRect(x: start.frame.minX, y: start.frame.maxY - h, width: w, height: h), display: true)
+    }
+
+    private func resizeDragEnded() {
+        dragStart = nil
+        LiveResize.shared.active = false
+        if let win = window {
+            UserDefaults.standard.set(win.frame.width, forKey: "panel.width")
+            UserDefaults.standard.set(win.frame.height, forKey: "panel.height")
+        }
     }
 
     private func makeWindow() -> PanelWindow {
@@ -108,18 +116,18 @@ final class PanelController {
                              openSettings: { [weak self] in self?.close(); self?.openSettings() },
                              collapse: { [weak self] in self?.close() },
                              quit: { NSApp.terminate(nil) },
-                             toggleSize: { [weak self] in self?.toggleSize() },
+                             resizeChanged: { [weak self] in self?.resizeDragged() },
+                             resizeEnded: { [weak self] in self?.resizeDragEnded() },
                              toolView: { [panel, toolViewFactory] in toolViewFactory($0, panel) },
                              firstRun: firstRun, readout: readout,
                              chargeLimit: chargeLimit, chargeLimiter: chargeLimiter)
         let win = PanelWindow(content: NSHostingView(rootView: view))
         win.onCancel = { [weak self] in self?.close() }
-        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: win, queue: .main) { [weak self, weak win] _ in
+        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: win, queue: .main) { [weak win] _ in
             MainActor.assumeIsolated {
-                guard let self, let win, win.isVisible else { return }
+                guard let win, win.isVisible else { return }
                 UserDefaults.standard.set(win.frame.width, forKey: "panel.width")
                 UserDefaults.standard.set(win.frame.height, forKey: "panel.height")
-                self.panel.expanded = win.frame.width > PanelView.size.width + 40
             }
         }
         NotificationCenter.default.addObserver(forName: NSWindow.willStartLiveResizeNotification, object: win, queue: .main) { _ in

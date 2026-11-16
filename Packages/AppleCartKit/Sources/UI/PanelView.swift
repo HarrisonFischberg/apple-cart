@@ -29,7 +29,6 @@ extension FeatureID {
 public struct PanelView: View {
     /// The normal size, and the smallest the window can be resized to.
     public static let size = CGSize(width: 380, height: 540)
-    public static let expandedSize = CGSize(width: 560, height: 780)
     public static let appName = "Apple Cart"
 
     let launcher: LauncherModel
@@ -37,7 +36,8 @@ public struct PanelView: View {
     let openSettings: () -> Void
     let collapse: () -> Void
     let quit: () -> Void
-    let toggleSize: () -> Void
+    let resizeChanged: () -> Void
+    let resizeEnded: () -> Void
     let toolView: (FeatureID) -> AnyView?
     let firstRun: FirstRunModel?
     let readout: ReadoutSettings?
@@ -48,7 +48,7 @@ public struct PanelView: View {
 
     public init(launcher: LauncherModel, panel: PanelModel,
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
-                toggleSize: @escaping () -> Void = {},
+                resizeChanged: @escaping () -> Void = {}, resizeEnded: @escaping () -> Void = {},
                 toolView: @escaping (FeatureID) -> AnyView? = { _ in nil },
                 firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil,
                 chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil) {
@@ -61,7 +61,8 @@ public struct PanelView: View {
         self.openSettings = openSettings
         self.collapse = collapse
         self.quit = quit
-        self.toggleSize = toggleSize
+        self.resizeChanged = resizeChanged
+        self.resizeEnded = resizeEnded
         self.toolView = toolView
     }
 
@@ -110,6 +111,21 @@ public struct PanelView: View {
         .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
         .onChange(of: launcher.allTiles) { selectFirstIfNone() }
         .onExitCommand { collapse() }
+        .overlay(alignment: .bottomTrailing) { resizeGrip }
+    }
+
+    /// Drag the corner to make the panel the size you like; the size is remembered. The window's edges resize it too.
+    private var resizeGrip: some View {
+        Image(systemName: "line.3.horizontal").rotationEffect(.degrees(-45))
+            .font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.secondary.opacity(0.7))
+            .frame(width: 22, height: 22).contentShape(Rectangle())
+            .pointerStyle(.frameResize(position: .bottomTrailing))
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { _ in resizeChanged() }
+                .onEnded { _ in resizeEnded() })
+            .padding(4)
+            .accessibilityLabel("Resize the panel")
+            .accessibilityHint("Drag to change the size. The size is remembered.")
     }
 
     /// Edit sits in the section header, not inside the card. Reset appears while editing.
@@ -201,17 +217,6 @@ public struct PanelView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button(action: toggleSize) {
-                Image(systemName: panel.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Color.primary)
-                    .frame(width: 56, height: 44)
-                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(panel.expanded ? "Make the panel smaller" : "Make the panel bigger")
-            .help(panel.expanded ? "Back to the normal size" : "Make the panel bigger. You can also drag its edges.")
             footerButton("Quit", symbol: "power", action: quit)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
