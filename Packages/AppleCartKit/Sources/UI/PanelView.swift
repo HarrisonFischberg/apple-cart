@@ -75,10 +75,17 @@ public struct PanelView: View {
                 strip(tiles)
                 if let route = panel.route {
                     HStack(spacing: 12) {
-                        Text(route.title.uppercased())
-                            .font(.system(size: 12, weight: .semibold)).tracking(0.6)
-                            .foregroundStyle(Palette.secondary)
-                            .accessibilityAddTraits(.isHeader)
+                        // Battery follows the owner's target: a big bold title. Other tools keep the small caps label.
+                        Group {
+                            if route == .battery {
+                                Text(route.title).font(.system(size: 22, weight: .bold))
+                            } else {
+                                Text(route.title.uppercased())
+                                    .font(.system(size: 12, weight: .semibold)).tracking(0.6)
+                                    .foregroundStyle(Palette.secondary)
+                            }
+                        }
+                        .accessibilityAddTraits(.isHeader)
                         if route == .battery { batteryEditButtons }
                         Spacer(minLength: 0)
                     }

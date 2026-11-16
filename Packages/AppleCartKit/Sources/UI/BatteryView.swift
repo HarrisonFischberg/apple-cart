@@ -85,19 +85,31 @@ public struct BatteryView: View {
     }
 
     private func summary(_ r: BatteryReading) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
-                if widgets.showPercentage { Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit() }
+                Text("Battery").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
+                if widgets.showPercentage { Text("\(r.percent)%").font(.system(size: 34, weight: .bold)).monospacedDigit() }
                 if showHardwarePercent {
                     Text("Battery reports \(MenuBarReadout.hardwarePercentText(r))").font(.caption).foregroundStyle(Palette.secondary).monospacedDigit()
                 }
             }
-            Spacer()
+            Rectangle().fill(Color.primary.opacity(0.14)).frame(width: 1, height: 40).accessibilityHidden(true)
+            Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 2) {
-                StatusText(state(r))
+                HStack(spacing: 6) {
+                    Circle().fill(dot(r)).frame(width: 8, height: 8).accessibilityHidden(true)
+                    StatusText(state(r))
+                }
                 Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
         }
+    }
+
+    /// Status dot: amber while the limit holds the charge, green on the charger, red when low on battery, grey otherwise.
+    private func dot(_ r: BatteryReading) -> Color {
+        if limiter?.state.holdingAt != nil { return Palette.amber }
+        if r.isPluggedIn { return Palette.green }
+        return r.percent <= 20 ? .red : Palette.secondary
     }
 
     /// Full-width charge bar; the badge sits at the trailing end. With charge control it is also the limit control:
@@ -122,6 +134,7 @@ public struct BatteryView: View {
         .accessibilityElement()
         .accessibilityLabel("Charge \(r.percent) percent")
         .overlay { if let chargeLimit { LimitHandle(settings: chargeLimit, changed: { Task { await limiter?.reevaluate() } }) } }
+        .padding(.bottom, chargeLimit == nil ? 0 : 16) // room for the limit label under the marker
     }
 
     private func details(_ r: BatteryReading) -> some View {
@@ -191,7 +204,8 @@ public struct BatteryView: View {
     }
 }
 
-/// Drag handle and sailing marker drawn over the charge bar. Snaps to 5% steps, from 0 to 100, and shows the value while dragging.
+/// Thin limit marker with its percent printed underneath, and the sailing marker, drawn over the charge bar.
+/// Snaps to 5% steps, from 0 to 100, and shows the value in a bubble while dragging.
 private struct LimitHandle: View {
     let settings: ChargeLimitSettings
     let changed: () -> Void
@@ -206,10 +220,10 @@ private struct LimitHandle: View {
                     .stroke(Color.primary.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .accessibilityHidden(true)
             }
-            Capsule().fill(Color.white).frame(width: 6, height: h + 8)
-                .overlay(Capsule().strokeBorder(Color.black.opacity(0.25)))
+            let markerX = min(max(x(settings.limit), 2), w - 2)
+            Capsule().fill(Color.primary).frame(width: 2.5, height: h + 10)
                 .frame(width: 44, height: 44).contentShape(Rectangle()) // 44 pt target
-                .position(x: min(max(x(settings.limit), 3), w - 3), y: h / 2)
+                .position(x: markerX, y: h / 2)
                 .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("chargeBar"))
                     .onChanged { v in
                         dragging = true
@@ -229,6 +243,10 @@ private struct LimitHandle: View {
                     }
                     changed()
                 }
+            Text("\(settings.limit)%").font(.system(size: 12, weight: .medium)).monospacedDigit()
+                .fixedSize()
+                .position(x: min(max(markerX, 14), w - 14), y: h + 13)
+                .allowsHitTesting(false).accessibilityHidden(true)
             if dragging {
                 Text("\(settings.limit)%").font(.system(size: 15, weight: .bold)).monospacedDigit()
                     .padding(.horizontal, 10).padding(.vertical, 4)

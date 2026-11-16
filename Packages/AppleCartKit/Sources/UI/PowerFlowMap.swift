@@ -11,6 +11,20 @@ struct PowerFlowMap: View {
     var body: some View {
         let streams = PowerFlows.streams(reading)
         VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text("Power flow").font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                // Live only while the panel samples this view; a closed or stale map does not claim it.
+                if active, reading != nil {
+                    HStack(spacing: 5) {
+                        Circle().fill(Palette.green).frame(width: 6, height: 6)
+                        Text("Live").font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 8).frame(height: 20)
+                    .background(Palette.raised, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.primary.opacity(0.12)))
+                    .accessibilityElement(children: .ignore).accessibilityLabel("Live")
+                }
+            }
             PowerFlowArt(reading: reading, active: active, pausedAt: pausedAt)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(reading, streams: streams, rest: PowerFlows.rest(reading, streams: streams))

@@ -50,11 +50,11 @@ public struct FlowLayout: Equatable, Sendable {
     public func link(_ id: FlowLinkID) -> Link? { links.first { $0.id == id } }
 
     // Tile sizes. The panel card gives the map about 320 pt (380 panel - page and card padding).
-    public static let source = CGSize(width: 68, height: 72)
+    public static let source = CGSize(width: 76, height: 80)
     public static let hub = CGSize(width: 96, height: 80)
     public static let below = CGSize(width: 96, height: 54)
-    public static let parked = CGSize(width: 68, height: 54)
-    public static let leaf = CGSize(width: 68, height: 36)
+    public static let parked = CGSize(width: 84, height: 54)
+    public static let leaf = CGSize(width: 78, height: 36)
     public static let leafGap: CGFloat = 6
     static let inset: CGFloat = 4
 
@@ -180,12 +180,12 @@ extension PowerFlows {
 /// Timing and sizing for the animated map. Pure so it can be tested.
 public enum FlowMotion {
     public static let transition: Double = 0.55
-    public static let minWidth: CGFloat = 2.5, maxWidth: CGFloat = 20
+    public static let minWidth: CGFloat = 3, maxWidth: CGFloat = 32
 
-    /// Ribbon thickness from watts: 0 for unknown or idle, otherwise clamped so 1 W stays visible and 45 W+ stays inside its tile.
+    /// Ribbon thickness from watts: 0 for unknown or idle, otherwise clamped so 1 W stays visible and 26 W+ stays inside its tile.
     public static func ribbonWidth(_ w: Double?) -> CGFloat {
         guard let w, w > 0.05 else { return 0 }
-        return min(max(2 + CGFloat(w) * 0.4, minWidth), maxWidth)
+        return min(max(1 + CGFloat(w) * 1.2, minWidth), maxWidth)
     }
 
     /// Smoothstep from 0 to 1 over `duration` seconds after a change.

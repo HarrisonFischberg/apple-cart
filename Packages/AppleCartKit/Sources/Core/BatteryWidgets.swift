@@ -12,7 +12,7 @@ public enum BatteryWidget: String, CaseIterable, Sendable, Identifiable {
         case .powerFlow: "Power flow"
         case .details: "Details"
         case .history: "Last 24 hours"
-        case .energyApps: "Using the most energy"
+        case .energyApps: "Using significant energy"
         }
     }
 }

@@ -7,6 +7,8 @@ public enum Palette {
     public static let tile = adaptive(light: 0xFFFFFF, dark: 0x18181B)
     public static let secondary = adaptive(light: 0x5B5B66, dark: 0xA1A1AA)
     public static let accent = adaptive(light: 0x0A5ED7, dark: 0x5AB0FF)
+    /// A surface one step up from the tile, for tiles and cards nested inside a tool card (power flow tiles, the energy list).
+    public static let raised = adaptive(light: 0xF6F6F8, dark: 0x232327)
     /// Energy colors of the power flow map: charger (amber bar), battery charging (green), battery draining (orange).
     public static let amber = adaptive(light: 0xC77700, dark: 0xF5A524)
     public static let green = adaptive(light: 0x177A3C, dark: 0x4ADE80)

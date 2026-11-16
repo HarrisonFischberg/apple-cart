@@ -235,7 +235,7 @@ Flat. Tiles carry no shadow at rest or in any state. Depth is tonal: the tile is
 ### Named Rules
 **The Flat Tile Rule.** Tiles never get shadows. State is shown by fill, outline color, or dash, not by lift.
 
-**Power flow exception (owner request, 2026-11-15).** Inside the Battery power flow map only, the small flow tiles use Liquid Glass (`glassEffect`, no shadow) and the ribbons carry gradients, a soft halo and travelling light. Energy colors there: charger amber (amber bar), Mac blue, battery green when charging and orange (light #D9480F / dark #FF8A4C) when draining. An unplugged charger tile is dimmed with the dashed hairline. Everything else stays flat.
+**Battery screen (owner target `docs/design/battery-ui-target.webp`, 2026-11-15).** The Battery view takes a 22 pt bold section title, a 34 pt bold percent with a status dot, a thin Ink limit marker with its percent printed under the bar, and Limit / Top Up pills (Top Up label in Control Blue with a plus). The power flow map is a flat Sankey: tiles on the new Raised surface (light #F6F6F8 / dark #232327) with a hairline, translucent Control Blue bands whose thickness follows the watts, a chevron on each band, green for charge into the battery and orange (light #D9480F / dark #FF8A4C) for power taken from it. No glass, gradients or glow. An unplugged charger tile is dimmed with the dashed hairline. The energy list sits in a Raised card.
 
 ## Shapes
 

@@ -22,7 +22,7 @@ struct ChargeHeader: View {
 
     private var row: some View {
         HStack(spacing: 8) {
-            pill("Limit: \(settings.limit)%", symbol: nil, selected: false) { showLimit = true }
+            pill("Limit \(settings.limit)%", symbol: nil, selected: false) { showLimit = true }
                 .accessibilityLabel("Charge limit")
                 .accessibilityValue("\(settings.limit) percent")
                 .accessibilityHint("Choose the highest charge level")
@@ -30,7 +30,7 @@ struct ChargeHeader: View {
                     LimitPopover(settings: settings, limiter: limiter)
                 }
             Spacer(minLength: 0)
-            pill(settings.topUpActive ? "Topping up" : "Top Up (+)", symbol: nil, selected: settings.topUpActive) {
+            pill(settings.topUpActive ? "Topping up" : "Top Up", symbol: settings.topUpActive ? nil : "plus.circle", selected: settings.topUpActive) {
                 settings.setTopUp(!settings.topUpActive)
                 Task { await limiter?.reevaluate() }
             }
@@ -47,13 +47,18 @@ struct ChargeHeader: View {
 
     private func pill(_ title: String, symbol: String?, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 14, weight: .semibold)).monospacedDigit().lineLimit(1)
-                .padding(.horizontal, 14).frame(height: 32)
-                .background(selected ? Palette.accent : Palette.tile, in: Capsule())
-                .overlay(Capsule().strokeBorder(.primary.opacity(selected ? 0 : 0.08)))
-                .foregroundStyle(selected ? Color.white : Color.primary)
-                .frame(minHeight: 44) // 44 pt target around the 32 pt pill
-                .contentShape(Rectangle())
+            HStack(spacing: 6) {
+                Text(title).monospacedDigit().lineLimit(1)
+                if let symbol { Image(systemName: symbol).font(.system(size: 15, weight: .medium)) }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            // A symbol marks an action pill (Top Up): its label takes the control blue, as in the owner's target.
+            .foregroundStyle(selected ? Color.white : symbol == nil ? Color.primary : Palette.accent)
+            .padding(.horizontal, 14).frame(height: 32)
+            .background(selected ? Palette.accent : Palette.tile, in: Capsule())
+            .overlay(Capsule().strokeBorder(.primary.opacity(selected ? 0 : 0.12)))
+            .frame(minHeight: 44) // 44 pt target around the 32 pt pill
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressFade())
     }
