@@ -6,7 +6,6 @@ public struct ClipboardView: View {
     let history: ClipboardHistory
     let close: () -> Void
     @State private var query = ""
-    @State private var showSettings = false
 
     public init(history: ClipboardHistory, close: @escaping () -> Void) { self.history = history; self.close = close }
 
@@ -15,14 +14,11 @@ public struct ClipboardView: View {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
                 TextField("Search", text: $query).textFieldStyle(.plain).accessibilityLabel("Search clipboard history")
-                Button { showSettings.toggle() } label: { Image(systemName: "gearshape").frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).accessibilityLabel("Clipboard settings")
             }
-            .padding(.leading, 14).padding(.trailing, 2)
+            .padding(.leading, 14).padding(.trailing, 14).frame(minHeight: 44)
             .background(Palette.tile, in: Capsule())
             ScrollView {
                 VStack(spacing: 8) {
-                    if showSettings { settings }
                     if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
                     if !history.lastDeleted.isEmpty {
                         HStack { Text("Removed \(history.lastDeleted.count).").foregroundStyle(Palette.secondary); Button("Undo") { history.undoDelete() }; Spacer() }
@@ -92,34 +88,6 @@ public struct ClipboardView: View {
                 Text(item.copiedAt.formatted(.relative(presentation: .named))).font(.caption).foregroundStyle(Palette.secondary)
             }
         }
-    }
-
-    private var settings: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("Options")
-            Stepper("Keep for \(history.retentionDays) day\(history.retentionDays == 1 ? "" : "s") (pinned stay)", value: Binding(get: { history.retentionDays }, set: { history.setRetention($0) }), in: 1...90)
-            Toggle("Remove tracking from copied links", isOn: Binding(get: { history.cleanLinks }, set: { history.setCleanLinks($0) }))
-            Toggle("Clear the clipboard after a minute and on lock", isOn: Binding(get: { history.autoClear }, set: { history.setAutoClear($0) }))
-            Text("Passwords and other items apps mark as secret are never saved.").hint()
-            if !history.excluded.isEmpty {
-                SectionLabel("Never stored from")
-                ForEach(history.excluded.sorted(), id: \.self) { id in
-                    HStack { Text(id).font(.callout); Spacer(); Button("Allow again") { history.allowAgain(id) } }
-                }
-            }
-            HStack {
-                Button("Ignore an app…") { pickApp() }
-                Button("Clear history", role: .destructive) { history.clearAll() }
-            }
-        }
-        .toolCard()
-    }
-
-    private func pickApp() {
-        let p = NSOpenPanel()
-        p.directoryURL = URL(fileURLWithPath: "/Applications"); p.allowedContentTypes = [.application]
-        NSApp.activate()
-        if p.runModal() == .OK, let u = p.url, let id = Bundle(url: u)?.bundleIdentifier { history.neverStore(from: id) }
     }
 }
 

@@ -26,40 +26,68 @@ public struct GeneralSettingsView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Open Apple Cart at login", isOn: Binding(get: { login.isOn }, set: { login.set($0) }))
-                    if let e = login.error { Text(e).hint() }
+        VStack(alignment: .leading, spacing: 16) {
+            PageTitle("General")
+            SettingsCard("Startup") {
+                SettingsRow("Open Apple Cart at login", detail: login.error) {
+                    Toggle("Open Apple Cart at login", isOn: Binding(get: { login.isOn }, set: { login.set($0) })).toggleStyle(.switch).labelsHidden()
                 }
-                .toolCard()
-                SectionLabel("Updates")
-                VStack(alignment: .leading, spacing: 10) {
-                    if actions.updatesConfigured {
-                        Toggle("Check for updates automatically", isOn: Binding(get: { automatic }, set: { automatic = $0; actions.setAutomaticChecks($0) }))
-                        Button("Check for updates now", action: actions.checkForUpdates).buttonStyle(ChipStyle()).frame(width: 220)
-                    } else {
-                        Text("Updates are not set up in this build yet.").hint()
-                    }
-                    Text("A check contacts only this app's update list on GitHub, which sees your IP address and the app version.").hint()
-                }
-                .toolCard()
-                SectionLabel("Help")
-                VStack(alignment: .leading, spacing: 10) {
-                    Button("Send debug info…", action: actions.sendDebugLogs).buttonStyle(ChipStyle()).frame(width: 220)
-                    Text("Opens an email draft with the app and macOS version, your Mac model, and which tools and permissions are on. Nothing is sent until you press Send.").hint()
-                }
-                .toolCard()
-                SectionLabel("Your data")
-                VStack(alignment: .leading, spacing: 10) {
-                    Button("Delete all app data…", role: .destructive, action: actions.deleteAllData).buttonStyle(ChipStyle()).frame(width: 220)
-                    Text("Removes every setting and saved item (clipboard history, battery history) from this Mac, then quits.").hint()
-                }
-                .toolCard()
             }
-            .toolPage()
+            SettingsCard("Apple Cart updates") {
+                if actions.updatesConfigured {
+                    SettingsRow("Check for updates automatically") {
+                        Toggle("Check for updates automatically", isOn: Binding(get: { automatic }, set: { automatic = $0; actions.setAutomaticChecks($0) }))
+                            .toggleStyle(.switch).labelsHidden()
+                    }
+                    SettingsRow("Check for updates now") { Button("Check now", action: actions.checkForUpdates).buttonStyle(ChipStyle()).frame(width: 120) }
+                } else {
+                    SettingsRow("Updates are not set up in this build yet.") { EmptyView() }
+                }
+            }
+            Text("A check contacts only this app's update list on GitHub, which sees your IP address and the app version.").hint()
+            SettingsCard("Your data") {
+                SettingsRow("Delete all app data", detail: "Removes every setting and saved item (clipboard history, battery history) from this Mac, then quits.") {
+                    Button("Delete…", role: .destructive, action: actions.deleteAllData).buttonStyle(ChipStyle()).frame(width: 120)
+                }
+            }
         }
-        .background(Palette.ground)
         .onAppear { login.refresh() }
+    }
+}
+
+struct MenuBarSettingsView: View {
+    let readout: ReadoutSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            PageTitle("Menu bar")
+            SettingsCard("Battery readout") { ReadoutRow(readout: readout) }
+            Text("Click the icon to open the panel. Right-click it for Settings and Quit.").hint()
+        }
+    }
+}
+
+struct AboutSettingsView: View {
+    let actions: GeneralActions
+
+    var body: some View {
+        let info = Bundle.main.infoDictionary
+        VStack(alignment: .leading, spacing: 16) {
+            PageTitle("About")
+            SettingsCard("Apple Cart") {
+                SettingsRow("Version", value: info?["CFBundleShortVersionString"] as? String ?? "Development build")
+                SettingsRow("Build", value: info?["CFBundleVersion"] as? String ?? "none")
+                SettingsRow("Made by", value: "Rare Creatures LLC")
+            }
+            SettingsCard("Help") {
+                SettingsRow("Send debug info", detail: "Opens an email draft with the app and macOS version, your Mac model, and which tools and permissions are on. Nothing is sent until you press Send.") {
+                    Button("Send…", action: actions.sendDebugLogs).buttonStyle(ChipStyle()).frame(width: 120)
+                }
+            }
+            SettingsCard("Privacy") {
+                Text("Apple Cart has no account and no tracking. Everything stays on this Mac. An update check contacts only this app's update list on GitHub, and debug info is an email draft you send yourself.")
+                    .foregroundStyle(Palette.secondary)
+            }
+        }
     }
 }

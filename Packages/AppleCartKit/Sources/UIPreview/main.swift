@@ -3,7 +3,7 @@ import Core
 import SwiftUI
 import UI
 
-// Dev tool: renders the Settings > Features window through a real NSWindow so native
+// Dev tool: renders the Settings window through a real NSWindow so native
 // controls draw. Fake tools stand in so some switches are live. Usage: UIPreview --out <dir>
 
 @MainActor
@@ -83,6 +83,12 @@ MainActor.assumeIsolated {
     let permReg = FeatureRegistry(store: permStore)
     for id in FeatureID.allCases { permReg.register(id) { DemoTool() } }
     let permModel = PermissionsModel(checker: DemoChecker(), registry: permReg)
+    @MainActor final class PrevLogin: LoginItem { var isEnabled = true; func set(_ on: Bool) throws { isEnabled = on } }
+    let settingsStore = DemoStore(); settingsStore.ids = [.battery, .system, .keepAwake, .clipboard, .readQR]
+    let settingsReg = FeatureRegistry(store: settingsStore)
+    for id in FeatureID.allCases where id != .fanSafeMode && id != .notifications { settingsReg.register(id) { DemoTool() } }
+    let settingsPerms = PermissionsModel(checker: DemoChecker(), registry: settingsReg)
+    let readoutSettings = ReadoutSettings(store: settingsStore)
     let sampler = BatterySampler(interval: .seconds(1))
     sampler.hold("preview")
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 4))
@@ -152,10 +158,17 @@ MainActor.assumeIsolated {
     let reader = ScreenReader(picker: PrevPicker(), capturer: PrevCapture(), recognizer: PrevRec(), pasteboard: board, toast: { _ in })
     Task { await reader.run(.text) }
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 1))
+    let settingsTools = SettingsTools(clipboard: clip, breaks: breaks, quickToggles: realToggles, updateChecker: checker)
+    @MainActor func settingsView(_ page: SettingsPage) -> SettingsView {
+        SettingsView(registry: settingsReg, permissions: settingsPerms, readout: readoutSettings, login: LaunchAtLogin(item: PrevLogin()),
+                     general: GeneralActions(updatesConfigured: true, checkForUpdates: {}, automaticChecks: { true }, setAutomaticChecks: { _ in },
+                                             sendDebugLogs: {}, deleteAllData: {}),
+                     tools: settingsTools, initialPage: page, open: { _ in })
+    }
     let guardTool = VolumeGuard(audio: CoreAudioOutput(), maxPercent: { 70 })
     let full = DemoStore(); full.ids = [.battery, .system, .keepAwake, .clipboard, .copyText, .readQR]
     let empty = DemoStore(); empty.ids = []
-    Task { await permModel.refresh() }
+    Task { await permModel.refresh(); await settingsPerms.refresh() }
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 45))
     if case .preview(let pl) = unin.phase { print("UNINSTALL plan:", pl.items.map { $0.url.path + " " + String($0.bytes) }.joined(separator: " | ")) } else { print("UNINSTALL phase", unin.phase) }
     if case .preview(let ci) = cleaner.phase { print("CLEANER", ci.count, "items", ci.reduce(Int64(0)) { $0 + $1.bytes }, "bytes") } else { print("CLEANER phase", cleaner.phase) }
@@ -163,10 +176,11 @@ MainActor.assumeIsolated {
     print("UPDATES brew=\(checker.homebrew) macOS=\(checker.macOS)")
     for dark in [false, true] {
         let tag = dark ? "dark" : "light"
-        render(name: "t003-features-\(tag)", size: NSSize(width: 480, height: 760),
-               dark: dark, view: FeaturesSettingsView(registry: registry), outDir: out)
-        render(name: "t005-permissions-\(tag)", size: NSSize(width: 560, height: 600), dark: dark,
-               view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
+        for (key, page) in [("general", SettingsPage.general), ("battery", .tool(.battery)), ("keepawake", .tool(.keepAwake)),
+                            ("clipboard", .tool(.clipboard)), ("permissions", .permissions)] {
+            render(name: "t030-settings-\(key)-\(tag)", size: NSSize(width: 780, height: 540), dark: dark,
+                   view: settingsView(page), outDir: out)
+        }
         render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
                view: fullPanel(.battery, AnyView(BatteryView(sampler: sampler, active: true))), outDir: out)
         render(name: "t006-menubar-glyphs-\(tag)", size: NSSize(width: 420, height: 50), dark: dark, view:
