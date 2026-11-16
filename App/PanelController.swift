@@ -106,7 +106,7 @@ final class PanelController {
         }
         // Clicks in this app's other windows (the status item button handles its own toggle).
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            if let self, event.window !== self.window, event.window !== self.anchor?.window { self.outsideClick() }
+            if let self, event.window !== self.window, event.window !== self.anchor?.window, !self.isPartOfPanel(event.window) { self.outsideClick() }
             return event
         }
     }
@@ -116,6 +116,12 @@ final class PanelController {
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         globalMonitor = nil
         localMonitor = nil
+    }
+
+    /// A SwiftUI popover opened from the panel (the Limit chooser) lives in its own window. Clicks inside it are clicks in the panel.
+    private func isPartOfPanel(_ w: NSWindow?) -> Bool {
+        guard let w else { return false }
+        return w.className.contains("Popover") || w.parent === window || (window?.childWindows?.contains(w) ?? false)
     }
 
     private func outsideClick() {
