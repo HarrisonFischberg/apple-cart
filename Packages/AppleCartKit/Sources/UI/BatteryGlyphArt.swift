@@ -8,6 +8,7 @@ enum BadgeShape {
         let p = CGMutablePath()
         switch badge {
         case .none: break
+        case .plugPaused, .plugBolt: break
         case .plug: // big rounded head, small prongs, stubby tail
             p.addRect(CGRect(x: 2.8, y: 7.7, width: 1.3, height: 2.3))
             p.addRect(CGRect(x: 5.9, y: 7.7, width: 1.3, height: 2.3))
@@ -23,6 +24,16 @@ enum BadgeShape {
             p.addRect(CGRect(x: 2, y: 1, width: 2.2, height: 8))
             p.addRect(CGRect(x: 5.8, y: 1, width: 2.2, height: 8))
         }
+        if badge == .plugPaused || badge == .plugBolt {
+            // two glyphs side by side on a 20 x 10 grid: a plug, then pause bars or a bolt
+            let s = min(rect.width / 2, rect.height) / 10
+            let t = CGAffineTransform(translationX: rect.midX - 10 * s, y: rect.midY - 5 * s)
+            let rightKind: BatteryBadge = badge == .plugPaused ? .paused : .bolt
+            let left = path(.plug, in: CGRect(x: 0, y: 0, width: 10 * s, height: 10 * s)).copy(using: [t]) ?? CGMutablePath()
+            let right = path(rightKind, in: CGRect(x: 10.4 * s, y: 0, width: 10 * s, height: 10 * s)).copy(using: [t]) ?? CGMutablePath()
+            let all = CGMutablePath(); all.addPath(left); all.addPath(right)
+            return all
+        }
         let s = min(rect.width, rect.height) / 10
         let t = CGAffineTransform(translationX: rect.midX - 5 * s, y: rect.midY - 5 * s).scaledBy(x: s, y: s)
         return p.copy(using: [t]) ?? p
@@ -32,6 +43,9 @@ enum BadgeShape {
 /// The menu bar glyph as a template image, in one of five styles.
 public enum BatteryGlyphImage {
     public static func make(_ g: BatteryGlyph, style: MenuBarGlyphStyle = .classic) -> NSImage {
+        // Only Classic has room for the two-glyph badges (plug with pause bars, plug with bolt).
+        var g = g
+        if style != .classic { g.badge = g.badge.single }
         let size: NSSize
         switch style {
         case .classic: size = NSSize(width: 29, height: 13)
@@ -89,18 +103,25 @@ public enum BatteryGlyphImage {
         nub(x: body.maxX + 0.9)
         let inner = body.insetBy(dx: 2, dy: 2)
         var edge = inner.minX
-        if g.level > 0 {
+        // On battery the body stays hollow, a clear outline with a dash, so it reads as unplugged.
+        if g.level > 0 && g.badge != .discharge {
             NSColor.black.setFill()
             let w = max(inner.height, inner.width * g.level)
             edge = inner.minX + w
             NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: w, height: inner.height), xRadius: 2.2, yRadius: 2.2).fill()
         }
         guard g.badge != .none else { return }
-        let box = NSRect(x: 0, y: 0, width: inner.height, height: inner.height)
+        // The two-glyph badge only fits inside a nearly full fill; on a lower charge it shrinks to one glyph.
+        let wideFits = g.badge.isWide && edge >= body.midX + inner.height * 0.95 + 1
+        let kind = g.badge.isWide && !wideFits ? g.badge.single : g.badge
+        let box = NSRect(x: 0, y: 0, width: kind.isWide ? inner.height * 1.9 : inner.height, height: inner.height)
         // On a low charge the badge goes in the middle of the empty part so it is never half cut.
         let cx = edge >= body.midX + box.width / 2 + 1 ? body.midX : (edge + inner.maxX) / 2
-        let path = NSBezierPath(cgPath: BadgeShape.path(g.badge, in: box.offsetBy(dx: cx - box.midX, dy: inner.midY - box.midY)))
-        if cx == body.midX && g.level > 0 {
+        let path = NSBezierPath(cgPath: BadgeShape.path(kind, in: box.offsetBy(dx: cx - box.midX, dy: inner.midY - box.midY)))
+        if g.badge == .discharge {
+            NSColor.black.setFill()
+            path.fill()
+        } else if cx == body.midX && g.level > 0 {
             NSGraphicsContext.current?.compositingOperation = .clear
             path.fill()
             NSGraphicsContext.current?.compositingOperation = .sourceOver

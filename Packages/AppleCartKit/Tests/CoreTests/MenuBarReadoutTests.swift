@@ -69,9 +69,9 @@ private func full(percent: Int = 80, amps: Int64 = 0, plugged: Bool = true, char
 @Suite struct BatteryGlyphTests {
     @Test func badgeFollowsPowerState() {
         #expect(MenuBarReadout.glyph(for: full(plugged: false)).badge == .discharge)
-        #expect(MenuBarReadout.glyph(for: full()).badge == .plug)
-        #expect(MenuBarReadout.glyph(for: full(charging: true)).badge == .bolt)
-        #expect(MenuBarReadout.glyph(for: full(charging: true), chargeHeld: true).badge == .paused)
+        #expect(MenuBarReadout.glyph(for: full()).badge == .plugPaused)
+        #expect(MenuBarReadout.glyph(for: full(charging: true)).badge == .plugBolt)
+        #expect(MenuBarReadout.glyph(for: full(charging: true), chargeHeld: true).badge == .plugPaused)
         #expect(MenuBarReadout.glyph(for: full(plugged: false), chargeHeld: true).badge == .discharge)
     }
 

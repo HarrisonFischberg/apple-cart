@@ -123,7 +123,7 @@ public struct BatteryView: View {
                     .opacity(g.level > 0 ? 1 : 0)
             }
             if g.badge != .none {
-                BadgeGlyph(badge: g.badge).frame(width: 14, height: 14)
+                BadgeGlyph(badge: g.badge).frame(width: g.badge.isWide ? 28 : 14, height: 14)
                     .foregroundStyle(g.level > 0.92 ? Color.white : Palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 10)
             }
