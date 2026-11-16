@@ -19,7 +19,7 @@ final class SystemPasteboard: PasteboardAccess {
     func clear() { board.clearContents() }
 
     func paste() -> Bool {
-        guard AXIsProcessTrusted() else { return false }
+        guard requestAccessibility() else { return false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { // let the panel finish closing
             let src = CGEventSource(stateID: .combinedSessionState)
             for down in [true, false] {

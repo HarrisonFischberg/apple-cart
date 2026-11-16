@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .cleaner: AnyView(CleanerView(model: cleaner))
             case .diskMap: AnyView(DiskMapView(model: diskMap))
             case .breakReminders: AnyView(BreaksView(reminders: breaks))
-            case .cleaningMode: AnyView(CleaningModeView(mode: cleaningMode, openAccessibility: { NSWorkspace.shared.open(Permission.accessibility.settingsURL) }))
+            case .cleaningMode: AnyView(CleaningModeView(mode: cleaningMode, openAccessibility: { if !requestAccessibility() { NSWorkspace.shared.open(Permission.accessibility.settingsURL) } }))
             case .clipboard: AnyView(ClipboardView(history: clipboard, close: { [weak self] in self?.panelController?.close() }))
             case .copyText: AnyView(ScreenReadView(reader: screenReader, mode: .text, start: { [weak self] in self?.panelController?.close(); Task { await self?.screenReader.run(.text) } },
                                                    openSettings: { NSWorkspace.shared.open(Permission.screenRecording.settingsURL) }))

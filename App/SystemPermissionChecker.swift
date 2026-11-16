@@ -23,3 +23,9 @@ struct SystemPermissionChecker: PermissionChecker {
         }
     }
 }
+
+/// Asks macOS for Accessibility. The prompt is what adds the app to System Settings' list;
+/// without it the app never appears there and the switch cannot be turned on.
+func requestAccessibility() -> Bool {
+    AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+}
