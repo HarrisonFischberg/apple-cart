@@ -303,21 +303,6 @@ private final class Rig {
         #expect(!rig.limiter.cutHidesPlug)
     }
 
-    @Test func aCutThatHidesThePlugIsLearnedOnce() async {
-        let rig = Rig()
-        await rig.holding()
-        await rig.feed(reading(80, plugged: false), after: 2)
-        await rig.feed(reading(80, plugged: false), after: 10) // released as an unplug
-        await rig.feed(reading(80), after: 5) // the plug came straight back: the cut hid it
-        #expect(rig.limiter.cutHidesPlug)
-        #expect(rig.controller.calls == [.allow, .hold(80)])
-        rig.controller.clear()
-        await rig.feed(reading(80, plugged: false), after: 15)
-        await rig.feed(reading(80, plugged: false), after: 15) // now held through the cut's "unplugged" readings
-        #expect(rig.controller.calls == [.hold(80)])
-        #expect(rig.limiter.state.holdingAt == 80)
-    }
-
     @Test func timedOutCutIsRestoredEvenWhenTopUpFollows() async {
         let rig = Rig()
         await rig.on()
@@ -352,15 +337,6 @@ private final class Rig {
         #expect(rig.controller.calls.isEmpty)
     }
 
-    @Test func helperSideRestoreEndsTheHoldClaimAndChecksResume() async {
-        let rig = Rig()
-        await rig.holding()
-        rig.controller.adapterCut = false // e.g. restored before sleep or on lease expiry
-        await rig.limiter.refreshHelperStatus()
-        #expect(rig.limiter.state.holdingAt == nil)
-        #expect(rig.limiter.wantsReadings)
-    }
-
     @Test func unknownCutReportedByTheHelperIsRestoredWhenAllowed() async {
         let rig = Rig()
         rig.controller.adapterCut = true
@@ -369,33 +345,106 @@ private final class Rig {
         #expect(rig.controller.calls == [.allow])
     }
 
-    @Test func stalledChargingAfterLaunchStartsTheResumeCheck() async {
+    /// One release for an "unplug" whose plug came straight back.
+    private func releaseAndReplug(_ rig: Rig) async {
+        await rig.feed(reading(80, plugged: false), after: 30) // renewal pass sees "unplugged"
+        await rig.feed(reading(80, plugged: false), after: 10) // past the grace: released
+        await rig.feed(reading(80), after: 5)                  // plugged again within 30 s: cut again
+    }
+
+    @Test func aCutThatHidesThePlugIsLearnedAfterTwoSightings() async {
         let rig = Rig()
-        await rig.on()
-        await rig.feed(reading(60))            // plugged, not charging, well below the limit
-        await rig.feed(reading(60), after: 59)
-        #expect(rig.controller.calls.isEmpty)
-        await rig.feed(reading(60), after: 1)  // 60 s: retry 1 right away
+        await rig.holding()
+        await releaseAndReplug(rig)
+        #expect(!rig.limiter.cutHidesPlug) // once could be a real quick unplug and replug
+        await releaseAndReplug(rig)
+        #expect(rig.limiter.cutHidesPlug)
+        rig.controller.clear()
+        await rig.feed(reading(80, plugged: false), after: 30)
+        await rig.feed(reading(80, plugged: false), after: 15) // now held through the cut's "unplugged" readings
+        #expect(rig.controller.calls == [.hold(80)])
+        #expect(rig.limiter.state.holdingAt == 80)
+    }
+
+    @Test func aRealQuickReplugDoesNotTeachAndALongUnplugForgets() async {
+        let rig = Rig()
+        await rig.holding()
+        await releaseAndReplug(rig) // a real unplug, replugged within 30 s
+        #expect(!rig.limiter.cutHidesPlug)
+        await releaseAndReplug(rig)
+        #expect(rig.limiter.cutHidesPlug) // learned (rightly or not)
+        // A real unplug now: the hold lasts only until the band (77%), then the restore; minutes of "unplugged"
+        // with no cut forget what was learned, so the next real unplug is caught after 10 s again.
+        await rig.feed(reading(78, plugged: false), after: 30)
+        await rig.feed(reading(76, plugged: false), after: 30)
+        #expect(rig.limiter.state.holdingAt == nil)
+        for _ in 0..<8 { await rig.feed(reading(75, plugged: false), after: 30) }
+        #expect(!rig.limiter.cutHidesPlug)
+    }
+
+    @Test func helperSideRestoreEndsTheHoldClaimAndChecksResume() async {
+        let rig = Rig()
+        await rig.holding()
+        rig.controller.adapterCut = false // e.g. restored on lease expiry
+        await rig.limiter.refreshHelperStatus()
+        #expect(rig.limiter.state.holdingAt == nil)
+        await rig.feed(reading(76), after: 1)  // below the band, not charging
+        await rig.feed(reading(76), after: 60) // the resume check retries the restore
         #expect(rig.controller.calls == [.allow])
-        await rig.feed(reading(60), after: 60)
-        #expect(rig.controller.calls == [.allow, .allow])
-        await rig.feed(reading(60), after: 60)
+        await rig.feed(reading(76), after: 120)
         #expect(rig.limiter.state.chargingNotResumed)
     }
 
-    @Test func stallCheckOnlyAfterLaunchOrWakeAndNotNearFull() async {
+    @Test func macOSHoldingAtEightyWithLimitOneHundredNeverWarns() async {
         let rig = Rig(limit: 100)
         await rig.on()
-        await rig.feed(reading(98), after: 0)   // near full macOS often shows "not charging": not a stall
-        await rig.feed(reading(98), after: 120)
-        #expect(rig.controller.calls.isEmpty)
-        await rig.feed(reading(60), after: 400) // watch window over
-        await rig.feed(reading(60), after: 120)
-        #expect(rig.controller.calls.isEmpty)
+        rig.controller.helperStatus = .unreachable
+        await rig.limiter.refreshHelperStatus()
+        rig.controller.helperStatus = .ready
+        await rig.limiter.refreshHelperStatus() // not ready -> ready
         await rig.limiter.systemDidWake()
-        await rig.feed(reading(60), after: 1)
-        await rig.feed(reading(60), after: 60)
+        for _ in 0..<20 { await rig.feed(reading(80), after: 30) } // Optimized Battery Charging: plugged, not charging
+        #expect(rig.controller.calls.isEmpty)
+        #expect(!rig.limiter.state.chargingNotResumed)
+        #expect(!rig.limiter.wantsReadings)
+    }
+
+    @Test func wakeAfterOurCutChecksThatChargingResumes() async {
+        let rig = Rig()
+        await rig.holding()
+        rig.clock += 20 // asleep; the last reading is now stale, so wake does not cut again from it
+        await rig.limiter.systemDidWake() // the helper restored before sleep
+        #expect(rig.limiter.state.holdingAt == nil)
+        await rig.feed(reading(76), after: 1)
+        await rig.feed(reading(76), after: 60)
+        await rig.feed(reading(76), after: 60)
+        #expect(rig.controller.calls == [.allow, .allow])
+        await rig.feed(reading(76), after: 60)
+        #expect(rig.limiter.state.chargingNotResumed)
+    }
+
+    @Test func cutOutstandingWhenTheHelperWentAwayIsCheckedWhenItIsBack() async {
+        let rig = Rig()
+        await rig.holding()
+        rig.controller.helperStatus = .unreachable
+        await rig.feed(reading(80), after: 30)
+        rig.controller.helperStatus = .ready
+        await rig.feed(reading(76), after: 30)
+        rig.controller.clear()
+        await rig.feed(reading(76), after: 60)
         #expect(rig.controller.calls == [.allow])
+    }
+
+    @Test func sleepingRefusalSaysWaitingForWake() async {
+        let rig = Rig()
+        await rig.on()
+        rig.controller.result = .sleeping
+        await rig.feed(reading(85))
+        #expect(rig.limiter.state.reasonText == "Waiting for the Mac to wake.")
+        #expect(rig.controller.calls == [.hold(80)]) // nothing was written, so no reset is needed
+        rig.controller.result = .applied
+        await rig.feed(reading(85), after: 5)
+        #expect(rig.limiter.state.reasonText == "Holding at 80%")
     }
 
     @Test func unsupportedMacNeverCuts() async {

@@ -5,18 +5,25 @@ import HelperProtocol
 public protocol LeaseTimer: Sendable { func cancel() }
 public typealias LeaseScheduler = @Sendable (_ seconds: Int, _ fire: @escaping @Sendable () -> Void) -> LeaseTimer
 
-/// Wall-clock deadline: a monotonic DispatchTime deadline stops counting while the Mac sleeps,
-/// so a lease armed just before sleep would otherwise outlive it.
+/// Fires at whichever comes first: a wall-clock deadline (keeps counting through sleep) or an uptime deadline
+/// (ignores the user changing the clock). Either alone could overrun a lease.
 public final class DispatchLeaseTimer: LeaseTimer, @unchecked Sendable {
-    private let source: DispatchSourceTimer
+    private let wall: DispatchSourceTimer
+    private let uptime: DispatchSourceTimer
     public init(seconds: Int, queue: DispatchQueue, fire: @escaping @Sendable () -> Void) {
-        source = DispatchSource.makeTimerSource(queue: queue)
-        source.schedule(wallDeadline: .now() + .seconds(seconds))
-        source.setEventHandler(handler: fire)
-        source.resume()
+        wall = DispatchSource.makeTimerSource(queue: queue)
+        uptime = DispatchSource.makeTimerSource(queue: queue)
+        wall.schedule(wallDeadline: .now() + .seconds(seconds))
+        uptime.schedule(deadline: .now() + .seconds(seconds))
+        let sources = [wall, uptime]
+        for s in sources { s.setEventHandler { sources.forEach { $0.cancel() }; fire() } }
+        wall.resume(); uptime.resume()
     }
-    public func cancel() { source.cancel() }
+    public func cancel() { wall.cancel(); uptime.cancel() }
 }
+
+/// Monotonic time that also counts sleep and never jumps with clock changes.
+public func monotonicSeconds() -> Double { Double(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9 }
 
 /// Owns the adapter. Fail-safe default is adapter ON: an "off" only exists together with a running lease
 /// timer, and every exit path (lease expiry, signal, XPC invalidation, sleep, startup) writes CHIE=00.
@@ -28,33 +35,42 @@ public final class AdapterGuard: @unchecked Sendable {
         public var supported: Bool
     }
 
-    /// Restore retries back off, then settle at every 5 minutes.
+    /// Restore retries back off, then settle at every 5 minutes; capped at 60 s while the charger may still be cut.
     static let retryBackoff = [5, 15, 60, 300]
+    static let retryCapWhileCut = 60
+    /// A sleep that never reports power-on (aborted) stops blocking cuts after this long.
+    static let sleepFlagTimeout: Double = 60
     private let connect: @Sendable () throws -> SMCWriting
     private let schedule: LeaseScheduler
     private let now: @Sendable () -> Date
+    private let monotonic: @Sendable () -> Double
     private let log: @Sendable (String) -> Void
     private let lock = NSLock()
     private var smc: SMCWriting?
     private var lease: LeaseTimer?
     private var leaseEnd: Date?
+    private var leaseEndMono: Double?
     private var generation = 0
     private var retries = 0
-    private var sleeping = false
+    private var sleepingSince: Double?
     private var unsupported = false
+    /// True after a cut was written (or CHIE read 08) until a restore succeeds.
+    private var mayBeCut = false
 
     /// `connect` opens the SMC; it is called again after an I/O failure, so a broken connection is reopened.
     public init(connect: @escaping @Sendable () throws -> SMCWriting, schedule: @escaping LeaseScheduler,
-                now: @escaping @Sendable () -> Date = Date.init, log: @escaping @Sendable (String) -> Void = { _ in }) {
+                now: @escaping @Sendable () -> Date = Date.init, monotonic: @escaping @Sendable () -> Double = monotonicSeconds,
+                log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.connect = connect
         self.schedule = schedule
         self.now = now
+        self.monotonic = monotonic
         self.log = log
     }
 
     public convenience init(smc: SMCWriting, schedule: @escaping LeaseScheduler, now: @escaping @Sendable () -> Date = Date.init,
-                            log: @escaping @Sendable (String) -> Void = { _ in }) {
-        self.init(connect: { smc }, schedule: schedule, now: now, log: log)
+                            monotonic: @escaping @Sendable () -> Double = monotonicSeconds, log: @escaping @Sendable (String) -> Void = { _ in }) {
+        self.init(connect: { smc }, schedule: schedule, now: now, monotonic: monotonic, log: log)
     }
 
     /// Helper start: whatever a previous run left behind, the adapter goes back on.
@@ -65,7 +81,10 @@ public final class AdapterGuard: @unchecked Sendable {
         expireIfDueLocked()
         if enabled { return restoreLocked(reason: "app asked") }
         if unsupported { return .unsupported }
-        if sleeping { log("cut refused: system is going to sleep"); return .sleeping }
+        if let since = sleepingSince {
+            guard monotonic() - since > Self.sleepFlagTimeout else { log("cut refused: system is going to sleep"); return .sleeping }
+            sleepingSince = nil // no power-on message ever came (aborted sleep)
+        }
         let seconds = AdapterLease.clamped(leaseSeconds)
         // Arm the lease before writing so there is never an "off" without a timer behind it.
         generation += 1
@@ -73,6 +92,8 @@ public final class AdapterGuard: @unchecked Sendable {
         lease?.cancel()
         lease = schedule(seconds) { [weak self] in self?.timerFired(generation: gen, reason: "lease expired") }
         leaseEnd = now().addingTimeInterval(TimeInterval(seconds))
+        leaseEndMono = monotonic() + Double(seconds)
+        mayBeCut = true
         do {
             try write(SMCWhitelist.adapterOff)
             log("adapter off, lease \(seconds) s")
@@ -97,13 +118,13 @@ public final class AdapterGuard: @unchecked Sendable {
     /// Before acknowledging sleep: charger on, and refuse cuts until the system has powered on again.
     public func systemWillSleep() {
         lock.lock(); defer { lock.unlock() }
-        sleeping = true
+        sleepingSince = monotonic()
         _ = restoreLocked(reason: "system will sleep")
     }
 
     public func systemDidWake() {
         lock.lock(); defer { lock.unlock() }
-        sleeping = false
+        sleepingSince = nil
         expireIfDueLocked()
     }
 
@@ -111,11 +132,27 @@ public final class AdapterGuard: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         expireIfDueLocked()
         var raw = -1
-        if !unsupported {
-            do { raw = Int(try (smc ?? connect()).read(key: SMCWhitelist.adapterKey)) } catch SMCError.keyMissing { unsupported = true } catch {}
-        }
-        let left = leaseEnd.map { max(0, Int($0.timeIntervalSince(now()).rounded(.up))) } ?? 0
+        if !unsupported, let value = try? read() { raw = Int(value) }
+        let wallLeft = leaseEnd.map { $0.timeIntervalSince(now()) }
+        let monoLeft = leaseEndMono.map { $0 - monotonic() }
+        let left = [wallLeft, monoLeft].compactMap { $0 }.min().map { max(0, Int($0.rounded(.up))) } ?? 0
         return Status(adapterEnabled: raw != Int(SMCWhitelist.adapterOff), chie: raw, leaseRemaining: left, supported: !unsupported)
+    }
+
+    private func read() throws -> UInt8 {
+        do {
+            let s = try smc ?? connect()
+            smc = s
+            let v = try s.read(key: SMCWhitelist.adapterKey)
+            if v == SMCWhitelist.adapterOff { mayBeCut = true }
+            return v
+        } catch SMCError.keyMissing {
+            unsupported = true
+            throw SMCError.keyMissing
+        } catch {
+            smc = nil // reopen on the next attempt
+            throw error
+        }
     }
 
     private func write(_ value: UInt8) throws {
@@ -134,9 +171,11 @@ public final class AdapterGuard: @unchecked Sendable {
         }
     }
 
-    /// A timer that slept past its deadline still ends the lease in real time.
+    /// A timer that slept past its deadline, or a clock set backwards, still ends the lease on time.
     private func expireIfDueLocked() {
-        if let end = leaseEnd, now() >= end { _ = restoreLocked(reason: "lease expired (wall clock)") }
+        let wallDue = leaseEnd.map { now() >= $0 } ?? false
+        let monoDue = leaseEndMono.map { monotonic() >= $0 } ?? false
+        if wallDue || monoDue { _ = restoreLocked(reason: "lease expired (\(wallDue ? "wall clock" : "uptime"))") }
     }
 
     private func timerFired(generation gen: Int, reason: String) {
@@ -148,17 +187,23 @@ public final class AdapterGuard: @unchecked Sendable {
     private func restoreLocked(reason: String) -> HelperErrorCode {
         generation += 1
         let gen = generation
-        lease?.cancel(); lease = nil; leaseEnd = nil
+        lease?.cancel(); lease = nil; leaseEnd = nil; leaseEndMono = nil
         do {
             try write(SMCWhitelist.adapterOn)
             retries = 0
+            mayBeCut = false
             log("adapter on (\(reason))")
             return .ok
-        } catch SMCError.keyMissing {
+        } catch SMCError.keyMissing where !mayBeCut {
             log("no CHIE key on this Mac: charge control unsupported, nothing to restore")
             return .unsupported
         } catch {
-            let delay = Self.retryBackoff[min(retries, Self.retryBackoff.count - 1)]
+            // A key that vanishes while a cut may be live is a glitch, not "unsupported": keep retrying the restore.
+            if case SMCError.keyMissing = error { unsupported = false }
+            // A previous run may have left 08 behind; if even the probe fails, assume it did.
+            if !mayBeCut, (try? read()) == nil { mayBeCut = true }
+            var delay = Self.retryBackoff[min(retries, Self.retryBackoff.count - 1)]
+            if mayBeCut { delay = min(delay, Self.retryCapWhileCut) }
             retries += 1
             log("adapter on FAILED (\(reason)): \(error); retrying in \(delay) s")
             // Never leave a possible "off" without a timer: keep retrying the restore.

@@ -26,9 +26,9 @@ final class HelperChargeController: ChargeController, @unchecked Sendable {
             })
             guard let reply else { return ChargeHelperReport(.unreachable) }
             guard reply.version == HelperIdentity.version else { return ChargeHelperReport(.outdated) }
-            // No CHIE key, or the SMC cannot be read: never report ready, so the runner never cuts.
-            if reply.code == HelperErrorCode.unsupported.rawValue || reply.chie < 0 { return ChargeHelperReport(.unsupported) }
-            return ChargeHelperReport(.ready, adapterCut: !reply.adapterEnabled)
+            // Only the helper's explicit "unsupported" (no CHIE key) means this Mac cannot do it; a failed read is transient.
+            if reply.code == HelperErrorCode.unsupported.rawValue { return ChargeHelperReport(.unsupported) }
+            return ChargeHelperReport(.ready, adapterCut: reply.chie < 0 ? nil : !reply.adapterEnabled)
         @unknown default: return ChargeHelperReport(.unreachable)
         }
     }
@@ -50,6 +50,7 @@ final class HelperChargeController: ChargeController, @unchecked Sendable {
         guard Self.service.status == .enabled else { return .unavailable }
         guard let code: Int = await call(body) else { return .failed("The charging helper did not answer.") }
         if code == HelperErrorCode.ok.rawValue { return .applied }
+        if code == HelperErrorCode.sleeping.rawValue { return .sleeping }
         return .failed("Helper error \(HelperErrorCode(rawValue: code).map { "\($0)" } ?? "\(code)")")
     }
 

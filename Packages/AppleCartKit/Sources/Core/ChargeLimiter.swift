@@ -12,6 +12,7 @@ public struct ChargeLimitState: Equatable, Sendable {
     public var commandFailed = false
     /// The latest battery level the runner saw, so the panel can offer Discharge only when it applies.
     public var level: Int?
+    public var waitingForWake = false
     /// The limit the runner is working towards (100 while Top Up is on).
     public var target = 100
 
@@ -29,6 +30,7 @@ public struct ChargeLimitState: Equatable, Sendable {
         case .unsupported: return "Not supported on this Mac."
         case .ready:
             if let n = holdingAt { return discharging ? "Discharging to \(n)%" : "Holding at \(n)%" }
+            if waitingForWake { return "Waiting for the Mac to wake." }
             if commandFailed { return "Could not reach the charging helper. Trying again." }
             return "Charging up to \(target)%"
         }
@@ -50,9 +52,10 @@ public final class ChargeLimiter {
     public static let unplugDuringCutGrace: TimeInterval = 10
     /// Cuts are only started or renewed from a reading at most this old.
     public static let freshReading: TimeInterval = 15
-    /// After launch, reconnect or wake: plugged, well below the limit and not charging this long starts the resume check.
-    public static let stallAfter: TimeInterval = 60
-    public static let stallWatch: TimeInterval = 300
+    /// Released-for-unplug readings that came straight back as plugged before we believe the cut hides the plug.
+    public static let hiddenPlugSightings = 2
+    /// Unplugged this long with no cut active: it was a real unplug, so forget what we learned.
+    public static let forgetHiddenPlugAfter: TimeInterval = 180
     public static let statusEvery: TimeInterval = 30
     /// The helper's own lease; past this a cut has certainly been undone by the helper.
     public static let leaseSeconds: TimeInterval = 90
@@ -70,8 +73,10 @@ public final class ChargeLimiter {
     @ObservationIgnored private var releasedForUnplugAt: Date?
     /// Learned this session: our cut makes macOS report "unplugged" even with the charger in.
     @ObservationIgnored private(set) var cutHidesPlug = false
-    @ObservationIgnored private var stallSince: Date?
-    @ObservationIgnored private var stallWatchUntil: Date?
+    @ObservationIgnored private var plugCameBack = 0
+    @ObservationIgnored private var unpluggedWithoutCutSince: Date?
+    /// A known cut was outstanding when the helper stopped being ready; check charging when it is back.
+    @ObservationIgnored private var cutUndoneWhileAway = false
     @ObservationIgnored private var statusCheckedAt: Date?
     @ObservationIgnored private var lastReading: BatteryReading?
     @ObservationIgnored private var busy = false
@@ -85,28 +90,26 @@ public final class ChargeLimiter {
 
     /// Whether the app should keep the battery sampler running for this runner.
     public var wantsReadings: Bool {
-        toolEnabled && (settings.limit < 100 || settings.topUpActive || lastCut != nil || cutMayBeLive || restoredAt != nil || watchingForStall)
+        toolEnabled && (settings.limit < 100 || settings.topUpActive || lastCut != nil || cutMayBeLive || restoredAt != nil)
     }
 
     private var cutMayBeLive: Bool { maybeCutUntil.map { now() < $0 } ?? false }
-    private var watchingForStall: Bool { stallWatchUntil.map { now() < $0 } ?? false }
 
     public func setToolEnabled(_ on: Bool) async {
         toolEnabled = on
         if on {
-            stallWatchUntil = now().addingTimeInterval(Self.stallWatch) // launch: a helper-side restore may not have resumed charging
             await refreshHelperStatus()
             await evaluate(lastReading)
         } else {
             clearCommandState()
-            stallWatchUntil = nil
             if await controller.resetAll() == .applied { maybeCutUntil = nil }
         }
     }
 
-    /// The Mac woke: the helper restored the charger before sleep, so check the helper and watch for a stall.
+    /// The Mac woke. If we had a cut, the helper undid it before sleep: check that charging resumes.
+    /// Without a cut of ours nothing is checked, so macOS's own holds (Optimized Battery Charging) never warn.
     public func systemDidWake() async {
-        stallWatchUntil = now().addingTimeInterval(Self.stallWatch)
+        if lastCut != nil || cutMayBeLive { helperUndidCut() }
         statusCheckedAt = nil
         await evaluate(lastReading)
     }
@@ -115,13 +118,11 @@ public final class ChargeLimiter {
     public func refreshHelperStatus() async {
         statusCheckedAt = now()
         let report = await controller.status()
-        if state.helperStatus != .ready && report.status == .ready { stallWatchUntil = now().addingTimeInterval(Self.stallWatch) }
         state.helperStatus = report.status
         guard report.status == .ready else { return }
+        if cutUndoneWhileAway { cutUndoneWhileAway = false; restoredAt = now(); retries = 0 }
         if report.adapterCut == false, lastCut != nil {
-            // The helper restored on its own (lease, sleep, restart): stop claiming a hold and check charging resumes.
-            lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil
-            restoredAt = now(); retries = 0
+            helperUndidCut() // lease, sleep or restart: stop claiming a hold and check charging resumes
         } else if report.adapterCut == true, lastCut == nil, !cutMayBeLive {
             maybeCutUntil = now().addingTimeInterval(Self.leaseSeconds) // a cut we do not know about: restore it if not holding
         }
@@ -146,9 +147,14 @@ public final class ChargeLimiter {
     /// Before quit or delete-all: adapter on, whatever state we were in.
     public func shutdown() async { await setToolEnabled(false) }
 
+    private func helperUndidCut() {
+        lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil
+        restoredAt = now(); retries = 0
+    }
+
     private func clearCommandState() {
-        lastCut = nil; restoredAt = nil; unpluggedInCutSince = nil; releasedForUnplugAt = nil; stallSince = nil
-        state.holdingAt = nil; state.chargingNotResumed = false; state.commandFailed = false
+        lastCut = nil; restoredAt = nil; unpluggedInCutSince = nil; releasedForUnplugAt = nil
+        state.holdingAt = nil; state.chargingNotResumed = false; state.commandFailed = false; state.waitingForWake = false
     }
 
     private func step(_ r: BatteryReading?) async {
@@ -161,19 +167,12 @@ public final class ChargeLimiter {
         if let r { state.level = r.percent }
         guard state.helperStatus == .ready else {
             // Nothing can be commanded safely. If a cut may still be live, ask for the restore anyway.
+            if lastCut != nil || cutMayBeLive { cutUndoneWhileAway = true }
             if cutMayBeLive, await controller.resetAll() == .applied { maybeCutUntil = nil }
             clearCommandState()
             return
         }
-        if !cut, let released = releasedForUnplugAt, let r {
-            if r.isPluggedIn {
-                // We released for an "unplug" and the plug came straight back: our cut hides the charger on this Mac.
-                if now().timeIntervalSince(released) <= Self.unplugGrace { cutHidesPlug = true }
-                releasedForUnplugAt = nil
-            } else if now().timeIntervalSince(released) > Self.unplugGrace {
-                releasedForUnplugAt = nil
-            }
-        }
+        if !cut, let r { learnPlug(r) }
         let seen = plugAdjusted(r, cut: cut)
         var decision = ChargePolicy.decide(reading: seen, settings: settings)
         // Charging takes a while to start after a restore; "not charging" in that wait must not re-cut below the limit.
@@ -183,6 +182,26 @@ public final class ChargeLimiter {
             await hold(decision, at: at, reading: r)
         case .allowCharging:
             await allow(r)
+        }
+    }
+
+    /// We released a cut for an "unplug" and the plug came straight back: our cut probably hides the charger.
+    /// A real quick unplug and replug looks the same once, so it takes two sightings; a long real unplug forgets it.
+    private func learnPlug(_ r: BatteryReading) {
+        if r.isPluggedIn { unpluggedWithoutCutSince = nil } else {
+            let since = unpluggedWithoutCutSince ?? now()
+            unpluggedWithoutCutSince = since
+            if now().timeIntervalSince(since) > Self.forgetHiddenPlugAfter { cutHidesPlug = false; plugCameBack = 0 }
+        }
+        guard let released = releasedForUnplugAt else { return }
+        if r.isPluggedIn {
+            if now().timeIntervalSince(released) <= Self.unplugGrace {
+                plugCameBack += 1
+                if plugCameBack >= Self.hiddenPlugSightings { cutHidesPlug = true }
+            }
+            releasedForUnplugAt = nil
+        } else if now().timeIntervalSince(released) > Self.unplugGrace {
+            releasedForUnplugAt = nil
         }
     }
 
@@ -215,7 +234,12 @@ public final class ChargeLimiter {
         guard toolEnabled else { if await controller.resetAll() == .applied { maybeCutUntil = nil }; return }
         if result == .applied {
             lastCut = now(); restoredAt = nil
-            state.holdingAt = at; state.discharging = discharging; state.chargingNotResumed = false; state.commandFailed = false
+            state.holdingAt = at; state.discharging = discharging; state.chargingNotResumed = false
+            state.commandFailed = false; state.waitingForWake = false
+        } else if result == .sleeping {
+            // Refused before anything was written: the helper restored for sleep and blocks cuts until power-on.
+            lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil; state.waitingForWake = true
+            if wasCut { restoredAt = now(); retries = 0 } // our cut was undone by the helper: still check charging resumes
         } else {
             // Failed or timed out: the cut may still have landed. Ask for the restore now, and keep asking while it may be live.
             lastCut = nil; state.holdingAt = nil; state.commandFailed = true
@@ -237,18 +261,8 @@ public final class ChargeLimiter {
             }
             return
         }
-        if let start = restoredAt { await verifyResume(r, since: start); return }
-        // After launch, reconnect or wake the helper may have restored the charger without charging resuming.
-        if watchingForStall, let r, r.isPluggedIn, !r.isCharging, r.percent <= settings.effectiveLimit - ChargePolicy.hysteresis {
-            let since = stallSince ?? now()
-            stallSince = since
-            if now().timeIntervalSince(since) >= Self.stallAfter {
-                stallSince = nil; restoredAt = since; retries = 0
-                await verifyResume(r, since: since)
-            }
-        } else {
-            stallSince = nil
-        }
+        state.waitingForWake = false
+        if let start = restoredAt { await verifyResume(r, since: start) }
     }
 
     private func verifyResume(_ r: BatteryReading?, since start: Date) async {
