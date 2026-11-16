@@ -57,11 +57,13 @@ public struct GeneralSettingsView: View {
 
 struct MenuBarSettingsView: View {
     let readout: ReadoutSettings
+    var glyphStyle: GlyphStyleSettings?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             PageTitle("Menu bar")
             SettingsCard("Battery readout") { ReadoutRow(readout: readout) }
+            if let glyphStyle { SettingsCard("Battery look") { GlyphStylePicker(settings: glyphStyle) } }
             Text("Click the icon to open the panel. Right-click it for Settings and Quit.").hint()
         }
     }
@@ -87,6 +89,33 @@ struct AboutSettingsView: View {
             SettingsCard("Privacy") {
                 Text("Apple Cart has no account and no tracking. Everything stays on this Mac. An update check contacts only this app's update list on GitHub, and debug info is an email draft you send yourself.")
                     .foregroundStyle(Palette.secondary)
+            }
+        }
+    }
+}
+
+/// Five looks for the menu bar battery, each drawn as it will appear (plugged in at 80%).
+struct GlyphStylePicker: View {
+    let settings: GlyphStyleSettings
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(MenuBarGlyphStyle.allCases, id: \.self) { style in
+                let on = settings.style == style
+                Button { settings.style = style } label: {
+                    VStack(spacing: 8) {
+                        Image(nsImage: BatteryGlyphImage.make(BatteryGlyph(level: 0.8, badge: .plug), style: style))
+                            .renderingMode(.template).foregroundStyle(on ? Color.white : Color.primary)
+                            .frame(height: 20)
+                        Text(style.title).font(.caption).foregroundStyle(on ? Color.white : Palette.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 64)
+                    .background(on ? Palette.accent : Palette.ground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(style.title) battery look")
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
     }

@@ -176,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         automaticChecks: { [updater] in updater.automaticChecks }, setAutomaticChecks: { [updater] in updater.automaticChecks = $0 },
                                         sendDebugLogs: { [weak self] in self?.sendDebugLogs() }, deleteAllData: { [weak self] in self?.deleteAllData() }),
                 tools: SettingsTools(clipboard: clipboard, breaks: breaks, quickToggles: quickToggles, updateChecker: updateChecker),
+                glyphStyle: glyphStyle,
                 open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
             window.center()

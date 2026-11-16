@@ -10,17 +10,19 @@ public struct SettingsView: View {
     let login: LaunchAtLogin
     let general: GeneralActions
     let tools: SettingsTools
+    let glyphStyle: GlyphStyleSettings?
     @State private var page: SettingsPage?
     private let selection = SettingsSelection()
 
     public init(registry: FeatureRegistry, permissions: PermissionsModel, readout: ReadoutSettings, login: LaunchAtLogin,
-                general: GeneralActions, tools: SettingsTools, initialPage: SettingsPage? = nil, open: @escaping (URL) -> Void) {
+                general: GeneralActions, tools: SettingsTools, glyphStyle: GlyphStyleSettings? = nil, initialPage: SettingsPage? = nil, open: @escaping (URL) -> Void) {
         self.login = login
         self.general = general
         self.registry = registry
         self.readout = readout
         self.permissions = permissions
         self.tools = tools
+        self.glyphStyle = glyphStyle
         self.open = open
         _page = State(initialValue: initialPage ?? SettingsSelection().load())
     }
@@ -85,7 +87,7 @@ public struct SettingsView: View {
     @ViewBuilder private func content(_ p: SettingsPage) -> some View {
         switch p {
         case .general: GeneralSettingsView(login: login, actions: general)
-        case .menuBar: MenuBarSettingsView(readout: readout)
+        case .menuBar: MenuBarSettingsView(readout: readout, glyphStyle: glyphStyle)
         case .permissions: PermissionsView(model: permissions, open: open)
         case .about: AboutSettingsView(actions: general)
         case .tool(let f): ToolSettingsPage(id: f, registry: registry, permissions: permissions, readout: readout, tools: tools, open: open)
