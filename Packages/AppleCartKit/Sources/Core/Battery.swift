@@ -32,12 +32,9 @@ public struct BatteryReading: Sendable, Equatable {
     public var date: Date
     public var percent: Int              // as macOS shows it
     public var measuredPercent: Double?  // raw charge / raw max, no rounding by macOS
-    /// The level the charge limit compares against. While not charging macOS can keep showing 100% long after the
-    /// battery started dropping (seen on a charger cut), so then the lower measured value wins.
-    public var limitLevel: Int {
-        guard !isCharging, let m = measuredPercent else { return percent }
-        return min(percent, Int(m.rounded()))
-    }
+    /// The level the charge limit compares against: the same figure the app shows (`shownPercent`), so the limit holds the
+    /// number on screen. macOS's own percentage can sit several points above the battery's real charge, charging or not.
+    public var limitLevel: Int { Int(shownPercent.rounded()) }
     public var isPluggedIn: Bool
     public var isCharging: Bool
     public var cycleCount: Int?

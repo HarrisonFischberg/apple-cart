@@ -535,6 +535,41 @@ private final class Rig {
         #expect(off.controller.calls.isEmpty && unknown.controller.calls.isEmpty && floor.controller.calls.isEmpty)
     }
 
+    @Test func heatNeverDrainsTheBatteryBelowItsFloor() async {
+        let low = Rig(limit: 100)
+        low.settings.setHeatProtection(true)
+        await low.on()
+        await low.feed(warm(ChargePolicy.heatFloor, 40))
+        #expect(low.controller.calls.isEmpty) // too low to run on the battery while it cools
+        let ok = Rig(limit: 100)
+        ok.settings.setHeatProtection(true)
+        await ok.on()
+        await ok.feed(warm(ChargePolicy.heatFloor + 5, 40))
+        #expect(ok.controller.calls == [.hold(100)])
+    }
+
+    @Test func aHeatCutIsReleasedWhenTheSettingIsTurnedOff() async {
+        let rig = Rig(limit: 100)
+        rig.settings.setHeatProtection(true)
+        await rig.on()
+        await rig.feed(warm(90, 38))
+        #expect(rig.controller.calls == [.hold(100)])
+        rig.settings.setHeatProtection(false)
+        await rig.feed(warm(90, 38), after: 30)
+        #expect(rig.controller.calls == [.hold(100), .allow])
+    }
+
+    @Test func aNewCutIsHeldForAMinuteBeforeAOnePointWobbleReleasesIt() async {
+        let rig = Rig()
+        await rig.on()
+        await rig.feed(reading(80))
+        #expect(rig.controller.calls == [.hold(80)])
+        await rig.feed(reading(79), after: 10) // a wobble: still held, nothing sent
+        #expect(rig.controller.calls == [.hold(80)])
+        await rig.feed(reading(79), after: ChargeLimiter.minHold) // a minute on, it is released
+        #expect(rig.controller.calls.last == .allow)
+    }
+
     @Test func heatAtTheLimitKeepsTheLimitWordingAndWantsReadingsAtOneHundred() async {
         let rig = Rig()
         rig.settings.setHeatProtection(true)

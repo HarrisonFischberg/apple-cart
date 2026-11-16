@@ -101,6 +101,8 @@ public enum ChargePolicy {
     public static let hysteresis = 1
     /// Never hold the charger off at or below this level, whatever the limit says: a dead battery shuts the Mac down.
     public static let emergencyFloor = 5
+    /// Heat protection cuts the charger, which runs the Mac on the battery; it never does that at or below this level.
+    public static let heatFloor = 20
 
     @MainActor
     public static func decide(reading: BatteryReading?, settings: ChargeLimitSettings) -> ChargeDecision {
@@ -118,10 +120,10 @@ public enum ChargePolicy {
     }
 
     /// Heat protection turns "charge" into the same cut a limit hold uses. It protects the battery, so it applies during
-    /// Top Up too, but never on battery and never at or below the emergency floor (it cannot keep a battery from charging forever:
-    /// HeatGuard always lets it charge again once it cools). A hold or discharge the limit already wants is left as it is.
+    /// Top Up too, but never on battery and never at or below `heatFloor` (a heat pause runs the Mac on the battery, so a hot battery must not
+    /// be drained empty). HeatGuard also lets it charge again once it cools. A hold or discharge the limit already wants is left as it is.
     public static func applyingHeat(_ d: ChargeDecision, paused: Bool, reading: BatteryReading?, limit: Int) -> ChargeDecision {
-        guard paused, d == .allowCharging, let r = reading, r.isPluggedIn, r.limitLevel > emergencyFloor else { return d }
+        guard paused, d == .allowCharging, let r = reading, r.isPluggedIn, r.limitLevel > heatFloor else { return d }
         return .holdCharging(at: limit)
     }
 }

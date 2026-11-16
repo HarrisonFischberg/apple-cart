@@ -58,6 +58,8 @@ public struct ChargeLimitState: Equatable, Sendable {
 @MainActor @Observable
 public final class ChargeLimiter {
     public static let renewEvery: TimeInterval = 30
+    /// A new cut is held at least this long before the limit may release it.
+    public static let minHold: TimeInterval = 60
     public static let verifyWindow: TimeInterval = 180
     /// Re-send the restore at these points if charging has not resumed.
     public static let retryAt: [TimeInterval] = [60, 120]
@@ -80,6 +82,7 @@ public final class ChargeLimiter {
     @ObservationIgnored private let controller: ChargeController
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var toolEnabled = false
+    @ObservationIgnored private var cutStartedAt: Date?     // when the current run of cuts began
     @ObservationIgnored private var lastCut: Date?          // the helper confirmed a cut at this time
     @ObservationIgnored private var maybeCutUntil: Date?    // a cut was sent and may be live until then (even unconfirmed)
     @ObservationIgnored private var restoredAt: Date? { didSet { state.resuming = restoredAt != nil } } // checking that charging resumed since then
@@ -169,7 +172,8 @@ public final class ChargeLimiter {
     }
 
     private func clearCommandState() {
-        lastCut = nil; restoredAt = nil; unpluggedInCutSince = nil; releasedForUnplugAt = nil
+        lastCut = nil; restoredAt = nil; unpluggedInCutSince = nil; releasedForUnplugAt = nil; cutStartedAt = nil
+        heat = HeatGuard()
         state.holdingAt = nil; state.chargingNotResumed = false; state.commandFailed = false; state.waitingForWake = false
     }
 
@@ -193,7 +197,14 @@ public final class ChargeLimiter {
         var decision = ChargePolicy.decide(reading: seen, settings: settings)
         // Charging takes a while to start after a restore; "not charging" in that wait must not re-cut below the limit.
         if case .holdCharging = decision, restoredAt != nil, let seen, seen.limitLevel < settings.effectiveLimit { decision = .allowCharging }
-        let hot = heat.update(temperatureC: seen?.temperatureC, maxC: settings.heatMaxC, enabled: settings.heatProtection,
+        // A cut that has only just begun is not released for a one-point wobble of the reading (the battery's own figure
+        // jitters by a point or two): holding for a minute first keeps it from switching on and off every few seconds.
+        if decision == .allowCharging, lastCut != nil, let started = cutStartedAt, now().timeIntervalSince(started) < Self.minHold,
+           let seen, seen.isPluggedIn, seen.limitLevel > settings.effectiveLimit - 3, settings.effectiveLimit < 100 {
+            decision = .holdCharging(at: settings.effectiveLimit)
+        }
+        let freshReading = r.map { abs(now().timeIntervalSince($0.date)) <= Self.freshReading } ?? false
+        let hot = heat.update(temperatureC: freshReading ? seen?.temperatureC : nil, maxC: settings.heatMaxC, enabled: settings.heatProtection,
                               pluggedIn: seen?.isPluggedIn ?? false, now: now())
         let limitDecision = decision
         decision = ChargePolicy.applyingHeat(decision, paused: hot, reading: seen, limit: settings.effectiveLimit)
@@ -251,6 +262,7 @@ public final class ChargeLimiter {
             state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC; return
         }
         let wasCut = lastCut != nil
+        if !wasCut { cutStartedAt = now() }
         maybeCutUntil = now().addingTimeInterval(Self.leaseSeconds)
         let result = await controller.apply(decision)
         guard toolEnabled else { if await controller.resetAll() == .applied { maybeCutUntil = nil }; return }
