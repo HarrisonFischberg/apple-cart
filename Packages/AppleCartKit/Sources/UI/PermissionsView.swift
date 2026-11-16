@@ -11,20 +11,11 @@ public struct PermissionsView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(spacing: 0) {
-                    ForEach(Array(Permission.allCases.enumerated()), id: \.element) { i, p in
-                        if i > 0 { Divider() }
-                        row(p).padding(.horizontal, 14).padding(.vertical, 8)
-                    }
-                }
-                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Text("Nothing is requested at launch. A permission is asked for only when you use a tool that needs it.").hint()
-            }
-            .toolPage()
+        VStack(alignment: .leading, spacing: 12) {
+            PageTitle("Permissions")
+            SettingsCard { ForEach(Permission.allCases, id: \.self) { row($0) } }
+            Text("Nothing is requested at launch. A permission is asked for only when you use a tool that needs it.").hint()
         }
-        .background(Palette.ground)
         .task { await model.refresh() }
     }
 
@@ -51,36 +42,6 @@ public struct PermissionsView: View {
         case .granted: Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(.primary).symbolRenderingMode(.multicolor)
         case .notGranted: Label("Not granted", systemImage: "circle").foregroundStyle(.secondary)
         case .unknown: Text("Checking…").foregroundStyle(.secondary)
-        }
-    }
-}
-
-/// Settings window content: Features and Permissions.
-public struct SettingsView: View {
-    let registry: FeatureRegistry
-    let permissions: PermissionsModel
-    let readout: ReadoutSettings
-    let open: (URL) -> Void
-    let login: LaunchAtLogin
-    let general: GeneralActions
-
-    public init(registry: FeatureRegistry, permissions: PermissionsModel, readout: ReadoutSettings, login: LaunchAtLogin,
-                general: GeneralActions, open: @escaping (URL) -> Void) {
-        self.login = login
-        self.general = general
-        self.registry = registry
-        self.readout = readout
-        self.permissions = permissions
-        self.open = open
-    }
-
-    public var body: some View {
-        TabView {
-            GeneralSettingsView(login: login, actions: general).tabItem { Label("General", systemImage: "gearshape") }
-            FeaturesSettingsView(registry: registry).tabItem { Label("Features", systemImage: "square.grid.2x2") }
-            Form { ReadoutPicker(readout: readout) }.formStyle(.grouped)
-                .tabItem { Label("Menu bar", systemImage: "menubar.rectangle") }
-            PermissionsView(model: permissions, open: open).tabItem { Label("Permissions", systemImage: "hand.raised") }
         }
     }
 }

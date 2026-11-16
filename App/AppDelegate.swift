@@ -162,10 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
-                styleMask: [.titled, .closable, .resizable],
+                contentRect: NSRect(x: 0, y: 0, width: 780, height: 540),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered, defer: false)
-            window.title = "Features"
+            window.title = "Apple Cart Settings"
+            window.contentMinSize = NSSize(width: 680, height: 460)
             window.contentView = NSHostingView(rootView: SettingsView(
                 registry: registry,
                 permissions: PermissionsModel(checker: SystemPermissionChecker(), registry: registry),
@@ -174,9 +175,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 general: GeneralActions(updatesConfigured: updater.isConfigured, checkForUpdates: { [updater] in updater.checkForUpdates() },
                                         automaticChecks: { [updater] in updater.automaticChecks }, setAutomaticChecks: { [updater] in updater.automaticChecks = $0 },
                                         sendDebugLogs: { [weak self] in self?.sendDebugLogs() }, deleteAllData: { [weak self] in self?.deleteAllData() }),
+                tools: SettingsTools(clipboard: clipboard, breaks: breaks, quickToggles: quickToggles, updateChecker: updateChecker),
                 open: { NSWorkspace.shared.open($0) }))
             window.isReleasedWhenClosed = false
             window.center()
+            window.setFrameAutosaveName("AppleCartSettings") // remembers size and place between launches
             settingsWindow = window
         }
         NSApp.activate()

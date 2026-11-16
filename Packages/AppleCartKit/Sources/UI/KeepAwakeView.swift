@@ -8,7 +8,7 @@ private let presets: [(label: String, spoken: String, seconds: TimeInterval?)] =
 
 public struct KeepAwakeView: View {
     let keepAwake: KeepAwake
-    @AppStorage("keepAwake.displayOn") private var displayOn = false
+    @AppStorage("keepAwake.displayOn") private var displayOn = false // set in Settings
     @AppStorage("keepAwake.useLevel") private var useLevel = false
     @AppStorage("keepAwake.level") private var level = 20
 
@@ -33,13 +33,7 @@ public struct KeepAwakeView: View {
                         }
                     }
                     Text("Click a time to start. Click it again to stop.").font(.callout).foregroundStyle(Palette.secondary)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle("Keep the display on too", isOn: $displayOn)
-                        Toggle("Stop when the battery reaches", isOn: $useLevel)
-                        if useLevel {
-                            Stepper("\(level)% (only on battery)", value: $level, in: 5...80, step: 5).font(.callout)
-                        }
-                    }
+                    Text("Display and battery options are in Settings.").font(.callout).foregroundStyle(Palette.secondary)
                     if keepAwake.failed {
                         Text("macOS refused to keep this Mac awake. Try again.").font(.callout).foregroundStyle(.red)
                     }
