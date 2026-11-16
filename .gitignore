@@ -16,3 +16,4 @@ ralph/STOP
 .claude/worktrees/
 Vendor/Sparkle.xcframework
 Vendor/Sparkle-LICENSE
+.signing/

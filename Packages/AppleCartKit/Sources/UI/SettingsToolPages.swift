@@ -141,21 +141,13 @@ struct ChargeControlOptions: View {
 
     var body: some View {
         SettingsCard("Charge control") {
-            SettingsRow("Charge limit", detail: "\(settings.minimum)-100%, in steps of 5. Also set from the panel.") {
+            SettingsRow("Charge limit", detail: "0-100%, in steps of 5. Also set from the panel.") {
                 HStack(spacing: 4) {
                     TextField("Charge limit", value: Binding(get: { settings.limit }, set: { settings.setLimit($0); changed() }), format: .number)
                         .multilineTextAlignment(.trailing).frame(width: 56).textFieldStyle(.roundedBorder)
                         .accessibilityValue("\(settings.limit) percent")
                     Text("%").foregroundStyle(Palette.secondary)
                 }
-            }
-            SettingsRow("Allow charge limits below 80%") {
-                Toggle("Allow charge limits below 80%", isOn: Binding(get: { settings.allowBelow80 }, set: { settings.setAllowBelow80($0); changed() }))
-                    .toggleStyle(.switch).labelsHidden()
-            }
-            if settings.allowBelow80 {
-                Label("Below 80% you have less battery when you unplug. Apple's own Charge Limit does not go below 80%.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             SettingsRow("Automatic discharge", detail: "Above the limit while plugged in, run from the battery down to the limit. On this Mac a pause also runs from the battery, so the level drifts down either way.") {
                 Toggle("Automatic discharge", isOn: Binding(get: { settings.autoDischarge }, set: { settings.setAutoDischarge($0); changed() }))

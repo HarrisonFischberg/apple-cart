@@ -53,7 +53,7 @@ public struct BatteryView: View {
     @ViewBuilder private func widget(_ w: BatteryWidget, _ r: BatteryReading) -> some View {
         switch w {
         case .charge: summary(r); chargeBar(r)
-        case .powerFlow: PowerFlowMap(reading: r, active: active)
+        case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt)
         case .details: details(r)
         case .history: graph
         case .energyApps: apps
@@ -206,10 +206,11 @@ public struct BatteryView: View {
     }
 }
 
-/// Drag handle and sailing marker drawn over the charge bar. Snaps to 5% steps and respects the below-80 rule.
+/// Drag handle and sailing marker drawn over the charge bar. Snaps to 5% steps, from 0 to 100, and shows the value while dragging.
 private struct LimitHandle: View {
     let settings: ChargeLimitSettings
     let changed: () -> Void
+    @State private var dragging = false
 
     var body: some View {
         GeometryReader { geo in
@@ -226,10 +227,11 @@ private struct LimitHandle: View {
                 .position(x: min(max(x(settings.limit), 3), w - 3), y: h / 2)
                 .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("chargeBar"))
                     .onChanged { v in
+                        dragging = true
                         let p = settings.clamped(Int((v.location.x / max(w, 1) * 100).rounded()))
                         if p != settings.limit { settings.setLimit(p) }
                     }
-                    .onEnded { _ in changed() })
+                    .onEnded { _ in dragging = false; changed() })
                 .help("Drag to set the charge limit")
                 .accessibilityElement()
                 .accessibilityLabel("Charge limit")
@@ -242,6 +244,13 @@ private struct LimitHandle: View {
                     }
                     changed()
                 }
+            if dragging {
+                Text("\(settings.limit)%").font(.system(size: 15, weight: .bold)).monospacedDigit()
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Palette.accent, in: Capsule()).foregroundStyle(Color.white)
+                    .position(x: min(max(x(settings.limit), 24), w - 24), y: -16)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
         }
         .coordinateSpace(.named("chargeBar"))
     }

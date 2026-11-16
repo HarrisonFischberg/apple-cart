@@ -10,6 +10,8 @@ public struct ChargeLimitState: Equatable, Sendable {
     public var discharging = false
     public var chargingNotResumed = false
     public var commandFailed = false
+    /// The latest battery level the runner saw, so the panel can offer Discharge only when it applies.
+    public var level: Int?
     /// The limit the runner is working towards (100 while Top Up is on).
     public var target = 100
 
@@ -156,6 +158,7 @@ public final class ChargeLimiter {
         // Our own cut (or its aftermath) makes macOS report battery power, so only a plugged reading may end Top Up then.
         if let r, (!cut && restoredAt == nil) || r.isPluggedIn { settings.observe(r) }
         state.target = settings.effectiveLimit
+        if let r { state.level = r.percent }
         guard state.helperStatus == .ready else {
             // Nothing can be commanded safely. If a cut may still be live, ask for the restore anyway.
             if cutMayBeLive, await controller.resetAll() == .applied { maybeCutUntil = nil }
@@ -172,7 +175,9 @@ public final class ChargeLimiter {
             }
         }
         let seen = plugAdjusted(r, cut: cut)
-        let decision = ChargePolicy.decide(reading: seen, settings: settings)
+        var decision = ChargePolicy.decide(reading: seen, settings: settings)
+        // Charging takes a while to start after a restore; "not charging" in that wait must not re-cut below the limit.
+        if case .holdCharging = decision, restoredAt != nil, let seen, seen.limitLevel < settings.effectiveLimit { decision = .allowCharging }
         switch decision {
         case .holdCharging(let at), .discharge(to: let at):
             await hold(decision, at: at, reading: r)

@@ -5,16 +5,21 @@ import SwiftUI
 struct PowerFlowMap: View {
     let reading: BatteryReading?
     var active = true
+    /// The charge limit is deliberately holding the charger off (the percent), so a low charger reading is not a weak charger.
+    var pausedAt: Int?
 
     var body: some View {
         let streams = PowerFlows.streams(reading)
         VStack(alignment: .leading, spacing: 8) {
             PowerFlowArt(reading: reading, active: active)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(FlowSummary.text(reading, streams: streams, rest: PowerFlows.rest(reading, streams: streams)))
+                .accessibilityLabel(FlowSummary.text(reading, streams: streams, rest: PowerFlows.rest(reading, streams: streams))
+                    .replacingOccurrences(of: "the charger is too weak", with: pausedAt == nil ? "the charger is too weak" : "charging is paused"))
             if PowerFlows.chargerTooWeak(reading) {
-                Label("The charger is too weak for what this Mac is doing. The battery is covering the rest.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout).foregroundStyle(Palette.drain)
+                Label(pausedAt.map { "Charging is paused at \($0)%. The Mac is running on the battery." }
+                      ?? "The charger is too weak for what this Mac is doing. The battery is covering the rest.",
+                      systemImage: pausedAt == nil ? "exclamationmark.triangle.fill" : "pause.circle.fill")
+                    .font(.callout).foregroundStyle(pausedAt == nil ? Palette.drain : Palette.secondary)
                     .accessibilityElement(children: .combine)
             }
         }

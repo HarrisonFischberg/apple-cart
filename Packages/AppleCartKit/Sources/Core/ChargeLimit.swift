@@ -5,19 +5,18 @@ import Observation
 /// after the helper confirmed a command, says a limit is being held.
 @MainActor @Observable
 public final class ChargeLimitSettings {
-    public static let range = 50...100
+    public static let range = 0...100
     public static let step = 5
-    /// Lowest limit while "Allow charge limits below 80%" is off.
-    public static let safeMinimum = 80
     /// What the limit popover offers (filtered by `minimum`).
-    public static let choices = [50, 60, 70, 80, 90, 100]
+    public static let choices = [0, 20, 50, 70, 80, 100]
     public static let sailingRange = 0...15
     public static let heatRangeC = 30.0...45.0
 
     public private(set) var limit: Int
     public private(set) var topUpActive: Bool
-    public private(set) var allowBelow80: Bool
     public private(set) var autoDischarge: Bool
+    /// One-shot Discharge: run from the battery down to the limit, then switch itself off.
+    public private(set) var dischargeActive: Bool
     public private(set) var sailing: Bool
     public private(set) var sailingDifference: Int
     /// Stored only; heat protection logic is not built yet.
@@ -27,8 +26,8 @@ public final class ChargeLimitSettings {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        allowBelow80 = defaults.bool(forKey: "chargeAllowBelow80")
         autoDischarge = defaults.bool(forKey: "chargeAutoDischarge")
+        dischargeActive = defaults.bool(forKey: "chargeDischarge")
         sailing = defaults.bool(forKey: "chargeSailing")
         sailingDifference = Self.clampedSailing(defaults.object(forKey: "chargeSailingDifference") as? Int ?? 5)
         heatProtection = defaults.bool(forKey: "chargeHeatProtection")
@@ -38,7 +37,7 @@ public final class ChargeLimitSettings {
         limit = clamped(defaults.object(forKey: "chargeLimit") as? Int ?? 100)
     }
 
-    /// Nearest multiple of 5 inside 50...100.
+    /// Nearest multiple of 5 inside 0...100.
     public static func clamped(_ percent: Int) -> Int {
         let stepped = Int((Double(percent) / Double(step)).rounded()) * step
         return min(max(stepped, range.lowerBound), range.upperBound)
@@ -46,24 +45,15 @@ public final class ChargeLimitSettings {
 
     public static func clampedSailing(_ n: Int) -> Int { min(max(n, sailingRange.lowerBound), sailingRange.upperBound) }
 
-    /// 80 until the owner allows lower limits.
-    public var minimum: Int { allowBelow80 ? Self.range.lowerBound : Self.safeMinimum }
-
-    /// Nearest multiple of 5 inside `minimum`...100.
-    public func clamped(_ percent: Int) -> Int { max(Self.clamped(percent), minimum) }
+    public func clamped(_ percent: Int) -> Int { Self.clamped(percent) }
 
     public func setLimit(_ percent: Int) {
         limit = clamped(percent)
         defaults.set(limit, forKey: "chargeLimit")
     }
 
-    public func setAllowBelow80(_ on: Bool) {
-        allowBelow80 = on
-        defaults.set(on, forKey: "chargeAllowBelow80")
-        if limit < minimum { setLimit(minimum) }
-    }
-
     public func setAutoDischarge(_ on: Bool) { autoDischarge = on; defaults.set(on, forKey: "chargeAutoDischarge") }
+    public func setDischarge(_ on: Bool) { dischargeActive = on; defaults.set(on, forKey: "chargeDischarge") }
     public func setSailing(_ on: Bool) { sailing = on; defaults.set(on, forKey: "chargeSailing") }
     public func setSailingDifference(_ n: Int) {
         sailingDifference = Self.clampedSailing(n)
@@ -90,8 +80,9 @@ public final class ChargeLimitSettings {
 
     /// Feed every new reading in. No reading is not "unplugged", so it leaves Top Up alone.
     public func observe(_ reading: BatteryReading?) {
-        guard topUpActive, let r = reading else { return }
-        if !r.isPluggedIn || r.percent >= 100 { setTopUp(false) }
+        guard let r = reading else { return }
+        if topUpActive, !r.isPluggedIn || r.percent >= 100 { setTopUp(false) }
+        if dischargeActive, !r.isPluggedIn || r.limitLevel <= effectiveLimit { setDischarge(false) }
     }
 }
 
@@ -105,19 +96,21 @@ public enum ChargeDecision: Equatable, Sendable {
 public enum ChargePolicy {
     /// Default band: charging resumes this many percent below the limit, so it does not flap at the edge.
     public static let hysteresis = 3
+    /// Never hold the charger off at or below this level, whatever the limit says: a dead battery shuts the Mac down.
+    public static let emergencyFloor = 5
 
     @MainActor
     public static func decide(reading: BatteryReading?, settings: ChargeLimitSettings) -> ChargeDecision {
-        decide(reading: reading, limit: settings.effectiveLimit, band: settings.resumeBand, autoDischarge: settings.autoDischarge)
+        decide(reading: reading, limit: settings.effectiveLimit, band: settings.resumeBand, autoDischarge: settings.autoDischarge || settings.dischargeActive)
     }
 
     /// Above the limit: discharge (if allowed) or hold. At the limit: hold. At or below `limit - band`: charge.
     /// Between: keep doing what the battery is doing now (`isCharging`). Unplugged or no reading: nothing to hold.
     public static func decide(reading: BatteryReading?, limit: Int, band: Int = hysteresis, autoDischarge: Bool = false) -> ChargeDecision {
-        guard let r = reading, r.isPluggedIn, limit < 100 else { return .allowCharging }
-        if r.percent > limit && autoDischarge { return .discharge(to: limit) }
-        if r.percent >= limit { return .holdCharging(at: limit) }
-        if r.percent <= limit - band { return .allowCharging }
+        guard let r = reading, r.isPluggedIn, limit < 100, r.limitLevel > emergencyFloor else { return .allowCharging }
+        if r.limitLevel > limit && autoDischarge { return .discharge(to: limit) }
+        if r.limitLevel >= limit { return .holdCharging(at: limit) }
+        if r.limitLevel <= limit - band { return .allowCharging }
         return r.isCharging ? .allowCharging : .holdCharging(at: limit)
     }
 }

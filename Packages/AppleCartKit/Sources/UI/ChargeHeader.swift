@@ -94,7 +94,7 @@ struct LimitPopover: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Stop charging at").font(.system(size: 13, weight: .semibold))
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(ChargeLimitSettings.choices.filter { $0 >= settings.minimum }, id: \.self) { p in
+                ForEach(ChargeLimitSettings.choices, id: \.self) { p in
                     Button("\(p)%") { settings.setLimit(p); Task { await limiter?.reevaluate() } }
                         .buttonStyle(ChipStyle(selected: settings.limit == p))
                         .accessibilityLabel("\(p) percent")
@@ -102,6 +102,16 @@ struct LimitPopover: View {
                 }
             }
             let state = limiter?.state ?? ChargeLimitState()
+            Toggle("Automatic discharge", isOn: Binding(get: { settings.autoDischarge }, set: { settings.setAutoDischarge($0); Task { await limiter?.reevaluate() } }))
+                .toggleStyle(.switch).font(.system(size: 13))
+            // Reference behavior: the Discharge button is hidden while Automatic Discharge is on.
+            if !settings.autoDischarge, state.helperStatus == .ready, settings.dischargeActive || (state.level ?? 0) > settings.effectiveLimit {
+                Button(settings.dischargeActive ? "Stop discharging" : "Discharge to \(settings.limit)%") {
+                    settings.setDischarge(!settings.dischargeActive)
+                    Task { await limiter?.reevaluate() }
+                }
+                .buttonStyle(ChipStyle(selected: settings.dischargeActive))
+            }
             Text(state.reasonText)
                 .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             if settings.topUpActive && state.helperStatus != .ready {
