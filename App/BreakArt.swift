@@ -11,29 +11,23 @@ struct BreakArt: View {
             switch kind {
             case .eyes: eyes
             case .stretch: outdoors
-            case .water: fountain
+            case .water: droplet
             }
         }
         .frame(width: 256, height: 256)
     }
 
-    /// An eye looking down a road to a far horizon, marked 20 ft.
+    /// Just an eyeball.
     private var eyes: some View {
         ZStack {
-            Path { p in
-                p.move(to: CGPoint(x: 128, y: 150)); p.addLine(to: CGPoint(x: 40, y: 256))
-                p.move(to: CGPoint(x: 128, y: 150)); p.addLine(to: CGPoint(x: 216, y: 256))
-            }.stroke(.white.opacity(0.55), lineWidth: 6)
-            Rectangle().fill(.white.opacity(0.5)).frame(width: 256, height: 3).position(x: 128, y: 150)
-            Circle().fill(.yellow.opacity(0.9)).frame(width: 34, height: 34).position(x: 128, y: 118)
-            Ellipse().fill(.white).frame(width: 150, height: 74).position(x: 128, y: 62)
-            Circle().fill(Color(red: 0.16, green: 0.42, blue: 0.78)).frame(width: 52, height: 52).position(x: 128, y: 62)
-            Circle().fill(.black).frame(width: 22, height: 22).position(x: 128, y: 62)
-            Text("20 ft").font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white).position(x: 128, y: 214)
+            Ellipse().fill(.white).frame(width: 196, height: 112)
+            Circle().fill(Color(red: 0.16, green: 0.42, blue: 0.78)).frame(width: 84, height: 84)
+            Circle().fill(.black).frame(width: 36, height: 36)
+            Circle().fill(.white.opacity(0.9)).frame(width: 14, height: 14).offset(x: -10, y: -12)
         }
     }
 
-    /// Mountains and a sun, with a small figure reaching up.
+    /// Mountains and a sun.
     private var outdoors: some View {
         ZStack {
             Circle().fill(.yellow).frame(width: 52, height: 52).position(x: 196, y: 58)
@@ -46,34 +40,21 @@ struct BreakArt: View {
                 p.move(to: CGPoint(x: 80, y: 90)); p.addLine(to: CGPoint(x: 62, y: 118)); p.addLine(to: CGPoint(x: 80, y: 112)); p.addLine(to: CGPoint(x: 96, y: 120)); p.closeSubpath()
             }.fill(.white)
             Rectangle().fill(Color(red: 0.18, green: 0.34, blue: 0.30)).frame(width: 256, height: 56).position(x: 128, y: 228)
-            Path { p in // a person stretching both arms overhead
-                p.move(to: CGPoint(x: 128, y: 224)); p.addLine(to: CGPoint(x: 128, y: 184))
-                p.move(to: CGPoint(x: 128, y: 224)); p.addLine(to: CGPoint(x: 116, y: 248))
-                p.move(to: CGPoint(x: 128, y: 224)); p.addLine(to: CGPoint(x: 140, y: 248))
-                p.move(to: CGPoint(x: 128, y: 196)); p.addLine(to: CGPoint(x: 108, y: 168))
-                p.move(to: CGPoint(x: 128, y: 196)); p.addLine(to: CGPoint(x: 148, y: 168))
-            }.stroke(.white, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-            Circle().fill(.white).frame(width: 24, height: 24).position(x: 128, y: 166)
         }
     }
 
-    /// A drinking fountain: a basin on a post with an arc of water.
-    private var fountain: some View {
-        ZStack {
-            Path { p in
-                p.move(to: CGPoint(x: 96, y: 150)); p.addQuadCurve(to: CGPoint(x: 70, y: 100), control: CGPoint(x: 70, y: 150))
-                p.addLine(to: CGPoint(x: 120, y: 90)); p.addLine(to: CGPoint(x: 150, y: 150)); p.closeSubpath()
-            }.fill(.white.opacity(0.95))
-            Path { p in
-                p.move(to: CGPoint(x: 70, y: 100)); p.addCurve(to: CGPoint(x: 112, y: 112), control1: CGPoint(x: 80, y: 40), control2: CGPoint(x: 112, y: 40))
-            }.stroke(Color(red: 0.55, green: 0.85, blue: 1.0), style: StrokeStyle(lineWidth: 8, lineCap: .round))
-            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.95)).frame(width: 26, height: 100).position(x: 112, y: 200)
-            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.95)).frame(width: 96, height: 16).position(x: 112, y: 250)
-            ForEach(0..<3, id: \.self) { i in
-                Image(systemName: "drop.fill").font(.system(size: 22)).foregroundStyle(Color(red: 0.55, green: 0.85, blue: 1.0))
-                    .position(x: 190 + CGFloat(i % 2) * 22, y: 70 + CGFloat(i) * 46)
-            }
+    /// A single water droplet.
+    private var droplet: some View {
+        Path { p in
+            p.move(to: CGPoint(x: 128, y: 40))
+            p.addCurve(to: CGPoint(x: 190, y: 150), control1: CGPoint(x: 150, y: 80), control2: CGPoint(x: 190, y: 108))
+            p.addCurve(to: CGPoint(x: 128, y: 216), control1: CGPoint(x: 190, y: 190), control2: CGPoint(x: 160, y: 216))
+            p.addCurve(to: CGPoint(x: 66, y: 150), control1: CGPoint(x: 96, y: 216), control2: CGPoint(x: 66, y: 190))
+            p.addCurve(to: CGPoint(x: 128, y: 40), control1: CGPoint(x: 66, y: 108), control2: CGPoint(x: 106, y: 80))
+            p.closeSubpath()
         }
+        .fill(.white.opacity(0.95))
+        .overlay(Ellipse().fill(Color(red: 0.55, green: 0.85, blue: 1.0).opacity(0.8)).frame(width: 18, height: 36).rotationEffect(.degrees(20)).position(x: 100, y: 152))
     }
 }
 
