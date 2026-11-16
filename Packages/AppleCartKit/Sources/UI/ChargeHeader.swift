@@ -1,0 +1,109 @@
+import Core
+import SwiftUI
+
+/// Top row of the panel while Battery is on: Limit on the left, Top Up and Settings on the right.
+struct ChargeHeader: View {
+    let settings: ChargeLimitSettings
+    let controllerAvailable: Bool
+    let openSettings: () -> Void
+    @State private var showLimit = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row
+            if settings.topUpActive && !controllerAvailable {
+                Text(settings.caption(controllerAvailable: false)).font(.system(size: 12)).foregroundStyle(Palette.secondary)
+                    .padding(.horizontal, 16).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var row: some View {
+        HStack(spacing: 8) {
+            pill("Limit: \(settings.limit)%", symbol: nil, selected: false) { showLimit = true }
+                .accessibilityLabel("Charge limit")
+                .accessibilityValue("\(settings.limit) percent")
+                .accessibilityHint("Choose the highest charge level")
+                .popover(isPresented: $showLimit, arrowEdge: .bottom) {
+                    LimitPopover(settings: settings, controllerAvailable: controllerAvailable)
+                }
+            Spacer(minLength: 0)
+            pill(settings.topUpActive ? "Topping up" : "Top Up (+)", symbol: nil, selected: settings.topUpActive) {
+                settings.setTopUp(!settings.topUpActive)
+            }
+            .disabled(settings.limit >= 100 && !settings.topUpActive)
+            .accessibilityLabel("Top Up to 100 percent")
+            .accessibilityValue(settings.topUpActive ? "On" : "Off")
+            .accessibilityAddTraits(.isToggle)
+            .help(settings.limit >= 100 ? "The limit is already 100%" : "Charge to 100% this time, then go back to the limit")
+            SettingsGlyphButton(action: openSettings)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 52)
+    }
+
+    private func pill(_ title: String, symbol: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 14, weight: .semibold)).monospacedDigit().lineLimit(1)
+                .padding(.horizontal, 14).frame(height: 32)
+                .background(selected ? Palette.accent : Palette.tile, in: Capsule())
+                .overlay(Capsule().strokeBorder(.primary.opacity(selected ? 0 : 0.08)))
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .frame(minHeight: 44) // 44 pt target around the 32 pt pill
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressFade())
+    }
+}
+
+struct SettingsGlyphButton: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.grid.2x2").font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Palette.secondary)
+                .frame(width: 32, height: 32)
+                .background(Palette.tile, in: Circle())
+                .overlay(Circle().strokeBorder(.primary.opacity(0.08)))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressFade())
+        .accessibilityLabel("Settings")
+        .help("Settings")
+    }
+}
+
+private struct PressFade: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(!enabled ? 0.45 : configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+/// Chips for the upper charge limit plus one honest caption.
+struct LimitPopover: View {
+    let settings: ChargeLimitSettings
+    let controllerAvailable: Bool
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Stop charging at").font(.system(size: 13, weight: .semibold))
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(ChargeLimitSettings.choices, id: \.self) { p in
+                    Button("\(p)%") { settings.setLimit(p) }
+                        .buttonStyle(ChipStyle(selected: settings.limit == p))
+                        .accessibilityLabel("\(p) percent")
+                        .accessibilityAddTraits(settings.limit == p ? .isSelected : [])
+                }
+            }
+            Text(settings.caption(controllerAvailable: controllerAvailable))
+                .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            if settings.topUpActive && !controllerAvailable {
+                Text("Top Up is on. It also takes effect once the helper is installed.").hint().fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14).frame(width: 240)
+    }
+}

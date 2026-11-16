@@ -19,7 +19,7 @@ public struct BatteryView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         summary(r)
                         chargeBar(r)
-                        flowTiles(r)
+                        PowerFlowMap(reading: r)
                         details(r)
                         graph
                         apps
@@ -72,34 +72,6 @@ public struct BatteryView: View {
         .accessibilityLabel("Charge \(r.percent) percent")
     }
 
-    private func flowTiles(_ r: BatteryReading) -> some View {
-        let f = PowerFlow(r)
-        return HStack(spacing: 4) {
-            tile(f.adapter, f.adapterNote) { BadgeGlyph(badge: .plug).frame(width: 14, height: 14) }
-            link
-            tile(f.system, f.systemNote) { Image(systemName: "laptopcomputer").font(.system(size: 14)) }
-            link
-            tile(f.battery, f.batteryNote) { if r.isCharging { BadgeGlyph(badge: .bolt).frame(width: 14, height: 14) } else { Image(systemName: "battery.50percent").font(.system(size: 14)) } }
-        }
-    }
-
-    private var link: some View {
-        Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.secondary)
-            .accessibilityHidden(true)
-    }
-
-    private func tile<Icon: View>(_ value: String, _ note: String, @ViewBuilder icon: () -> Icon) -> some View {
-        VStack(spacing: 4) {
-            icon().foregroundStyle(Palette.secondary).frame(height: 16)
-            Text(value).font(.system(size: 16, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
-            Text(note).font(.system(size: 11)).foregroundStyle(Palette.secondary).lineLimit(1).minimumScaleFactor(0.8)
-        }
-        .padding(.vertical, 10).padding(.horizontal, 4)
-        .frame(maxWidth: .infinity)
-        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
     private func details(_ r: BatteryReading) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel("Details")
@@ -123,9 +95,28 @@ public struct BatteryView: View {
                         .foregroundStyle(Palette.accent)
                 }
                 .chartYScale(domain: 0...100)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: axis.component, count: axis.count)) {
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.hour().minute())
+                    }
+                }
                 .frame(height: 100)
                 .accessibilityLabel("Battery percent over the last 24 hours")
             }
+        }
+    }
+
+    /// Tick spacing that fits the data so far: minutes while there is under an hour, then whole hours.
+    private var axis: (component: Calendar.Component, count: Int) {
+        let s = sampler.history.samples
+        let span = (s.last?.date.timeIntervalSince(s.first?.date ?? .now) ?? 0)
+        switch span {
+        case ..<(15 * 60): return (.minute, 5)
+        case ..<3600: return (.minute, 15)
+        case ..<(6 * 3600): return (.hour, 1)
+        case ..<(12 * 3600): return (.hour, 3)
+        default: return (.hour, 6)
         }
     }
 

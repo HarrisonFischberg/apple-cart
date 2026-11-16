@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return r
     }()
     private let battery = BatterySampler()
+    private let chargeLimit = ChargeLimitSettings()
+    /// No root helper exists yet, so nothing can limit charging; the UI says so.
+    private let chargeController: ChargeController = NoopChargeController()
     private let systemSampler = SystemSampler()
     private let keepAwake = KeepAwake()
     private let quickToggles = QuickToggles(prefs: SystemPreferences())
@@ -82,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
+                                          battery: battery, chargeLimit: chargeLimit, chargeController: chargeController,
                                           toolView: { [weak self, battery, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery))

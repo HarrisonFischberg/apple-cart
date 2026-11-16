@@ -74,7 +74,8 @@ MainActor.assumeIsolated {
         for id in FeatureID.allCases { reg.register(id) { DemoTool() } }
         let p = PanelModel(); p.open(route)
         return PanelView(launcher: LauncherModel(registry: reg, store: st), panel: p, openSettings: {}, collapse: {}, quit: {},
-                         toolView: { _ in content })
+                         toolView: { _ in content },
+                         chargeLimit: ChargeLimitSettings(defaults: UserDefaults(suiteName: "preview-limit-" + UUID().uuidString)!))
     }
     struct DemoChecker: PermissionChecker {
         func status(of p: Permission) async -> PermissionStatus { p == .screenRecording ? .granted : p == .fullDiskAccess ? .granted : .notGranted }

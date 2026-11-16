@@ -38,13 +38,20 @@ public struct PanelView: View {
     let toolView: (FeatureID) -> AnyView?
     let firstRun: FirstRunModel?
     let readout: ReadoutSettings?
+    let battery: BatterySampler?
+    let chargeLimit: ChargeLimitSettings?
+    let chargeControlAvailable: Bool
 
     @FocusState private var focused: FeatureID?
 
     public init(launcher: LauncherModel, panel: PanelModel,
                 openSettings: @escaping () -> Void, collapse: @escaping () -> Void, quit: @escaping () -> Void,
                 toolView: @escaping (FeatureID) -> AnyView? = { _ in nil },
-                firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil) {
+                firstRun: FirstRunModel? = nil, readout: ReadoutSettings? = nil,
+                battery: BatterySampler? = nil, chargeLimit: ChargeLimitSettings? = nil, chargeControlAvailable: Bool = false) {
+        self.battery = battery
+        self.chargeLimit = chargeLimit
+        self.chargeControlAvailable = chargeControlAvailable
         self.firstRun = firstRun
         self.readout = readout
         self.launcher = launcher
@@ -86,6 +93,7 @@ public struct PanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .onChange(of: panel.route, initial: true) { selectFirstIfNone() }
         .onChange(of: launcher.allTiles) { selectFirstIfNone() }
+        .onChange(of: battery?.latest, initial: true) { chargeLimit?.observe(battery?.latest) }
         .onExitCommand { collapse() }
     }
 
@@ -96,20 +104,20 @@ public struct PanelView: View {
         if let first = tiles.first { panel.open(first) }
     }
 
-    private var header: some View {
-        ZStack {
-            Text(Self.appName).font(.system(size: 15, weight: .semibold))
+    @ViewBuilder private var header: some View {
+        if let chargeLimit, launcher.allTiles.contains(.battery) {
+            ChargeHeader(settings: chargeLimit, controllerAvailable: chargeControlAvailable, openSettings: openSettings)
+        } else {
             HStack {
+                Color.clear.frame(width: 44, height: 44) // balances the Settings button so the name stays centered
                 Spacer()
-                Button { panel.keepOpen.toggle() } label: { Image(systemName: panel.keepOpen ? "pin.fill" : "pin") }
-                    .buttonStyle(HeaderButtonStyle())
-                    .accessibilityLabel("Keep open")
-                    .accessibilityValue(panel.keepOpen ? "On" : "Off")
-                    .help("Keep the panel open when you click elsewhere")
+                Text(Self.appName).font(.system(size: 15, weight: .semibold))
+                Spacer()
+                SettingsGlyphButton(action: openSettings)
             }
+            .padding(.horizontal, 12)
+            .frame(height: 52)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 48)
     }
 
     private func strip(_ tiles: [FeatureID]) -> some View {
@@ -165,7 +173,18 @@ public struct PanelView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            footerButton("Settings", symbol: "gearshape", action: openSettings)
+            Button { panel.keepOpen.toggle() } label: {
+                Image(systemName: panel.keepOpen ? "pin.fill" : "pin").font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(panel.keepOpen ? Palette.accent : Color.primary)
+                    .frame(width: 56, height: 44)
+                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Keep open")
+            .accessibilityValue(panel.keepOpen ? "On" : "Off")
+            .help("Keep the panel open when you click elsewhere")
             footerButton("Quit", symbol: "power", action: quit)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -180,17 +199,6 @@ public struct PanelView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct HeaderButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(Palette.secondary)
-            .frame(width: 44, height: 44) // 44 pt target
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.5 : 1)
     }
 }
 
