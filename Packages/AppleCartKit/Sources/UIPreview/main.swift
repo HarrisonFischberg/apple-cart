@@ -69,7 +69,7 @@ MainActor.assumeIsolated {
     }
     /// The whole panel (header, icon strip, footer) with one tool chosen.
     @MainActor func fullPanel(_ route: FeatureID, _ content: AnyView) -> PanelView {
-        let st = DemoStore(); st.ids = [.battery, .system, .keepAwake, .clipboard, .quickToggles, .volumeGuard, .updates, .cleaner]
+        let st = DemoStore(); st.ids = [.battery, .system, .keepAwake, .clipboard, .quickToggles, .volumeGuard, .updates, .cleaner, route]
         let reg = FeatureRegistry(store: st)
         for id in FeatureID.allCases { reg.register(id) { DemoTool() } }
         let p = PanelModel(); p.open(route)
@@ -148,37 +148,37 @@ MainActor.assumeIsolated {
         render(name: "t005-permissions-\(tag)", size: NSSize(width: 560, height: 600), dark: dark,
                view: PermissionsView(model: permModel, open: { _ in }), outDir: out)
         render(name: "t006-battery-\(tag)", size: PanelView.size, dark: dark,
-               view: BatteryView(sampler: sampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.battery, AnyView(BatteryView(sampler: sampler, active: true))), outDir: out)
         for step in 0...1 { render(name: "t007-firstrun\(step + 1)-\(tag)", size: PanelView.size, dark: dark, view: firstRunPanel(step: step), outDir: out) }
         render(name: "t008-system-\(tag)", size: PanelView.size, dark: dark,
-               view: SystemView(sampler: sysSampler, active: true).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.system, AnyView(SystemView(sampler: sysSampler, active: true))), outDir: out)
         render(name: "t008-keepawake-\(tag)", size: PanelView.size, dark: dark,
-               view: KeepAwakeView(keepAwake: awake).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.keepAwake, AnyView(KeepAwakeView(keepAwake: awake))), outDir: out)
         render(name: "t024-panel-keepawake-\(tag)", size: PanelView.size, dark: dark,
                view: fullPanel(.keepAwake, AnyView(KeepAwakeView(keepAwake: awake))), outDir: out)
         render(name: "t013-toggles-\(tag)", size: PanelView.size, dark: dark,
-               view: QuickTogglesView(toggles: realToggles).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.quickToggles, AnyView(QuickTogglesView(toggles: realToggles))), outDir: out)
         render(name: "t013-volume-\(tag)", size: PanelView.size, dark: dark,
-               view: VolumeGuardView(guardTool: guardTool).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.volumeGuard, AnyView(VolumeGuardView(guardTool: guardTool))), outDir: out)
         render(name: "t016-uninstaller-\(tag)", size: PanelView.size, dark: dark,
-               view: UninstallerView(model: unin, openFullDiskAccess: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.uninstaller, AnyView(UninstallerView(model: unin, openFullDiskAccess: {}))), outDir: out)
         render(name: "t017-cleaner-\(tag)", size: PanelView.size, dark: dark,
-               view: CleanerView(model: cleaner).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.cleaner, AnyView(CleanerView(model: cleaner))), outDir: out)
         render(name: "t017-diskmap-\(tag)", size: PanelView.size, dark: dark,
-               view: DiskMapView(model: diskMap).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.diskMap, AnyView(DiskMapView(model: diskMap))), outDir: out)
         render(name: "t021-breaks-\(tag)", size: PanelView.size, dark: dark,
-               view: BreaksView(reminders: breaks).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.breakReminders, AnyView(BreaksView(reminders: breaks))), outDir: out)
         render(name: "t021-cleaning-\(tag)", size: PanelView.size, dark: dark,
-               view: CleaningModeView(mode: cleaning, openAccessibility: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.cleaningMode, AnyView(CleaningModeView(mode: cleaning, openAccessibility: {}))), outDir: out)
         render(name: "t021-overlay-\(tag)", size: NSSize(width: 900, height: 560), dark: dark, view: CleaningOverlayView(mode: cleaningLive), outDir: out)
         render(name: "t019-clipboard-\(tag)", size: PanelView.size, dark: dark,
-               view: ClipboardView(history: clip, close: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.clipboard, AnyView(ClipboardView(history: clip, close: {}))), outDir: out)
         render(name: "t020-copytext-\(tag)", size: PanelView.size, dark: dark,
-               view: ScreenReadView(reader: reader, mode: .text, start: {}, openSettings: {}).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.copyText, AnyView(ScreenReadView(reader: reader, mode: .text, start: {}, openSettings: {}))), outDir: out)
         render(name: "t015-flushdns-\(tag)", size: PanelView.size, dark: dark,
-               view: FlushDNSView(tool: flush).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.flushDNS, AnyView(FlushDNSView(tool: flush))), outDir: out)
         render(name: "t018-updates-\(tag)", size: PanelView.size, dark: dark,
-               view: UpdatesView(checker: checker).frame(width: 420, height: 560).background(Palette.ground), outDir: out)
+               view: fullPanel(.updates, AnyView(UpdatesView(checker: checker))), outDir: out)
         render(name: "t004-launcher-\(tag)", size: PanelView.size, dark: dark, view: panelView(full, []), outDir: out)
         render(name: "t004-empty-\(tag)", size: PanelView.size, dark: dark, view: panelView(empty, []), outDir: out)
     }

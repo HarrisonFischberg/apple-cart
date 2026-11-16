@@ -16,23 +16,23 @@ public struct UninstallerView: View {
             VStack(alignment: .leading, spacing: 12) {
                 switch model.phase {
                 case .idle, .refused: dropZone
-                case .scanning: ProgressView("Looking for leftovers…").frame(maxWidth: .infinity, minHeight: 200)
+                case .scanning: ProgressView("Looking for leftovers…").frame(maxWidth: .infinity, minHeight: 160)
                 case .preview(let plan): preview(plan)
                 case .done(let report): done(report)
                 }
             }
-            .padding(16)
+            .toolPage()
         }
     }
 
     private var dropZone: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(spacing: 10) {
-                Image(systemName: "arrow.down.app").font(.system(size: 34)).foregroundStyle(Palette.secondary)
-                Text("Drop an app here").font(.headline)
-                Button("Choose an app…") { choose() }
+                Image(systemName: "arrow.down.app").font(.system(size: 28)).foregroundStyle(Palette.secondary)
+                StatusText("Drop an app here")
+                Button("Choose an app…") { choose() }.buttonStyle(ChipStyle(selected: true)).frame(width: 170)
             }
-            .frame(maxWidth: .infinity, minHeight: 190)
+            .frame(maxWidth: .infinity, minHeight: 150)
             .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6])).opacity(targeted ? 1 : 0))
             .dropDestination(for: URL.self) { urls, _ in
@@ -40,15 +40,14 @@ public struct UninstallerView: View {
                 Task { await model.choose(u) }
                 return true
             } isTargeted: { targeted = $0 }
-            if case .refused(let r) = model.phase { Text(r.message).foregroundStyle(Palette.secondary) }
-            Text("You see everything first. Files go to the Trash, not deleted.")
-                .font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            if case .refused(let r) = model.phase { Text(r.message).hint() }
+            Text("You see everything first. Files go to the Trash, not deleted.").hint()
         }
     }
 
     private func preview(_ plan: UninstallPlan) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Remove \(plan.app.name)?").font(.headline)
+            StatusText("Remove \(plan.app.name)?")
             VStack(spacing: 0) {
                 ForEach(Array(plan.items.enumerated()), id: \.element.id) { i, item in
                     if i > 0 { Divider() }
@@ -68,21 +67,22 @@ public struct UninstallerView: View {
                 }
             }
             .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            if plan.items.count == 1 { Text("No leftover files were found.").foregroundStyle(Palette.secondary) }
+            if plan.items.count == 1 { Text("No leftover files were found.").hint() }
             if model.protectedFoldersHidden {
-                HStack {
-                    Text("Without Full Disk Access some protected leftovers can be missed.").font(.callout).foregroundStyle(Palette.secondary)
-                    Button("Open settings", action: openFullDiskAccess)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Without Full Disk Access some protected leftovers can be missed.").hint()
+                    Button("Open settings", action: openFullDiskAccess).buttonStyle(ChipStyle()).frame(width: 150)
                 }
             }
             if model.appIsRunning {
-                HStack { Text("\(plan.app.name) is open.").foregroundStyle(Palette.secondary); Button("Quit it") { model.quitApp() } }
+                HStack { Text("\(plan.app.name) is open.").hint(); Spacer(); Button("Quit it") { model.quitApp() }.buttonStyle(ChipStyle()).frame(width: 100) }
             }
-            HStack {
-                Button("Cancel") { model.reset() }
+            HStack(spacing: 8) {
+                Button("Cancel") { model.reset() }.buttonStyle(ChipStyle())
                 Button("Move to Trash") { model.moveToTrash() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(ChipStyle(selected: true))
                     .disabled(model.appIsRunning || model.selected.isEmpty)
+                    .opacity(model.appIsRunning || model.selected.isEmpty ? 0.4 : 1)
             }
         }
     }
@@ -90,14 +90,15 @@ public struct UninstallerView: View {
     private func done(_ r: UninstallReport) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(r.undone ? "Put everything back." : "Moved \(r.moved.count) item\(r.moved.count == 1 ? "" : "s") to the Trash.", systemImage: r.undone ? "arrow.uturn.backward" : "checkmark.circle")
-                .font(.headline)
-            if !r.failed.isEmpty { Text("\(r.failed.count) could not be moved: \(r.failed.map { $0.url.lastPathComponent }.joined(separator: ", ")).").foregroundStyle(Palette.secondary) }
-            HStack {
-                if !r.undone && !r.moved.isEmpty { Button("Undo") { model.undo() } }
-                Button("Remove another") { model.reset() }
+                .font(.system(size: 15, weight: .medium))
+            if !r.failed.isEmpty { Text("\(r.failed.count) could not be moved: \(r.failed.map { $0.url.lastPathComponent }.joined(separator: ", ")).").hint() }
+            HStack(spacing: 8) {
+                if !r.undone && !r.moved.isEmpty { Button("Undo") { model.undo() }.buttonStyle(ChipStyle()) }
+                Button("Remove another") { model.reset() }.buttonStyle(ChipStyle(selected: true))
             }
-            if !r.undone { Text("They stay in the Trash until you empty it.").font(.callout).foregroundStyle(Palette.secondary) }
+            if !r.undone { Text("They stay in the Trash until you empty it.").hint() }
         }
+        .toolCard()
     }
 
     private func choose() {

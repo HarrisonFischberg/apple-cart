@@ -15,10 +15,9 @@ public struct BreaksView: View {
                     }
                 }
                 .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Text("A banner appears when a break is due, with a Snooze button. Times restart after your Mac sleeps, and nothing runs while every reminder is off.")
-                    .font(.callout).foregroundStyle(Palette.secondary)
+                Text("A banner appears when a break is due, with a Snooze button. Times restart after your Mac sleeps, and nothing runs while every reminder is off.").hint()
             }
-            .padding(16)
+            .toolPage()
         }
     }
 
@@ -26,14 +25,14 @@ public struct BreaksView: View {
         let c = reminders.config[kind] ?? BreakConfig(minutes: kind.defaultMinutes)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Label(kind.title, systemImage: kind.symbol)
+                Label(kind.title, systemImage: kind.symbol).font(.system(size: 15, weight: .medium))
                 Spacer()
                 Toggle(kind.title, isOn: Binding(get: { c.enabled }, set: { reminders.setEnabled(kind, $0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
             if c.enabled {
                 HStack {
-                    Stepper("Every \(c.minutes) min", value: Binding(get: { c.minutes }, set: { reminders.setMinutes(kind, $0) }), in: 5...240, step: 5)
+                    Stepper("Every \(c.minutes) min", value: Binding(get: { c.minutes }, set: { reminders.setMinutes(kind, $0) }), in: 5...240, step: 5).font(.callout)
                     Spacer(minLength: 8)
                     if let due = reminders.nextDue[kind] {
                         Text("Next \(due.formatted(date: .omitted, time: .shortened))").font(.callout).foregroundStyle(Palette.secondary)
@@ -41,7 +40,7 @@ public struct BreaksView: View {
                 }
             }
         }
-        .padding(14).frame(minHeight: 44)
+        .padding(.horizontal, 14).padding(.vertical, 8).frame(minHeight: 44)
     }
 }
 
@@ -53,30 +52,29 @@ public struct CleaningModeView: View {
     public init(mode: CleaningMode, openAccessibility: @escaping () -> Void) { self.mode = mode; self.openAccessibility = openAccessibility }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Wipe your keyboard and trackpad").font(.headline)
-                Text("The screen goes black and the keyboard and trackpad stop responding. To leave, hold Esc for 3 seconds. It also ends by itself when the time is up.")
-                    .font(.callout).foregroundStyle(Palette.secondary)
-                Picker("Lasts", selection: $seconds) {
-                    ForEach([60, 120, 180, 300], id: \.self) { Text("\($0 / 60) min").tag($0) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    StatusText("Wipe your keyboard and trackpad")
+                    Picker("Lasts", selection: $seconds) {
+                        ForEach([60, 120, 180, 300], id: \.self) { Text("\($0 / 60) min").tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Button("Start cleaning mode") { mode.start(seconds: seconds) }
+                        .buttonStyle(ChipStyle(selected: true))
+                    switch mode.phase {
+                    case .needsAccessibility:
+                        Text("Allow Apple Cart in Accessibility so it can pause the keyboard.").hint()
+                        Button("Open Accessibility settings", action: openAccessibility).buttonStyle(ChipStyle())
+                    case .failed: Text("macOS would not let the keyboard be paused. Nothing changed.").hint()
+                    default: EmptyView()
+                    }
+                    Text("The screen goes black and the keyboard and trackpad stop responding. To leave, hold Esc for 3 seconds. It also ends by itself when the time is up.").hint()
                 }
-                .pickerStyle(.segmented)
-                Button("Start cleaning mode") { mode.start(seconds: seconds) }
-                    .buttonStyle(.borderedProminent)
-                switch mode.phase {
-                case .needsAccessibility:
-                    Text("Allow Apple Cart in Accessibility so it can pause the keyboard.").foregroundStyle(Palette.secondary)
-                    Button("Open Accessibility settings", action: openAccessibility)
-                case .failed: Text("macOS would not let the keyboard be paused. Nothing changed.").foregroundStyle(Palette.secondary)
-                default: EmptyView()
-                }
+                .toolCard()
             }
-            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            Spacer()
+            .toolPage()
         }
-        .padding(16)
     }
 }
 

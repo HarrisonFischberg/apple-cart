@@ -11,13 +11,15 @@ public struct ClipboardView: View {
     public init(history: ClipboardHistory, close: @escaping () -> Void) { self.history = history; self.close = close }
 
     public var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
                 TextField("Search", text: $query).textFieldStyle(.plain).accessibilityLabel("Search clipboard history")
-                Button { showSettings.toggle() } label: { Image(systemName: "gearshape") }.buttonStyle(.plain).accessibilityLabel("Clipboard settings")
+                Button { showSettings.toggle() } label: { Image(systemName: "gearshape").frame(width: 44, height: 44).contentShape(Rectangle()) }
+                    .buttonStyle(.plain).accessibilityLabel("Clipboard settings")
             }
-            .padding(10).background(Palette.tile, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.leading, 14).padding(.trailing, 2)
+            .background(Palette.tile, in: Capsule())
             if showSettings { settings }
             if let s = history.status { Text(s).font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             if !history.lastDeleted.isEmpty {
@@ -27,8 +29,9 @@ public struct ClipboardView: View {
             if shown.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "doc.on.clipboard").font(.system(size: 30)).foregroundStyle(Palette.secondary)
-                    Text(query.isEmpty ? "Nothing copied yet. Copy something and it shows up here." : "No matches.").foregroundStyle(Palette.secondary)
-                }.frame(maxWidth: .infinity, minHeight: 200)
+                    Text(query.isEmpty ? "Nothing copied yet. Copy something and it shows up here." : "No matches.").hint()
+                        .multilineTextAlignment(.center)
+                }.frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -41,7 +44,7 @@ public struct ClipboardView: View {
                 }
             }
         }
-        .padding(16)
+        .toolPage()
     }
 
     private func row(_ item: ClipItem) -> some View {
@@ -90,13 +93,14 @@ public struct ClipboardView: View {
     }
 
     private var settings: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Options")
             Stepper("Keep for \(history.retentionDays) day\(history.retentionDays == 1 ? "" : "s") (pinned stay)", value: Binding(get: { history.retentionDays }, set: { history.setRetention($0) }), in: 1...90)
             Toggle("Remove tracking from copied links", isOn: Binding(get: { history.cleanLinks }, set: { history.setCleanLinks($0) }))
             Toggle("Clear the clipboard after a minute and on lock", isOn: Binding(get: { history.autoClear }, set: { history.setAutoClear($0) }))
-            Text("Passwords and other items apps mark as secret are never saved.").font(.callout).foregroundStyle(Palette.secondary)
+            Text("Passwords and other items apps mark as secret are never saved.").hint()
             if !history.excluded.isEmpty {
-                Text("Never stored from").font(.headline)
+                SectionLabel("Never stored from")
                 ForEach(history.excluded.sorted(), id: \.self) { id in
                     HStack { Text(id).font(.callout); Spacer(); Button("Allow again") { history.allowAgain(id) } }
                 }
@@ -106,8 +110,7 @@ public struct ClipboardView: View {
                 Button("Clear history", role: .destructive) { history.clearAll() }
             }
         }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .toolCard()
     }
 
     private func pickApp() {
@@ -132,11 +135,11 @@ public struct ScreenReadView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(mode == .text ? "Copy text from the screen" : "Read a QR code").font(.headline)
+                    StatusText(mode == .text ? "Copy text from the screen" : "Read a QR code")
                     Text(mode == .text ? "Drag a box around any text, even in an image or a video. It is read on this Mac and copied."
                                        : "Drag a box around a QR code or barcode. The result is copied. Links are never opened for you.")
                         .font(.callout).foregroundStyle(Palette.secondary)
-                    Button("Select an area") { start() }.buttonStyle(.borderedProminent)
+                    Button("Select an area") { start() }.buttonStyle(ChipStyle(selected: true))
                     Text("Shortcut: ⌃⌥⌘\(mode == .text ? "T" : "Q")").font(.callout).foregroundStyle(Palette.secondary)
                     if reader.phase == .needsPermission {
                         Text("Screen Recording is off for Apple Cart. It is only used for the area you pick; nothing is recorded or saved.").foregroundStyle(Palette.secondary)
@@ -144,11 +147,10 @@ public struct ScreenReadView: View {
                     }
                     if reader.phase == .failed { Text("The screen could not be read. Try again.").foregroundStyle(Palette.secondary) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .toolCard()
                 result
             }
-            .padding(16)
+            .toolPage()
         }
     }
 
@@ -163,10 +165,9 @@ public struct ScreenReadView: View {
 
     private func card(_ title: String, _ body: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: "checkmark.circle").font(.headline)
+            Label(title, systemImage: "checkmark.circle").font(.system(size: 15, weight: .medium))
             Text(body).lineLimit(8).textSelection(.enabled)
         }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .toolCard()
     }
 }

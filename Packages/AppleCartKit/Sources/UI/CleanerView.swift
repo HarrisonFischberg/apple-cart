@@ -12,25 +12,25 @@ public struct CleanerView: View {
                 switch model.phase {
                 case .idle:
                     card {
-                        Text("Clear caches and logs").font(.headline)
-                        Text("Finds app caches, logs and Xcode build files (macOS's own caches are left alone). Apps rebuild these on their own. You see the list first and everything goes to the Trash.")
-                            .font(.callout).foregroundStyle(Palette.secondary)
-                        Button("Scan") { model.scan() }
+                        StatusText("Ready to scan")
+                        Button("Scan") { model.scan() }.buttonStyle(ChipStyle(selected: true))
+                        Text("Finds app caches, logs and Xcode build files (macOS's own caches are left alone). Apps rebuild these on their own. You see the list first and everything goes to the Trash.").hint()
                     }
                 case .scanning:
-                    HStack { ProgressView().controlSize(.small); Text("Scanning…"); Spacer(); Button("Stop") { model.cancel() } }
-                        .padding(14).background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    card {
+                        HStack { ProgressView().controlSize(.small); StatusText("Scanning…"); Spacer() }
+                        Button("Stop") { model.cancel() }.buttonStyle(ChipStyle())
+                    }
                 case .preview(let items): preview(items)
                 case .done(let r): done(r)
                 }
             }
-            .padding(16)
+            .toolPage()
         }
     }
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 10, content: c).frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        VStack(alignment: .leading, spacing: 12, content: c).toolCard()
     }
 
     private func preview(_ items: [CleanItem]) -> some View {
@@ -38,7 +38,7 @@ public struct CleanerView: View {
         return VStack(alignment: .leading, spacing: 12) {
             if items.isEmpty { Text("Nothing to clear.").foregroundStyle(Palette.secondary) }
             ForEach(Array(Dictionary(grouping: items, by: \.group).keys.sorted()), id: \.self) { group in
-                Text(group).font(.headline)
+                SectionLabel(group)
                 VStack(spacing: 0) {
                     ForEach(Array(items.filter { $0.group == group }.enumerated()), id: \.element.id) { i, item in
                         if i > 0 { Divider() }
@@ -55,23 +55,24 @@ public struct CleanerView: View {
                 }
                 .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            HStack {
-                Button("Cancel") { model.reset() }
+            HStack(spacing: 8) {
+                Button("Cancel") { model.reset() }.buttonStyle(ChipStyle())
                 Button("Move \(picked.formatted(.byteCount(style: .file))) to Trash") { model.moveToTrash() }
-                    .buttonStyle(.borderedProminent).disabled(model.selected.isEmpty)
+                    .buttonStyle(ChipStyle(selected: true)).disabled(model.selected.isEmpty)
+                    .opacity(model.selected.isEmpty ? 0.4 : 1)
             }
         }
     }
 
     private func done(_ r: UninstallReport) -> some View {
         card {
-            Label(r.undone ? "Put everything back." : "Moved \(r.moved.count) item\(r.moved.count == 1 ? "" : "s") to the Trash.", systemImage: r.undone ? "arrow.uturn.backward" : "checkmark.circle").font(.headline)
-            if !r.failed.isEmpty { Text("\(r.failed.count) could not be moved (in use or protected): \(r.failed.map { $0.url.lastPathComponent }.joined(separator: ", ")).").foregroundStyle(Palette.secondary) }
-            HStack {
-                if !r.undone && !r.moved.isEmpty { Button("Undo") { model.undo() } }
-                Button("Scan again") { model.reset(); model.scan() }
+            Label(r.undone ? "Put everything back." : "Moved \(r.moved.count) item\(r.moved.count == 1 ? "" : "s") to the Trash.", systemImage: r.undone ? "arrow.uturn.backward" : "checkmark.circle").font(.system(size: 15, weight: .medium))
+            if !r.failed.isEmpty { Text("\(r.failed.count) could not be moved (in use or protected): \(r.failed.map { $0.url.lastPathComponent }.joined(separator: ", ")).").hint() }
+            HStack(spacing: 8) {
+                if !r.undone && !r.moved.isEmpty { Button("Undo") { model.undo() }.buttonStyle(ChipStyle()) }
+                Button("Scan again") { model.reset(); model.scan() }.buttonStyle(ChipStyle(selected: true))
             }
-            if !r.undone { Text("Space comes back when you empty the Trash.").font(.callout).foregroundStyle(Palette.secondary) }
+            if !r.undone { Text("Space comes back when you empty the Trash.").hint() }
         }
     }
 }
@@ -81,12 +82,14 @@ public struct DiskMapView: View {
     public init(model: DiskMapModel) { self.model = model }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Button { model.up() } label: { Image(systemName: "chevron.left") }.disabled(model.path.count < 2).accessibilityLabel("Up one folder")
-                Text(model.current.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.headline).lineLimit(1).truncationMode(.head)
-                Spacer()
-                if model.scanning { Button("Stop") { model.stop() } } else { Button("Rescan") { model.scan() } }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button { model.up() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44).contentShape(Rectangle()) }
+                    .buttonStyle(.plain).disabled(model.path.count < 2).accessibilityLabel("Up one folder")
+                StatusText(model.current.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).lineLimit(1).truncationMode(.head)
+                Spacer(minLength: 0)
+                if model.scanning { Button("Stop") { model.stop() }.buttonStyle(ChipStyle()).frame(width: 84) }
+                else { Button("Rescan") { model.scan() }.buttonStyle(ChipStyle()).frame(width: 84) }
             }
             ScrollView {
                 VStack(spacing: 0) {
@@ -98,10 +101,10 @@ public struct DiskMapView: View {
                 }
                 .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 if model.scanning { ProgressView().controlSize(.small).padding(8) }
-                Text("Read only. Folders macOS protects can look smaller without Full Disk Access.").font(.callout).foregroundStyle(Palette.secondary)
+                Text("Read only. Folders macOS protects can look smaller without Full Disk Access.").hint()
             }
         }
-        .padding(16)
+        .toolPage()
         .onAppear { if model.entries.isEmpty && !model.scanning { model.scan() } }
     }
 

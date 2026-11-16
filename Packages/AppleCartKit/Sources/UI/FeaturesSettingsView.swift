@@ -8,19 +8,23 @@ public struct FeaturesSettingsView: View {
     public init(registry: FeatureRegistry) { self.registry = registry }
 
     public var body: some View {
-        Form {
-            Section {
-                Text("Every tool is off until you turn it on. A tool that is off does nothing and uses nothing.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.secondary)
-            }
-            ForEach(FeatureFamily.allCases, id: \.self) { family in
-                Section(family.title) {
-                    ForEach(family.features, id: \.self) { id in row(id) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Every tool is off until you turn it on. A tool that is off does nothing and uses nothing.").hint()
+                ForEach(FeatureFamily.allCases, id: \.self) { family in
+                    SectionLabel(family.title)
+                    VStack(spacing: 0) {
+                        ForEach(Array(family.features.enumerated()), id: \.element) { i, id in
+                            if i > 0 { Divider() }
+                            row(id).padding(.horizontal, 14)
+                        }
+                    }
+                    .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             }
+            .toolPage()
         }
-        .formStyle(.grouped)
+        .background(Palette.ground)
     }
 
     private func row(_ id: FeatureID) -> some View {
@@ -40,6 +44,7 @@ public struct FeaturesSettingsView: View {
         }
         .toggleStyle(.switch)
         .tint(Palette.accent)
+        .frame(minHeight: 44)
         .disabled(!available)
     }
 }

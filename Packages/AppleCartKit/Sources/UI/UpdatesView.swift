@@ -8,46 +8,59 @@ public struct UpdatesView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                section("macOS", symbol: "apple.logo", source: checker.macOS, upToDate: "No macOS updates waiting.")
-                section("Homebrew", symbol: "shippingbox", source: checker.homebrew, upToDate: "Everything from Homebrew is current.")
-                HStack {
-                    Button(checker.phase == .checking ? "Checking…" : "Check now") { Task { await checker.check() } }
-                        .disabled(checker.phase == .checking)
-                    if case .done(let d) = checker.phase {
-                        Text("Checked \(d.formatted(date: .omitted, time: .shortened))").font(.callout).foregroundStyle(Palette.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        statusText
+                        Spacer()
+                        Button(checker.phase == .checking ? "Checking…" : "Check now") { Task { await checker.check() } }
+                            .buttonStyle(ChipStyle(selected: true)).frame(width: 120)
+                            .disabled(checker.phase == .checking)
                     }
+                    section("macOS", source: checker.macOS, upToDate: "No macOS updates waiting.")
+                    section("Homebrew", source: checker.homebrew, upToDate: "Everything from Homebrew is current.")
                 }
-                Text("Checks only when you press the button. The macOS check asks Apple's update service; Homebrew is compared with its last downloaded list, and nothing is installed.")
-                    .font(.callout).foregroundStyle(Palette.secondary)
+                .toolCard()
+                Text("Checks only when you press the button. The macOS check asks Apple's update service; Homebrew is compared with its last downloaded list, and nothing is installed.").hint()
             }
-            .padding(16)
+            .toolPage()
+        }
+    }
+
+    private var statusText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            switch checker.phase {
+            case .done(let d):
+                let n = [checker.macOS, checker.homebrew].reduce(0) { if case .outdated(let i) = $1 { $0 + i.count } else { $0 } }
+                StatusText(n == 0 ? "Up to date" : "\(n) update\(n == 1 ? "" : "s") waiting")
+                Text("Checked \(d.formatted(date: .omitted, time: .shortened))").hint()
+            case .checking: StatusText("Checking…")
+            default: StatusText("Not checked yet")
+            }
         }
     }
 
     @ViewBuilder
-    private func section(_ title: String, symbol: String, source: UpdateSource, upToDate: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: symbol).font(.headline)
+    private func section(_ title: String, source: UpdateSource, upToDate: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel(title)
             switch source {
             case .notInstalled:
-                Text("Homebrew is not installed on this Mac.").foregroundStyle(Palette.secondary)
+                Text("Homebrew is not installed on this Mac.").hint()
             case .upToDate:
-                Text(checker.phase == .idle ? "Not checked yet." : upToDate).foregroundStyle(Palette.secondary)
+                Text(checker.phase == .idle ? "Not checked yet." : upToDate).hint()
             case .failed(let m):
-                Text(m).foregroundStyle(Palette.secondary)
+                Text(m).hint()
             case .outdated(let items):
                 ForEach(items) { i in
                     HStack {
-                        Text(i.name)
+                        Text(i.name).lineLimit(1)
                         Spacer()
                         Text([i.installed, i.available].compactMap { $0 }.joined(separator: " → ")).font(.callout).foregroundStyle(Palette.secondary)
                     }
+                    .font(.callout)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -56,25 +69,42 @@ public struct FlushDNSView: View {
     public init(tool: FlushDNS) { self.tool = tool }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Clear the DNS cache").font(.headline)
-                Text("Helps when a website still goes to an old address. macOS will ask for your administrator password.")
-                    .font(.callout).foregroundStyle(Palette.secondary)
-                Button(tool.phase == .running ? "Flushing…" : "Flush DNS") { Task { await tool.flush() } }
-                    .disabled(tool.phase == .running)
-                switch tool.phase {
-                case .done(let d): Text("Done at \(d.formatted(date: .omitted, time: .shortened)).").foregroundStyle(Palette.secondary)
-                case .cancelled: Text("Cancelled. Nothing changed.").foregroundStyle(Palette.secondary)
-                case .failed(let m): Text(m).foregroundStyle(Palette.secondary)
-                default: EmptyView()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            StatusText(headline)
+                            if let d = detail { Text(d).hint() }
+                        }
+                        Spacer()
+                        Button(tool.phase == .running ? "Flushing…" : "Flush DNS") { Task { await tool.flush() } }
+                            .buttonStyle(ChipStyle(selected: true)).frame(width: 120)
+                            .disabled(tool.phase == .running)
+                    }
+                    Text("Helps when a website still goes to an old address. macOS will ask for your administrator password.").hint()
                 }
+                .toolCard()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            Spacer()
+            .toolPage()
         }
-        .padding(16)
+    }
+
+    private var headline: String {
+        switch tool.phase {
+        case .running: "Flushing…"
+        case .done(let d): "Done at \(d.formatted(date: .omitted, time: .shortened))"
+        case .cancelled: "Cancelled"
+        case .failed: "Did not finish"
+        default: "DNS cache ready to clear"
+        }
+    }
+
+    private var detail: String? {
+        switch tool.phase {
+        case .cancelled: "Nothing changed."
+        case .failed(let m): m
+        default: nil
+        }
     }
 }

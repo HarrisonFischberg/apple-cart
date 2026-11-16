@@ -8,12 +8,12 @@ public struct QuickTogglesView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(spacing: 0) {
                     ForEach(Array(QuickToggle.allCases.enumerated()), id: \.element) { i, t in
                         if i > 0 { Divider() }
                         HStack {
-                            Label(t.title, systemImage: t.symbol)
+                            Label(t.title, systemImage: t.symbol).font(.system(size: 15))
                             Spacer()
                             Toggle(t.title, isOn: Binding(get: { toggles.states[t] ?? false }, set: { toggles.set(t, on: $0) }))
                                 .toggleStyle(.switch).labelsHidden()
@@ -23,10 +23,9 @@ public struct QuickTogglesView: View {
                     }
                 }
                 .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Text("Changing one restarts Finder or the Dock for a moment so it takes effect.")
-                    .font(.callout).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                Text("Changing one restarts Finder or the Dock for a moment so it takes effect.").hint()
             }
-            .padding(16)
+            .toolPage()
         }
         .onAppear { toggles.refresh() }
     }
@@ -41,23 +40,21 @@ public struct VolumeGuardView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Highest volume when the speaker changes").font(.headline)
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Slider(value: Binding(get: { Double(maxPercent) }, set: { maxPercent = Int($0.rounded()) }), in: 10...100, step: 5)
-                            .accessibilityLabel("Highest volume")
-                        Text("\(maxPercent)%").monospacedDigit().frame(width: 48, alignment: .trailing)
+                        StatusText(guardTool.lastLowered.map { "Last time: lowered from \($0.from)% to \($0.to)%" } ?? "Capped at \(maxPercent)%")
+                        Spacer()
+                        Text("\(maxPercent)%").font(.callout).monospacedDigit().foregroundStyle(Palette.secondary)
                     }
-                    Text("When you plug in headphones or switch speakers, the volume is lowered to this if it was higher. It is never raised, and you can still turn it up afterwards.")
-                        .font(.callout).foregroundStyle(Palette.secondary)
+                    .accessibilityElement(children: .combine)
+                    SectionLabel("Highest volume when the speaker changes")
+                    Slider(value: Binding(get: { Double(maxPercent) }, set: { maxPercent = Int($0.rounded()) }), in: 10...100, step: 5)
+                        .accessibilityLabel("Highest volume")
+                    Text("When you plug in headphones or switch speakers, the volume is lowered to this if it was higher. It is never raised, and you can still turn it up afterwards.").hint()
                 }
-                .padding(14)
-                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                if let l = guardTool.lastLowered {
-                    Text("Last time: lowered from \(l.from)% to \(l.to)%.").font(.callout).foregroundStyle(Palette.secondary)
-                }
+                .toolCard()
             }
-            .padding(16)
+            .toolPage()
         }
     }
 }

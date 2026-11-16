@@ -11,14 +11,20 @@ public struct PermissionsView: View {
     }
 
     public var body: some View {
-        Form {
-            Section {
-                ForEach(Permission.allCases, id: \.self) { p in row(p) }
-            } footer: {
-                Text("Nothing is requested at launch. A permission is asked for only when you use a tool that needs it.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(spacing: 0) {
+                    ForEach(Array(Permission.allCases.enumerated()), id: \.element) { i, p in
+                        if i > 0 { Divider() }
+                        row(p).padding(.horizontal, 14).padding(.vertical, 8)
+                    }
+                }
+                .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Text("Nothing is requested at launch. A permission is asked for only when you use a tool that needs it.").hint()
             }
+            .toolPage()
         }
-        .formStyle(.grouped)
+        .background(Palette.ground)
         .task { await model.refresh() }
     }
 
@@ -26,19 +32,17 @@ public struct PermissionsView: View {
         let users = model.activeUsers(of: p)
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(p.title)
+                StatusText(p.title)
                 Spacer()
-                statusLabel(model.status(p))
-                Button("Open Settings") { open(p.settingsURL) }
+                statusLabel(model.status(p)).font(.callout)
+                Button("Open Settings") { open(p.settingsURL) }.buttonStyle(ChipStyle()).frame(width: 120)
             }
-            Text(p.reason).font(.callout).foregroundStyle(.secondary)
-            Text(users.isEmpty ? "No tool you turned on uses this." : "Used by: " + users.map(\.title).joined(separator: ", "))
-                .font(.callout).foregroundStyle(.secondary)
+            Text(p.reason).hint()
+            Text(users.isEmpty ? "No tool you turned on uses this." : "Used by: " + users.map(\.title).joined(separator: ", ")).hint()
             if model.isUnused(p) {
                 Text("Granted but unused. You can turn it off in System Settings.").font(.callout).foregroundStyle(Palette.accent)
             }
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 

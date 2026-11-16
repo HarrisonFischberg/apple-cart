@@ -14,19 +14,22 @@ public struct BatteryView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
-                    summary(r)
-                    details(r)
-                    graph
-                    apps
+                    VStack(alignment: .leading, spacing: 12) {
+                        summary(r)
+                        details(r)
+                        graph
+                        apps
+                    }
+                    .toolCard()
                 } else if active {
-                    ProgressView().padding(40)
+                    ProgressView().frame(maxWidth: .infinity).padding(40)
                 } else {
                     Text("No battery found on this Mac.").foregroundStyle(Palette.secondary).padding(40)
                 }
             }
-            .padding(16)
+            .toolPage()
         }
         .task(id: active) {
             if active { sampler.hold("batteryView") } else { sampler.release("batteryView") }
@@ -35,65 +38,54 @@ public struct BatteryView: View {
     }
 
     private func summary(_ r: BatteryReading) -> some View {
-        card {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(r.percent)%").font(.system(size: 40, weight: .semibold)).monospacedDigit()
-                Spacer()
-                VStack(alignment: .trailing) {
-                    Text(state(r)).font(.headline)
-                    Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
-                }
+        HStack(alignment: .firstTextBaseline) {
+            Text("\(r.percent)%").font(.system(size: 34, weight: .semibold)).monospacedDigit()
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                StatusText(state(r))
+                Text(flow(r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
         }
     }
 
     private func details(_ r: BatteryReading) -> some View {
-        card {
-            VStack(spacing: 8) {
-                row("True charge", r.measuredPercent.map { String(format: "%.1f%%", $0) })
-                row("Capacity vs new", r.capacityVsDesign.map { String(format: "%.0f%%", $0 * 100) })
-                row("Cycles", r.cycleCount.map(String.init))
-                row("Temperature", r.temperatureC.map { String(format: "%.1f °C", $0) } ?? "Not provided by macOS")
-                row("Mac is using", r.systemWatts.map { String(format: "%.1f W", $0) })
-                row("Charger", r.isPluggedIn ? r.adapterWatts.map { "\($0) W" } ?? "Connected" : "Not connected")
-                row("Time left", r.minutesRemaining.map { "\($0 / 60) h \($0 % 60) min" })
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel("Details")
+            row("True charge", r.measuredPercent.map { String(format: "%.1f%%", $0) })
+            row("Capacity vs new", r.capacityVsDesign.map { String(format: "%.0f%%", $0 * 100) })
+            row("Cycles", r.cycleCount.map(String.init))
+            row("Temperature", r.temperatureC.map { String(format: "%.1f °C", $0) } ?? "Not provided by macOS")
+            row("Mac is using", r.systemWatts.map { String(format: "%.1f W", $0) })
+            row("Charger", r.isPluggedIn ? r.adapterWatts.map { "\($0) W" } ?? "Connected" : "Not connected")
+            row("Time left", r.minutesRemaining.map { "\($0 / 60) h \($0 % 60) min" })
         }
     }
 
     private var graph: some View {
-        card {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Last 24 hours").font(.headline)
-                if sampler.history.samples.count < 2 {
-                    Text("History fills in while this view is open.").font(.callout).foregroundStyle(Palette.secondary)
-                } else {
-                    Chart(sampler.history.samples, id: \.date) {
-                        LineMark(x: .value("Time", $0.date), y: .value("Percent", $0.percent))
-                            .foregroundStyle(Palette.accent)
-                    }
-                    .chartYScale(domain: 0...100)
-                    .frame(height: 120)
-                    .accessibilityLabel("Battery percent over the last 24 hours")
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel("Last 24 hours")
+            if sampler.history.samples.count < 2 {
+                Text("History fills in while this view is open.").hint()
+            } else {
+                Chart(sampler.history.samples, id: \.date) {
+                    LineMark(x: .value("Time", $0.date), y: .value("Percent", $0.percent))
+                        .foregroundStyle(Palette.accent)
                 }
+                .chartYScale(domain: 0...100)
+                .frame(height: 100)
+                .accessibilityLabel("Battery percent over the last 24 hours")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var apps: some View {
-        card {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Using the most energy").font(.headline)
-                if sampler.energyUsers.isEmpty {
-                    Text("Measuring…").font(.callout).foregroundStyle(Palette.secondary)
-                }
-                ForEach(sampler.energyUsers) { u in
-                    HStack { Text(u.name).lineLimit(1); Spacer(); Text(String(format: "%.0f%% CPU", u.cpu)).monospacedDigit().foregroundStyle(Palette.secondary) }
-                        .font(.callout)
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel("Using the most energy")
+            if sampler.energyUsers.isEmpty { Text("Measuring…").hint() }
+            ForEach(sampler.energyUsers) { u in
+                HStack { Text(u.name).lineLimit(1); Spacer(); Text(String(format: "%.0f%% CPU", u.cpu)).monospacedDigit().foregroundStyle(Palette.secondary) }
+                    .font(.callout)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -109,10 +101,5 @@ public struct BatteryView: View {
         HStack { Text(title); Spacer(); Text(value ?? "—").foregroundStyle(Palette.secondary).monospacedDigit() }
             .font(.callout)
             .accessibilityElement(children: .combine)
-    }
-
-    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        content().padding(14).frame(maxWidth: .infinity)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

@@ -95,7 +95,8 @@ public struct KeepAwakeView: View {
 struct ChipStyle: ButtonStyle {
     var selected = false
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+        configuration.label.font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(selected ? Palette.accent : Palette.ground, in: Capsule())
             .foregroundStyle(selected ? Color.white : Color.primary)
             .opacity(configuration.isPressed ? 0.6 : 1)
@@ -115,51 +116,46 @@ public struct SystemView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 if let r = sampler.latest {
-                    meter("CPU", fraction: r.cpuPercent / 100, value: String(format: "%.0f%%", r.cpuPercent))
-                    meter("Memory", fraction: r.memoryFraction,
-                          value: "\(gb(r.memoryUsedBytes)) of \(gb(r.memoryTotalBytes))")
-                    card {
-                        row("Thermal state", thermal(r.thermal))
-                        row("Up for", uptime(r.uptime))
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            StatusText(thermal(r.thermal))
+                            Spacer()
+                            Text("Up \(uptime(r.uptime))").font(.callout).foregroundStyle(Palette.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        meter("CPU", fraction: r.cpuPercent / 100, value: String(format: "%.0f%%", r.cpuPercent))
+                        meter("Memory", fraction: r.memoryFraction,
+                              value: "\(gb(r.memoryUsedBytes)) of \(gb(r.memoryTotalBytes))")
                     }
+                    .toolCard()
                 } else {
-                    ProgressView().padding(40)
+                    ProgressView().frame(maxWidth: .infinity).padding(40)
                 }
             }
-            .padding(16)
+            .toolPage()
         }
         .task(id: active) { if active { sampler.hold("systemView") } else { sampler.release("systemView") } }
         .onDisappear { sampler.release("systemView") }
     }
 
     private func meter(_ title: String, fraction: Double, value: String) -> some View {
-        card {
-            HStack { Text(title).font(.headline); Spacer(); Text(value).monospacedDigit().foregroundStyle(Palette.secondary) }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack { SectionLabel(title); Spacer(); Text(value).font(.callout).monospacedDigit().foregroundStyle(Palette.secondary) }
             ProgressView(value: min(max(fraction, 0), 1)).tint(Palette.accent)
                 .accessibilityLabel(title).accessibilityValue(value)
         }
     }
 
-    private func row(_ t: String, _ v: String) -> some View {
-        HStack { Text(t); Spacer(); Text(v).foregroundStyle(Palette.secondary) }.font(.callout)
-            .accessibilityElement(children: .combine)
-    }
-
     private func gb(_ b: UInt64) -> String { String(format: "%.1f GB", Double(b) / 1_073_741_824) }
 
     private func thermal(_ s: ProcessInfo.ThermalState) -> String {
-        switch s { case .nominal: "Normal"; case .fair: "Slightly warm"; case .serious: "Hot, slowing down"; case .critical: "Critical"; @unknown default: "Unknown" }
+        switch s { case .nominal: "Thermal state normal"; case .fair: "Slightly warm"; case .serious: "Hot, slowing down"; case .critical: "Critical heat"; @unknown default: "Thermal state unknown" }
     }
 
     private func uptime(_ t: TimeInterval) -> String {
         let m = Int(t) / 60
         return m >= 1440 ? "\(m / 1440) d \(m % 1440 / 60) h" : "\(m / 60) h \(m % 60) min"
-    }
-
-    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8, content: content).padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
