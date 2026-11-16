@@ -23,6 +23,7 @@ extension BatteryReading {
         var r = self
         r.batteryWatts = -(systemWatts ?? max(-batteryWatts, 0))
         r.isCharging = false
+        r.adapterLossWatts = nil // a charger held off has no conversion loss to report
         return r
     }
 }

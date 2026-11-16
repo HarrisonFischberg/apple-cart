@@ -162,4 +162,14 @@ private func layout(_ r: BatteryReading?, width: CGFloat, soc: Double? = nil, ot
         let unplugged = reading(plugged: false, amps: -1000)
         #expect(unplugged.whileHeld() == unplugged)
     }
+
+    @Test func tappedTilesExplainThemselvesInPlainWords() {
+        let r = reading(plugged: true, amps: -1000)
+        let held = FlowExplain.make(.charger, reading: r.whileHeld(), pausedAt: 80, streams: [])
+        #expect(held.value == "0.0 W" && held.text.contains("80%") && held.facts == ["Charger rating: 60 W"])
+        let loss = FlowExplain.make(.stream("Charger loss"), reading: r, pausedAt: nil, streams: PowerFlows.streams(r))
+        #expect(loss.title == "Charger loss" && loss.text.contains("heat"))
+        #expect(FlowExplain.make(.mac, reading: nil, pausedAt: nil, streams: []).value == "—")
+        #expect(PowerFlows.streams(r.whileHeld()).first { $0.title == "Charger loss" }?.watts == nil) // no loss reading while held off
+    }
 }

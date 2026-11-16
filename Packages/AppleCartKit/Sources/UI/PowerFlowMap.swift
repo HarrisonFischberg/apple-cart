@@ -7,6 +7,8 @@ struct PowerFlowMap: View {
     var active = true
     /// The charge limit is deliberately holding the charger off (the percent), so a low charger reading is not a weak charger.
     var pausedAt: Int?
+    @State private var selected: FlowNodeID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// While the charger is held off the Mac runs wholly from the battery, even when one telemetry sample says otherwise.
     private var shown: BatteryReading? { pausedAt == nil ? reading : reading?.whileHeld() }
@@ -28,10 +30,14 @@ struct PowerFlowMap: View {
                     .accessibilityElement(children: .ignore).accessibilityLabel("Live")
                 }
             }
-            PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt)
+            PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(shown, streams: streams, rest: PowerFlows.rest(shown, streams: streams))
                     .replacingOccurrences(of: "the charger is too weak", with: pausedAt == nil ? "the charger is too weak" : "charging is paused"))
+            if let selected, let reading {
+                detail(FlowExplain.make(selected, reading: shown ?? reading, pausedAt: pausedAt, streams: streams))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             if PowerFlows.chargerTooWeak(shown) {
                 Label(pausedAt.map { "Charging is paused at \($0)%. The Mac is running on the battery." }
                       ?? "The charger is too weak for what this Mac is doing. The battery is covering the rest.",
@@ -40,5 +46,30 @@ struct PowerFlowMap: View {
                     .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    private func select(_ id: FlowNodeID) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { selected = selected == id ? nil : id }
+    }
+
+    /// What the tapped tile is, in plain words. Tap the tile again or the close button to fold it away.
+    private func detail(_ e: FlowExplanation) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(e.title).font(.system(size: 14, weight: .semibold))
+                Text(e.value).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(Palette.secondary)
+                Spacer()
+                Button { select(selected ?? .mac) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.secondary).frame(width: 28, height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).accessibilityLabel("Close details")
+            }
+            if !e.text.isEmpty { Text(e.text).font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true) }
+            ForEach(e.facts, id: \.self) { Text($0).font(.callout).monospacedDigit() }
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.12)))
+        .accessibilityElement(children: .combine)
     }
 }

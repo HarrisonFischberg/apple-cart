@@ -8,6 +8,9 @@ struct PowerFlowArt: View {
     let active: Bool
     /// The charge limit is holding the charger off at this percent.
     var pausedAt: Int?
+    /// The tile the owner tapped (it is drawn with a stronger outline) and what to do when a tile is tapped.
+    var selected: FlowNodeID?
+    var onSelect: (FlowNodeID) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var from: FlowLayout?
@@ -42,6 +45,8 @@ struct PowerFlowArt: View {
                 ZStack(alignment: .topLeading) {
                     ForEach(target.nodes, id: \.id) { n in
                         tile(n).frame(width: n.rect.width, height: n.rect.height)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onSelect(n.id) }
                             .position(x: n.rect.midX, y: n.rect.midY)
                             .transition(.opacity)
                     }
@@ -208,7 +213,7 @@ struct PowerFlowArt: View {
     // MARK: Tiles
 
     /// `caption` names the tile (small, above the value); `note` is an optional third line under the value.
-    /// `lit` tiles glow in their tint; idle, held and missing ones stay neutral. `badge` is a small corner glyph (the held pause).
+    /// `lit` tiles glow in their tint; idle, held and missing ones stay neutral. `badge` is a small corner glyph, if a tile ever needs one.
     private struct TileContent {
         var symbol: String, value: String, caption: String, note: String? = nil, tint: Color, number: Double = 0, big = false
         var lit = true, badge: String? = nil
@@ -225,7 +230,7 @@ struct PowerFlowArt: View {
             }
             if let n = pausedAt {
                 return TileContent(symbol: "powerplug", value: PowerFlow.watts(0), caption: "Charger", note: "Held at \(n)%",
-                                   tint: Palette.secondary, lit: false, badge: "pause.fill")
+                                   tint: Palette.secondary, lit: false)
             }
             guard let m = flows.chargerToMac else {
                 return TileContent(symbol: "powerplug.fill", value: r.adapterWatts.map { "\($0) W" } ?? "—", caption: "Charger", note: "Rating", tint: Palette.amber)
@@ -300,8 +305,8 @@ struct PowerFlowArt: View {
             }
         }
         .overlay {
-            shape.strokeBorder(lit ? c.tint.opacity(0.45) : Color.primary.opacity(n.dimmed ? 0.2 : 0.12),
-                               style: StrokeStyle(lineWidth: 1, dash: n.dimmed ? [4, 3] : []))
+            shape.strokeBorder(n.id == selected ? c.tint : (lit ? c.tint.opacity(0.45) : Color.primary.opacity(n.dimmed ? 0.2 : 0.12)),
+                               style: StrokeStyle(lineWidth: n.id == selected ? 2 : 1, dash: n.dimmed ? [4, 3] : []))
             if !n.dimmed {
                 shape.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.16), .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
             }
@@ -328,7 +333,7 @@ struct PowerFlowArt: View {
     }
 
     private func number(_ c: TileContent, size: CGFloat) -> some View {
-        Text(c.value).font(.system(size: size, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+        Text(c.value).font(.system(size: size, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
             .contentTransition(.numericText(value: c.number))
             .animation(tick, value: c.number)
     }
