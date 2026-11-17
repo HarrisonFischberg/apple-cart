@@ -44,7 +44,7 @@ public final class LEDRunner {
     @ObservationIgnored private let controller: LEDController
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var toolEnabled = false
-    @ObservationIgnored private var helperStatus: ChargeHelperStatus = .notInstalled
+    public private(set) var helperStatus: ChargeHelperStatus = .notInstalled
     @ObservationIgnored private var statusCheckedAt: Date?
     @ObservationIgnored private var sentAt: Date?
     @ObservationIgnored private var maybeForcedUntil: Date?

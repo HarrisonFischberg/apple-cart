@@ -95,7 +95,7 @@ public final class LEDGuard: @unchecked Sendable {
         do {
             let current = try read()
             // The first arm captures macOS's own value; a renewal while we are forcing must not capture ours.
-            if wanted == nil { macOSValue = current }
+            if wanted == nil && !mayBeForced { macOSValue = current }
             wanted = value
             mayBeForced = true
             if current != value {
@@ -105,7 +105,7 @@ public final class LEDGuard: @unchecked Sendable {
                 guard back == value else {
                     log("ACLC reads back \(back) after writing \(value); restoring")
                     wanted = nil
-                    _ = restoreLocked(reason: "colour not applied")
+                    _ = restoreLocked(reason: "colour not applied", forceWrite: true)
                     return .notApplied
                 }
             }
@@ -253,14 +253,15 @@ public final class LEDGuard: @unchecked Sendable {
     }
 
     /// Stops forcing at once (no more ticks), then writes macOS's last value back if the key still shows ours.
-    private func restoreLocked(reason: String) -> HelperErrorCode {
+    // forceWrite: a write of ours may still land after this read (the SMC applies it late), so write macOS's value back regardless.
+    private func restoreLocked(reason: String, forceWrite: Bool = false) -> HelperErrorCode {
         generation += 1
         let gen = generation
         lease?.cancel(); lease = nil; tick?.cancel(); tick = nil; leaseEnd = nil; leaseEndMono = nil
         wanted = nil
         guard mayBeForced else { retries = 0; return unsupported ? .unsupported : .ok } // nothing of ours: write nothing
         do {
-            if let original = macOSValue, LEDWhitelist.allowsWrite(key: LEDWhitelist.key, bytes: [original]), try read() != original {
+            if let original = macOSValue, LEDWhitelist.allowsWrite(key: LEDWhitelist.key, bytes: [original]), try forceWrite || read() != original {
                 try write(original)
                 settle()
                 let back = try read()

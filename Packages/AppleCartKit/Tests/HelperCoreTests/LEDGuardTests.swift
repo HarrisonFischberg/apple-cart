@@ -73,7 +73,7 @@ private extension FakeTimers {
         let (g, smc, timers, _) = makeLEDGuard()
         smc.ignoreWrites = true
         #expect(g.setLED(color: 3, leaseSeconds: 90) == .notApplied)
-        #expect(smc.writes == [3] && smc.value == 4) // the key never changed, so restoring writes nothing
+        #expect(smc.writes == [3, 4] && smc.value == 4) // the green write may still land late, so macOS's value is written back regardless
         #expect(timers.live.isEmpty && g.status().wanted == 0)
     }
 
@@ -191,6 +191,17 @@ private extension FakeTimers {
         smc.failWrites = false
         timers.live[0].fire()
         #expect(smc.value == 4 && timers.live.isEmpty)
+    }
+
+    @Test func aFailedRestoreIsNotMistakenForMacOSValueOnTheNextSet() {
+        let (g, smc, _, _) = makeLEDGuard()
+        _ = g.setLED(color: 3, leaseSeconds: 90)
+        smc.failWrites = true
+        _ = g.restore(reason: "test")
+        smc.failWrites = false
+        _ = g.setLED(color: 3, leaseSeconds: 90) // the key still shows our 3: that is not macOS's value
+        _ = g.restore(reason: "test")
+        #expect(smc.value == 4)
     }
 
     @Test func failedWriteRestores() {

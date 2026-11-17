@@ -181,7 +181,9 @@ struct ChargeControlOptions: View {
                     Text(r.magSafeLight.text(pluggedIn: r.isPluggedIn)).foregroundStyle(Palette.secondary)
                         .accessibilityLabel("MagSafe light")
                 }
-                SettingsRow("Indicate charge limit", detail: "Green while your limit holds charging, orange while heat protection pauses it. Needs the charging helper.") {
+                SettingsRow("Indicate charge limit", detail: led?.helperStatus == .outdated
+                            ? "The helper is out of date for this. In Settings, Remove it, then Install it again."
+                            : "Green while your limit holds charging, orange while heat protection pauses it. Needs the charging helper.") {
                     Toggle("Indicate charge limit", isOn: Binding(get: { settings.indicateChargeLimit },
                                                                   set: { settings.setIndicateChargeLimit($0); Task { await led?.evaluate() } }))
                         .toggleStyle(.switch).labelsHidden()
