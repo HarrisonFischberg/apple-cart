@@ -11,12 +11,14 @@ public struct BatteryView: View {
     @State private var didOpenEditing = false
     let limiter: ChargeLimiter?
     let chargeLimit: ChargeLimitSettings?
+    let led: LEDRunner?
 
-    public init(sampler: BatterySampler, active: Bool, limiter: ChargeLimiter? = nil, chargeLimit: ChargeLimitSettings? = nil) {
+    public init(sampler: BatterySampler, active: Bool, limiter: ChargeLimiter? = nil, chargeLimit: ChargeLimitSettings? = nil, led: LEDRunner? = nil) {
         self.sampler = sampler
         self.active = active
         self.limiter = limiter
         self.chargeLimit = chargeLimit
+        self.led = led
     }
 
     public var body: some View {
@@ -59,7 +61,8 @@ public struct BatteryView: View {
         case .charge:
             VStack(alignment: .leading, spacing: 14) {
                 summary(r); chargeBar(r)
-                if let note = MagSafeLight.note(light: r.magSafeLight, pluggedIn: r.isPluggedIn, held: limiter?.state.holdingAt != nil, charging: r.isCharging, percent: r.percent) {
+                // The notes explain macOS's own colour; while Apple Cart forces the light they do not apply.
+                if led?.forced ?? .system == .system, let note = MagSafeLight.note(light: r.magSafeLight, pluggedIn: r.isPluggedIn, held: limiter?.state.holdingAt != nil, charging: r.isCharging, percent: r.percent) {
                     Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -238,7 +241,7 @@ public struct BatteryView: View {
         abs(r.batteryWatts) < 0.05 ? "Battery idle" : String(format: "%@%.1f W %@", r.batteryWatts > 0 ? "+" : "−", abs(r.batteryWatts), r.batteryWatts > 0 ? "into battery" : "from battery")
     }
 
-    /// What the MagSafe light shows (read only; it follows macOS, Apple Cart does not set it).
+    /// What the MagSafe light shows, read from the SMC (macOS sets it unless "Indicate charge limit" forces it).
     private func magSafeRow(_ r: BatteryReading) -> some View {
         let text = r.magSafeLight.text(pluggedIn: r.isPluggedIn)
         let color: Color? = !r.isPluggedIn ? nil : r.magSafeLight == .green ? Palette.green : r.magSafeLight == .orange ? .orange : nil

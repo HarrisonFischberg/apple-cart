@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = UserDefaultsSettingsStore()
     private lazy var registry: FeatureRegistry = {
         let r = FeatureRegistry(store: store)
-        r.register(.battery) { [chargeLimiter, battery] in BatteryTool(limiter: chargeLimiter, battery: battery) }
+        r.register(.battery) { [chargeLimiter, battery, ledRunner] in BatteryTool(limiter: chargeLimiter, battery: battery, led: ledRunner) }
         r.register(.system) { SystemTool() }
         r.register(.keepAwake) { [keepAwake] in KeepAwakeTool(keepAwake) }
         r.register(.quickToggles) { QuickTogglesTool() }
@@ -39,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fanController: FanController = HelperFanController()
     /// The single writer of fan commands.
     private lazy var fanRunner = FanRunner(settings: FanSettings(), controller: fanController)
+    private let ledController: LEDController = HelperLEDController()
+    /// The single writer of MagSafe light commands; follows the charge limiter.
+    private lazy var ledRunner = LEDRunner(settings: chargeLimit, limiter: chargeLimiter, controller: ledController)
     private let systemSampler = SystemSampler()
     // A fresh ChargeLimitSettings reads the saved limit (and Top Up) every check, so it is never stale.
     private let keepAwake = KeepAwake(chargeLimit: { ChargeLimitSettings().effectiveLimit })
@@ -91,6 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let limiter = self?.chargeLimiter { Task { await limiter.systemDidWake() } }
                 // The helper gave the fans to macOS before sleep; they stay there unless Resume is on.
                 if let fans = self?.fanRunner { Task { await fans.systemDidWake() } }
+                // The helper handed the light back before sleep; force it again if the setting wants it.
+                if let led = self?.ledRunner { Task { await led.systemDidWake() } }
             }
         }
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [clipboard] _ in
@@ -106,9 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
                                           chargeLimit: chargeLimit, chargeLimiter: chargeLimiter,
-                                          toolView: { [weak self, battery, chargeLimit, chargeLimiter, fanRunner, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
+                                          toolView: { [weak self, battery, chargeLimit, chargeLimiter, ledRunner, fanRunner, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
             switch id {
-            case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery, limiter: chargeLimiter, chargeLimit: chargeLimit))
+            case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery, limiter: chargeLimiter, chargeLimit: chargeLimit, led: ledRunner))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
             case .fanSafeMode: AnyView(FanSpeedView(runner: fanRunner))
             case .keepAwake: AnyView(KeepAwakeView(keepAwake: keepAwake))
@@ -164,12 +169,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkForUpdates() { updater.checkForUpdates() }
 
-    /// Put the charger back on and the fans back to macOS before quitting instead of waiting for the helper's lease to run out.
+    /// Put the charger back on and the fans and light back to macOS before quitting instead of waiting for the helper's lease to run out.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if dataErased { return .terminateNow } // deleteAllData already shut both down
         Task {
             await chargeLimiter.shutdown()
             await fanRunner.shutdown()
+            await ledRunner.shutdown()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
@@ -201,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await chargeLimiter.shutdown() // charger back to normal (resetAll) before the data goes
             await fanRunner.shutdown() // fans back to macOS
+            await ledRunner.shutdown() // light back to macOS
             settingsWindow?.setFrameAutosaveName("") // or the window frame is written back into the erased preferences
             let fm = FileManager.default
             let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Apple Cart")
@@ -228,11 +235,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         automaticChecks: { [updater] in updater.automaticChecks }, setAutomaticChecks: { [updater] in updater.automaticChecks = $0 },
                                         sendDebugLogs: { [weak self] in self?.sendDebugLogs() }, deleteAllData: { [weak self] in self?.deleteAllData() }),
                 tools: SettingsTools(clipboard: clipboard, breaks: breaks, quickToggles: quickToggles, updateChecker: updateChecker,
-                                     chargeLimit: chargeLimit, chargeLimiter: chargeLimiter, fanRunner: fanRunner,
+                                     chargeLimit: chargeLimit, chargeLimiter: chargeLimiter, fanRunner: fanRunner, ledRunner: ledRunner,
                                      chargeHelper: ChargeHelperActions(
                                         install: { await ChargeHelperInstaller.install() },
                                         repair: { await ChargeHelperInstaller.repair() },
-                                        remove: { [chargeController, fanController] in await ChargeHelperInstaller.remove(controller: chargeController, fans: fanController) },
+                                        remove: { [chargeController, fanController, ledController] in
+                                            await ChargeHelperInstaller.remove(controller: chargeController, fans: fanController, led: ledController)
+                                        },
                                         openLoginItems: { ChargeHelperInstaller.openLoginItems() }),
                                      battery: battery),
                 glyphStyle: glyphStyle,

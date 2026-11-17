@@ -22,6 +22,8 @@ public final class ChargeLimitSettings {
     /// Pause charging while the battery is above `heatMaxC` (see HeatGuard; the limiter applies it).
     public private(set) var heatProtection: Bool
     public private(set) var heatMaxC: Double
+    /// Force the MagSafe light to show the limit (LEDPolicy; the LEDRunner applies it). Off by default: macOS sets the light.
+    public private(set) var indicateChargeLimit: Bool
     @ObservationIgnored private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
@@ -32,6 +34,7 @@ public final class ChargeLimitSettings {
         sailingDifference = Self.clampedSailing(defaults.object(forKey: "chargeSailingDifference") as? Int ?? 5)
         heatProtection = defaults.bool(forKey: "chargeHeatProtection")
         heatMaxC = min(max(defaults.object(forKey: "chargeHeatMaxC") as? Double ?? 35, Self.heatRangeC.lowerBound), Self.heatRangeC.upperBound)
+        indicateChargeLimit = defaults.bool(forKey: "chargeIndicateLimit")
         limit = 100
         topUpActive = defaults.bool(forKey: "chargeTopUp")
         limit = clamped(defaults.object(forKey: "chargeLimit") as? Int ?? 100)
@@ -60,6 +63,7 @@ public final class ChargeLimitSettings {
         defaults.set(sailingDifference, forKey: "chargeSailingDifference")
     }
     public func setHeatProtection(_ on: Bool) { heatProtection = on; defaults.set(on, forKey: "chargeHeatProtection") }
+    public func setIndicateChargeLimit(_ on: Bool) { indicateChargeLimit = on; defaults.set(on, forKey: "chargeIndicateLimit") }
     public func setHeatMaxC(_ c: Double) {
         heatMaxC = min(max(c, Self.heatRangeC.lowerBound), Self.heatRangeC.upperBound)
         defaults.set(heatMaxC, forKey: "chargeHeatMaxC")

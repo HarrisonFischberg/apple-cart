@@ -66,8 +66,8 @@ final class HelperClient: @unchecked Sendable {
 }
 
 /// Talks to the root helper through the shared HelperClient. Ready only when the daemon is registered, approved,
-/// answers status() with a version that has the charger calls (2 or 3: a version 2 helper keeps charging working
-/// until it is repaired for fans) and can read the charger key.
+/// answers status() with a version that has the charger calls (2 to 4: an older helper keeps charging working
+/// until it is repaired) and can read the charger key.
 final class HelperChargeController: ChargeController, @unchecked Sendable {
     private struct StatusReply: Sendable { var adapterEnabled: Bool, chie: Int, version: Int, code: Int }
 
@@ -101,7 +101,7 @@ final class HelperChargeController: ChargeController, @unchecked Sendable {
     }
 }
 
-/// Fan commands over the same connection. Needs a version 3 helper: an older one shows "outdated" (Repair installs the
+/// Fan commands over the same connection. Needs a version 3 or later helper: an older one shows "outdated" (Repair installs the
 /// one inside this app) and fan calls are never sent to it.
 final class HelperFanController: FanController, @unchecked Sendable {
     private struct FanReply: Sendable { var supported: Bool, manual: Bool, target: Int, code: Int }
@@ -125,13 +125,52 @@ final class HelperFanController: FanController, @unchecked Sendable {
     }
 
     func setFan(rpm: Int) async -> ChargeApplyResult {
-        // The runner only sends after a ready status (version 3), so a version 2 helper never sees this selector.
+        // The runner only sends after a ready status (version 3 or 4), so a version 2 helper never sees this selector.
         await client.command { p, done in p.setFan(rpm: rpm, leaseSeconds: AdapterLease.defaultSeconds, reply: done) }
     }
 
     func resetFan() async -> ChargeApplyResult {
         guard let v = await version(), HelperIdentity.supportsFans(helperVersion: v) else { return .unavailable }
         return await client.command { p, done in p.resetFan(reply: done) }
+    }
+}
+
+/// MagSafe light commands over the same connection. Needs a version 4 helper: an older one is "outdated" here (Remove, then
+/// Install, puts in the one inside this app) and light calls are never sent to it.
+final class HelperLEDController: LEDController, @unchecked Sendable {
+    private struct LEDReply: Sendable { var supported: Bool, code: Int }
+    private let client: HelperClient
+    init(client: HelperClient = .shared) { self.client = client }
+
+    private func version() async -> Int? {
+        await client.call { p, done in p.status { _, _, version, _, _ in done(version) } }
+    }
+
+    func status() async -> ChargeHelperStatus {
+        if let s = HelperClient.registrationStatus { return s }
+        guard let v = await version() else { return .unreachable }
+        guard HelperIdentity.supportsLED(helperVersion: v) else { return .outdated }
+        let reply: LEDReply? = await client.call({ p, done in
+            p.ledStatus { supported, _, _, _, code in done(LEDReply(supported: supported, code: code)) }
+        })
+        guard let reply else { return .unreachable }
+        return !reply.supported || reply.code == HelperErrorCode.unsupported.rawValue ? .unsupported : .ready
+    }
+
+    func setLED(_ color: LEDColor) async -> ChargeApplyResult {
+        let value: Int
+        switch color {
+        case .green: value = 3
+        case .orange: value = 4
+        case .system: return await resetLED()
+        }
+        // The runner only sends after a ready status (version 4), so an older helper never sees this selector.
+        return await client.command { p, done in p.setLED(color: value, leaseSeconds: AdapterLease.defaultSeconds, reply: done) }
+    }
+
+    func resetLED() async -> ChargeApplyResult {
+        guard let v = await version(), HelperIdentity.supportsLED(helperVersion: v) else { return .unavailable }
+        return await client.command { p, done in p.resetLED(reply: done) }
     }
 }
 
@@ -145,7 +184,7 @@ private final class Once<T: Sendable>: @unchecked Sendable {
     }
 }
 
-/// Install, repair and remove through SMAppService. Remove puts the adapter back on and the fans back to macOS first.
+/// Install, repair and remove through SMAppService. Remove puts the adapter back on and the fans and light back to macOS first.
 @MainActor
 enum ChargeHelperInstaller {
     static func install() async -> String? {
@@ -160,9 +199,10 @@ enum ChargeHelperInstaller {
         return await install()
     }
 
-    static func remove(controller: ChargeController, fans: FanController) async -> String? {
+    static func remove(controller: ChargeController, fans: FanController, led: LEDController) async -> String? {
         _ = await controller.resetAll()
         _ = await fans.resetFan()
+        _ = await led.resetLED()
         do { try await HelperChargeController.service.unregister(); return nil } catch { return error.localizedDescription }
     }
 

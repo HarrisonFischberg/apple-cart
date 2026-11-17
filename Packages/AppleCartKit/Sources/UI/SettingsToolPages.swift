@@ -13,12 +13,13 @@ public struct SettingsTools {
     public var chargeHelper: ChargeHelperActions?
     public var battery: BatterySampler?
     public var fanRunner: FanRunner?
+    public var ledRunner: LEDRunner?
     public init(clipboard: ClipboardHistory, breaks: BreakReminders, quickToggles: QuickToggles, updateChecker: UpdateChecker,
                 chargeLimit: ChargeLimitSettings? = nil, chargeLimiter: ChargeLimiter? = nil, fanRunner: FanRunner? = nil,
-                chargeHelper: ChargeHelperActions? = nil, battery: BatterySampler? = nil) {
+                ledRunner: LEDRunner? = nil, chargeHelper: ChargeHelperActions? = nil, battery: BatterySampler? = nil) {
         self.clipboard = clipboard; self.breaks = breaks; self.quickToggles = quickToggles; self.updateChecker = updateChecker
         self.chargeLimit = chargeLimit; self.chargeLimiter = chargeLimiter; self.chargeHelper = chargeHelper; self.battery = battery
-        self.fanRunner = fanRunner
+        self.fanRunner = fanRunner; self.ledRunner = ledRunner
     }
 }
 
@@ -92,7 +93,7 @@ struct ToolSettingsPage: View {
             SettingsCard("Menu bar") { ReadoutRow(readout: readout) }
             BatteryEnergySettings()
             if let s = tools.chargeLimit {
-                ChargeControlOptions(settings: s, limiter: tools.chargeLimiter, battery: tools.battery)
+                ChargeControlOptions(settings: s, limiter: tools.chargeLimiter, battery: tools.battery, led: tools.ledRunner)
             } else {
                 Text("Charge limit is set from the panel.").hint()
             }
@@ -140,11 +141,13 @@ struct ToolSettingsPage: View {
     }
 }
 
-/// Charge Control: typed limit, below-80 rule, Automatic Discharge, Sailing Mode, Heat Protection and the MagSafe light (read only).
+/// Charge Control: typed limit, below-80 rule, Automatic Discharge, Sailing Mode, Heat Protection, the MagSafe light and
+/// Indicate charge limit.
 struct ChargeControlOptions: View {
     let settings: ChargeLimitSettings
     let limiter: ChargeLimiter?
     let battery: BatterySampler?
+    var led: LEDRunner?
 
     var body: some View {
         SettingsCard("Charge control") {
@@ -172,9 +175,16 @@ struct ChargeControlOptions: View {
             }
             heat
             if let r = battery?.latest, r.magSafeLight != .notAvailable {
-                SettingsRow("MagSafe light", detail: "Apple Cart shows the light but does not control it: it follows macOS, orange below 100% and green when full.") {
+                SettingsRow("MagSafe light", detail: settings.indicateChargeLimit
+                            ? "macOS sets the light unless your limit holds charging or heat protection pauses it."
+                            : "macOS sets the light: orange below 100% and green when full.") {
                     Text(r.magSafeLight.text(pluggedIn: r.isPluggedIn)).foregroundStyle(Palette.secondary)
                         .accessibilityLabel("MagSafe light")
+                }
+                SettingsRow("Indicate charge limit", detail: "Green while your limit holds charging, orange while heat protection pauses it. Needs the charging helper.") {
+                    Toggle("Indicate charge limit", isOn: Binding(get: { settings.indicateChargeLimit },
+                                                                  set: { settings.setIndicateChargeLimit($0); Task { await led?.evaluate() } }))
+                        .toggleStyle(.switch).labelsHidden()
                 }
             }
         }
@@ -238,8 +248,8 @@ struct ChargeHelperCard: View {
         }
         if let error { Text(error).hint() }
         Text(fans
-             ? "The same helper as the charge limit. It runs on this Mac only and never uses the network. It can only pause or resume the charger and set the fans, and both go back to macOS by themselves if Apple Cart stops. Remove hands everything back first."
-             : "The helper runs on this Mac only and never uses the network. It can only pause or resume the charger, and the charger comes back on by itself if Apple Cart stops. Remove turns charging back to normal first.").hint()
+             ? "The same helper as the charge limit. It runs on this Mac only and never uses the network. It can only pause or resume the charger and set the fans and the MagSafe light, and all of them go back to macOS by themselves if Apple Cart stops. Remove hands everything back first."
+             : "The helper runs on this Mac only and never uses the network. It can only pause or resume the charger and set the MagSafe light, and both go back to normal by themselves if Apple Cart stops. Remove turns charging back to normal first.").hint()
             .task { await refresh() }
     }
 
