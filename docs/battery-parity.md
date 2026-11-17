@@ -18,7 +18,7 @@ TODO = not started.
 | Schedule (set limit, calibrate, top up, pause, discharge, power mode) | TODO (T011) | Seven actions, repeat options, catch-up after sleep | yes |
 | Stop charging in sleep | TODO | Optional pre-sleep hold; our safe default restores the adapter before sleep, so this needs its own tested path | yes |
 | Keep limit after quit | TODO | Helper keeps the hold when the app closes; resets at power off | yes |
-| MagSafe LED control (green at limit, orange charging) | PART: read-only: shown and explained (SMC ACLC 3 = green, 4 = orange); control not built (needs a write probe) | Needs a write probe first; the LED key reads here, never written | yes |
+| MagSafe LED control (green at limit, orange charging) | PART (2026-11-16): "Indicate charge limit" built, off by default. Helper v4 writes ACLC 3/4 only on a 90 s lease, re-writes it each second when macOS changes it, hands it back on every exit. Write and macOS overwrite hardware-verified by the probe (`docs/spikes/led-write-probe-plan.md`); the app-side feature is not yet tried on hardware (needs helper Remove then Install). Blink orange during discharge, LED always off / off during sleep not built | Try it on the Mac: green at the limit, orange in a heat pause, corrected after a replug within ~1 s; sleep/wake and charge-state change still untested | yes |
 | Low Power Mode control (per power source) | TODO | Always off / on / battery only / adapter only; energy mode on newer chips | yes |
 | Live status icons (charging, paused, discharging, on battery) | PART: glyph has plug, bolt, pause bars; paused never triggers | Drive pause and discharge states from the runner | yes |
 | Disable sleep until the limit is reached | PART: "Until limit reached", display on and re-enable at level are built; mute and lock-on-lid left out (no safe public API) | Mute and lock-on-lid options | no |
@@ -36,8 +36,8 @@ TODO = not started.
 1. Now, no helper needed: Keep awake / sleep control parity, apps-using-energy parity, hardware percentage, menu bar and popover options,
    power flow breakdown, Shortcuts read actions.
 2. With the helper (in progress): limiter, sailing range, top up, discharge and automatic discharge, status icons, keep after quit.
-3. Then: heat protection (after a safe temperature read exists), calibration and schedule, stop in sleep, Low Power Mode, MagSafe LED (write
-   probe with the owner present first), Shortcuts write actions.
+3. Then: heat protection (after a safe temperature read exists), calibration and schedule, stop in sleep, Low Power Mode, MagSafe LED (indicate
+   charge limit built; blink and off modes still need a probe), Shortcuts write actions.
 
 ## What would help from the owner's paid copy
 
@@ -87,4 +87,4 @@ Source: https://apphousekitchen.com/aldente-overview/features/ (MagSafe 3 MacBoo
 - Top Up: green once 100% is reached.
 - Calibration: green when done and the limit is reached.
 
-Not built: our LED is read-only (ACLC 3 green, 4 orange). Writing it needs a write probe on the owner's Mac first; plan in `docs/spikes/led-write-probe-plan.md`.
+Built (2026-11-16) as "Indicate charge limit" in Settings > Battery, off by default (`Core/MagSafeLED.swift` LEDPolicy, `HelperCore/LEDGuard.swift`): limit reached or above it and Sailing green, heat pause orange, Top Up green once at 100%, charging toward the limit left to macOS. Stop-in-sleep and app-closed pauses and calibration are not built in this app, so they have no rule. Not built: Blink Orange during Discharge (needs its own timing test), LED Always Off / Off During Sleep (values unknown; separate probe with the owner). Restore limit: ACLC has no "macOS decides" value, so handing back writes the last value macOS set and stops correcting; macOS rewrites it on its next event.

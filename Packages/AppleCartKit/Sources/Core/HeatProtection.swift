@@ -34,7 +34,7 @@ public struct HeatGuard: Equatable, Sendable {
     }
 }
 
-/// What the MagSafe light shows, read from the SMC (read only: Apple Cart never sets it). Measured on an M5 (Mac17,2):
+/// What the MagSafe light shows, read from the SMC (the helper forces it only for Indicate charge limit). Measured on an M5 (Mac17,2):
 /// key ACLC reads 3 while the light is green and 4 while it is orange. Anything else is not guessed at.
 public enum MagSafeLight: Equatable, Sendable {
     case green, orange, unknown
