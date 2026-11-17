@@ -128,11 +128,7 @@ private final class Counter: @unchecked Sendable {
         #expect(!k4.isActive)
     }
 
-    @Test func customDurationMathAndStoredOptions() throws {
-        #expect(KeepAwakeOptions.customSeconds(45, hours: false) == 2700)
-        #expect(KeepAwakeOptions.customSeconds(3, hours: true) == 10800)
-        #expect(KeepAwakeOptions.customSeconds(0, hours: false) == nil && KeepAwakeOptions.customSeconds(-5, hours: true) == nil)
-        #expect(KeepAwakeOptions.customSeconds(9999, hours: true) == KeepAwakeOptions.maxCustomSeconds)
+    @Test func storedOptions() throws {
         let d = try #require(UserDefaults(suiteName: "keepawake-test-" + UUID().uuidString))
         #expect(KeepAwakeOptions.stored(duration: 60, defaults: d) == .init(duration: 60, keepDisplayOn: true)) // display on unless turned off
         d.set(true, forKey: "keepAwake.useLevel"); d.set(99, forKey: "keepAwake.level")

@@ -42,15 +42,6 @@ public struct KeepAwakeOptions: Sendable, Equatable {
 
     public static let levelRange = 5...95
     public static let defaultLevel = 20
-    /// Longest custom time: one week.
-    public static let maxCustomSeconds: TimeInterval = 7 * 24 * 3600
-
-    /// Seconds for a typed amount, or nil when it is not a positive number. Over a week is capped.
-    public static func customSeconds(_ amount: Int, hours: Bool) -> TimeInterval? {
-        guard amount > 0 else { return nil }
-        return min(Double(amount) * (hours ? 3600 : 60), maxCustomSeconds)
-    }
-
     /// The display stays on unless the owner turned that off: an idle display starts the screensaver, which defeats keeping awake.
     public static func storedKeepDisplayOn(_ defaults: UserDefaults = .standard) -> Bool {
         defaults.object(forKey: "keepAwake.displayOn") as? Bool ?? true
