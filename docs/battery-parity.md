@@ -87,4 +87,4 @@ Source: https://apphousekitchen.com/aldente-overview/features/ (MagSafe 3 MacBoo
 - Top Up: green once 100% is reached.
 - Calibration: green when done and the limit is reached.
 
-Not built: our LED is read-only (ACLC 3 green, 4 orange). Writing it needs a write probe on the owner's Mac first.
+Not built: our LED is read-only (ACLC 3 green, 4 orange). Writing it needs a write probe on the owner's Mac first; plan in `docs/spikes/led-write-probe-plan.md`.
