@@ -51,12 +51,17 @@ public struct KeepAwakeOptions: Sendable, Equatable {
         return min(Double(amount) * (hours ? 3600 : 60), maxCustomSeconds)
     }
 
-    /// The options saved in Settings, with the given duration from the panel.
+    /// The display stays on unless the owner turned that off: an idle display starts the screensaver, which defeats keeping awake.
+    public static func storedKeepDisplayOn(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: "keepAwake.displayOn") as? Bool ?? true
+    }
+
+    /// The options saved in the panel, with the given duration from the time buttons.
     public static func stored(duration: TimeInterval?, defaults: UserDefaults = .standard) -> KeepAwakeOptions {
         let level = min(max(defaults.object(forKey: "keepAwake.level") as? Int ?? defaultLevel, levelRange.lowerBound), levelRange.upperBound)
         return .init(duration: duration,
                      stopBelowPercent: defaults.bool(forKey: "keepAwake.useLevel") ? level : nil,
-                     keepDisplayOn: defaults.bool(forKey: "keepAwake.displayOn"),
+                     keepDisplayOn: storedKeepDisplayOn(defaults),
                      stopOnUnplug: defaults.bool(forKey: "keepAwake.endOnUnplug"),
                      stopAtChargeLimit: defaults.bool(forKey: "keepAwake.untilLimit"))
     }

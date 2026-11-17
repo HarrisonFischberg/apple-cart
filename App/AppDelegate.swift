@@ -76,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // "Keep the display on too" applies to a running Keep awake session at once, not only to the next one.
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [keepAwake] _ in
-            MainActor.assumeIsolated { keepAwake.setKeepDisplayOn(UserDefaults.standard.bool(forKey: "keepAwake.displayOn")) }
+            MainActor.assumeIsolated { keepAwake.setKeepDisplayOn(KeepAwakeOptions.storedKeepDisplayOn()) }
         }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "battery.75percent", accessibilityDescription: "Apple Cart")

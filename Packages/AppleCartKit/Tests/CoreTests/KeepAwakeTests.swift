@@ -134,10 +134,12 @@ private final class Counter: @unchecked Sendable {
         #expect(KeepAwakeOptions.customSeconds(0, hours: false) == nil && KeepAwakeOptions.customSeconds(-5, hours: true) == nil)
         #expect(KeepAwakeOptions.customSeconds(9999, hours: true) == KeepAwakeOptions.maxCustomSeconds)
         let d = try #require(UserDefaults(suiteName: "keepawake-test-" + UUID().uuidString))
-        #expect(KeepAwakeOptions.stored(duration: 60, defaults: d) == .init(duration: 60))
+        #expect(KeepAwakeOptions.stored(duration: 60, defaults: d) == .init(duration: 60, keepDisplayOn: true)) // display on unless turned off
         d.set(true, forKey: "keepAwake.useLevel"); d.set(99, forKey: "keepAwake.level")
         d.set(true, forKey: "keepAwake.endOnUnplug"); d.set(true, forKey: "keepAwake.untilLimit")
-        #expect(KeepAwakeOptions.stored(duration: nil, defaults: d) == .init(stopBelowPercent: 95, stopOnUnplug: true, stopAtChargeLimit: true))
+        #expect(KeepAwakeOptions.stored(duration: nil, defaults: d) == .init(stopBelowPercent: 95, keepDisplayOn: true, stopOnUnplug: true, stopAtChargeLimit: true))
+        d.set(false, forKey: "keepAwake.displayOn")
+        #expect(!KeepAwakeOptions.stored(duration: nil, defaults: d).keepDisplayOn)
     }
 
     @Test func replacingASessionDropsTheOldConditions() async {

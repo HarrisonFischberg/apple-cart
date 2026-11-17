@@ -10,6 +10,11 @@ public struct KeepAwakeView: View {
     let keepAwake: KeepAwake
     @AppStorage("keepAwake.customAmount") private var customAmount = 45
     @AppStorage("keepAwake.customHours") private var customHours = false
+    @AppStorage("keepAwake.displayOn") private var displayOn = true
+    @AppStorage("keepAwake.untilLimit") private var untilLimit = false
+    @AppStorage("keepAwake.useLevel") private var useLevel = false
+    @AppStorage("keepAwake.level") private var level = KeepAwakeOptions.defaultLevel
+    @AppStorage("keepAwake.endOnUnplug") private var endOnUnplug = false
 
     public init(keepAwake: KeepAwake) { self.keepAwake = keepAwake }
 
@@ -33,16 +38,46 @@ public struct KeepAwakeView: View {
                     }
                     customRow
                     Text("Click a time to start. Click it again to stop.").font(.callout).foregroundStyle(Palette.secondary)
-                    Text("Display and battery options are in Settings.").font(.callout).foregroundStyle(Palette.secondary)
                     if keepAwake.failed {
                         Text("macOS refused to keep this Mac awake. Try again.").font(.callout).foregroundStyle(.red)
                     }
                 }
                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                optionsCard
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
         }
+    }
+
+    /// Display and battery options, applied the next time a session starts (the display option also applies live).
+    private var optionsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            optionRow("Keep the display on too", isOn: $displayOn)
+            optionRow("Stop at the charge limit", isOn: $untilLimit)
+            optionRow("Stop at a battery level", isOn: $useLevel)
+            if useLevel {
+                HStack {
+                    Text("Stop at \(level)% (on battery)").font(.callout).foregroundStyle(Palette.secondary)
+                    Slider(value: Binding(get: { Double(level) }, set: { level = Int($0) }),
+                           in: Double(KeepAwakeOptions.levelRange.lowerBound)...Double(KeepAwakeOptions.levelRange.upperBound), step: 5)
+                        .accessibilityLabel("Stop at battery level").accessibilityValue("\(level) percent")
+                }
+                .frame(minHeight: 44)
+            }
+            optionRow("Stop when unplugged", isOn: $endOnUnplug)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 4).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.tile, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func optionRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title).font(.system(size: 15))
+            Spacer(minLength: 8)
+            Toggle(title, isOn: isOn).toggleStyle(.switch).labelsHidden()
+        }
+        .frame(minHeight: 44)
     }
 
     private var statusText: some View {

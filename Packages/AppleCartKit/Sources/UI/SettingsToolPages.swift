@@ -333,32 +333,7 @@ private struct BatteryEnergySettings: View {
 }
 
 private struct KeepAwakeSettingsCards: View {
-    @AppStorage("keepAwake.displayOn") private var displayOn = false
-    @AppStorage("keepAwake.useLevel") private var useLevel = false
-    @AppStorage("keepAwake.level") private var level = KeepAwakeOptions.defaultLevel
-    @AppStorage("keepAwake.endOnUnplug") private var endOnUnplug = false
-    @AppStorage("keepAwake.untilLimit") private var untilLimit = false
-
-    var body: some View {
-        SettingsCard("When it starts") {
-            SettingsRow("Keep the display on too") { Toggle("Keep the display on too", isOn: $displayOn).toggleStyle(.switch).labelsHidden() }
-            SettingsRow("Disable sleep until the charge limit", detail: "Recommended. Ends when plugged in and the charge reaches your limit. At 100% it ends when full.") {
-                Toggle("Disable sleep until the charge limit", isOn: $untilLimit).toggleStyle(.switch).labelsHidden()
-            }
-        }
-        SettingsCard("Manual sleep control") {
-            SettingsRow("Re-enable sleep at a battery level") { Toggle("Re-enable sleep at a battery level", isOn: $useLevel).toggleStyle(.switch).labelsHidden() }
-            if useLevel {
-                SettingsRow("Re-enable sleep at \(level)%", detail: "Only counts while on battery.") {
-                    Slider(value: Binding(get: { Double(level) }, set: { level = Int($0) }),
-                           in: Double(KeepAwakeOptions.levelRange.lowerBound)...Double(KeepAwakeOptions.levelRange.upperBound), step: 5)
-                        .frame(width: 180).accessibilityLabel("Re-enable sleep at battery level").accessibilityValue("\(level) percent")
-                }
-            }
-            SettingsRow("Re-enable sleep when unplugged") { Toggle("Re-enable sleep when unplugged", isOn: $endOnUnplug).toggleStyle(.switch).labelsHidden() }
-        }
-        Text("Start it from the panel by choosing a time.").hint()
-    }
+    var body: some View { Text("Keep awake options are in the panel, under the time buttons.").hint() }
 }
 
 private struct ClipboardOptions: View {
