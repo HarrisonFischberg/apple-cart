@@ -75,3 +75,16 @@ Full window (sidebar: Dashboard; Battery Care: Charge Control, Sleep Behavior, E
   health, battery specs incl. hardware percentage and temperature, power adapter specs, status items) with Reset and Clear All; spacing slider 0-20.
 - Other: show Dock icon, reduce transparency, restore window layout, appearance (system, light, dark), MagSafe LED (setting, indicate charge limit,
   blink orange during discharge).
+
+## MagSafe LED rules to match (AlDente, public docs, noted 2026-11-16)
+
+Source: https://apphousekitchen.com/aldente-overview/features/ (MagSafe 3 MacBooks). Setting: "Indicate Charge Limit", optional "Blink Orange during Discharge", LED "Always Off" / "Off During Sleep".
+
+- Limit reached or above it: green.
+- Paused because of Sailing Mode: green (ours today shows orange while sailing, see the battery page note).
+- Paused by "stop charging when sleeping" or "when app closed" before the limit: orange.
+- Paused by heat protection: orange.
+- Top Up: green once 100% is reached.
+- Calibration: green when done and the limit is reached.
+
+Not built: our LED is read-only (ACLC 3 green, 4 orange). Writing it needs a write probe on the owner's Mac first.
