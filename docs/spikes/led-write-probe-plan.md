@@ -39,3 +39,8 @@ Keep the light read-only and explained. Mark the parity row BLOCKED with this pr
 - Run 2 (green forced 50 s, charger unplugged about 3 s and replugged at about 10 s): `03` at 10 s, `04` by 20 s, and it stayed `04`. The owner saw the light stay orange after the replug. macOS rewrites `ACLC` itself on an adapter event.
 - Verdict: **conditional pass.** The write works and holds while nothing changes, but macOS overwrites it on a plug/unplug. Not yet tested: sleep and wake, and a charge-state change (pause to charging).
 - Design consequence: the helper cannot set it once. It has to read `ACLC` every 1-2 s while a colour is wanted and write it again when macOS changes it, so the light can flash the wrong colour for up to that interval after an event. Restore on lease expiry, sleep, SIGTERM and helper start, as with the charger and fan guards.
+
+## App-side results (2026-11-16, owner at the Mac, build 408c43e)
+- Forced green at the limit, back to orange when "Indicate charge limit" is turned off, corrected about 1 s after a replug.
+- Sleep and wake: at sleep the helper hands the light back to macOS (orange). With the battery above the limit the light turned green again within about 1 s of waking (limit 60%, battery 70%). With the battery at the limit (70% on 70%) it took about 66 s, because the limiter treats that as below the limit and waits for charging to resume before cutting again; the light only follows the confirmed cut. Left as it is: that wait is the limiter's safeguard.
+- Not tested: heat-pause orange, and a charge-state change (pause to charging).
