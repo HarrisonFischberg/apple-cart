@@ -33,3 +33,9 @@ Keep the light read-only and explained. Mark the parity row BLOCKED with this pr
 ## Owner steps (one result at a time)
 1. Confirm the Mac is on the charger and the limit is below the battery percent.
 2. Run the probe command I give you in Terminal, then tell me the light colour at the prompts.
+
+## Results (2026-11-16, owner at the Mac, probe d4e1aeb)
+- Run 1 (orange to green, 35 s, no events): write accepted (`smc=0`), read back `03` from 0.5 s on, held 35 s, light green. Restore wrote `04`; the key read `04` afterwards. A read right after a write shows the old value (about 0.5 s lag), so any read-back needs a short wait.
+- Run 2 (green forced 50 s, charger unplugged about 3 s and replugged at about 10 s): `03` at 10 s, `04` by 20 s, and it stayed `04`. The owner saw the light stay orange after the replug. macOS rewrites `ACLC` itself on an adapter event.
+- Verdict: **conditional pass.** The write works and holds while nothing changes, but macOS overwrites it on a plug/unplug. Not yet tested: sleep and wake, and a charge-state change (pause to charging).
+- Design consequence: the helper cannot set it once. It has to read `ACLC` every 1-2 s while a colour is wanted and write it again when macOS changes it, so the light can flash the wrong colour for up to that interval after an event. Restore on lease expiry, sleep, SIGTERM and helper start, as with the charger and fan guards.
