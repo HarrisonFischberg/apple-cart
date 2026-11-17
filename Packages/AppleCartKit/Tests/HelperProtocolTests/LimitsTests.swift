@@ -30,11 +30,13 @@ import Testing
         #expect(FanLimits.clampedMinimum(requested: 9000, systemMinimum: 1200, hardwareMaximum: 6000) == 6000)
     }
 
-    @Test func versionThreeAddsFansAndAVersionTwoHelperStillCharges() {
-        #expect(HelperIdentity.version == 3)
-        #expect(HelperIdentity.supportsCharging(helperVersion: 2) && HelperIdentity.supportsCharging(helperVersion: 3))
-        #expect(!HelperIdentity.supportsCharging(helperVersion: 1) && !HelperIdentity.supportsCharging(helperVersion: 4))
-        #expect(HelperIdentity.supportsFans(helperVersion: 3))
-        #expect(!HelperIdentity.supportsFans(helperVersion: 2) && !HelperIdentity.supportsFans(helperVersion: 4))
+    @Test func versionFourAddsTheLightAndOlderHelpersKeepWhatTheyHad() {
+        #expect(HelperIdentity.version == 4)
+        #expect((2...4).allSatisfy { HelperIdentity.supportsCharging(helperVersion: $0) })
+        #expect(!HelperIdentity.supportsCharging(helperVersion: 1) && !HelperIdentity.supportsCharging(helperVersion: 5))
+        #expect(HelperIdentity.supportsFans(helperVersion: 3) && HelperIdentity.supportsFans(helperVersion: 4))
+        #expect(!HelperIdentity.supportsFans(helperVersion: 2) && !HelperIdentity.supportsFans(helperVersion: 5))
+        #expect(HelperIdentity.supportsLED(helperVersion: 4))
+        #expect(!HelperIdentity.supportsLED(helperVersion: 3) && !HelperIdentity.supportsLED(helperVersion: 5))
     }
 }

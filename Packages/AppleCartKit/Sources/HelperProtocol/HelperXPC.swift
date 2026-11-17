@@ -8,14 +8,17 @@ public enum HelperIdentity {
     public static let machService = "app.rarecreatures.applecart.helper"
     public static let plistName = "app.rarecreatures.applecart.helper.plist"
     /// Bump when the XPC surface or helper behavior changes; the app shows "outdated" on a mismatch.
-    /// 3 added fan control (setFan, resetFan, fanStatus).
-    public static let version = 3
-    /// The charger calls (status, setAdapter, resetAll) are unchanged since 2, so a version 2 helper still drives the
-    /// charge limit; only fan control needs `version`. A helper newer than the app is outdated for both.
+    /// 3 added fan control (setFan, resetFan, fanStatus). 4 added the MagSafe light (setLED, resetLED, ledStatus).
+    /// A helper from before 4 is not replaced in place: Remove, then Install.
+    public static let version = 4
+    /// The charger calls (status, setAdapter, resetAll) are unchanged since 2 and the fan calls since 3, so an older helper
+    /// still drives what it has; only the MagSafe light needs `version`. A helper newer than the app is outdated for all.
     public static let chargeVersions = 2...version
+    public static let fanVersions = 3...version
 
     public static func supportsCharging(helperVersion v: Int) -> Bool { chargeVersions.contains(v) }
-    public static func supportsFans(helperVersion v: Int) -> Bool { v == version }
+    public static func supportsFans(helperVersion v: Int) -> Bool { fanVersions.contains(v) }
+    public static func supportsLED(helperVersion v: Int) -> Bool { v == version }
     /// Info.plist key that carries the team ID from the AC_TEAM_ID build setting (the one place it lives).
     public static let teamIDInfoKey = "ACTeamID"
 }
@@ -54,8 +57,18 @@ public enum HelperIdentity {
     /// Version 3. supported, fan count, actual rpm (fastest fan), minimum rpm (highest fan minimum), maximum rpm (lowest fan
     /// maximum), manual active, manual target rpm (0 if none), lease seconds left, error code.
     func fanStatus(reply: @escaping @Sendable (Bool, Int, Int, Int, Int, Bool, Int, Int, Int) -> Void)
+
+    /// Version 4. Force the MagSafe light to `color` (3 green, 4 orange; anything else is refused) for at most
+    /// `leaseSeconds` (clamped like AdapterLease). The helper keeps writing it back while macOS changes it, and hands the
+    /// light back to macOS when the lease ends.
+    func setLED(color: Int, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void)
+    /// Version 4. Stop forcing the light, lease cancelled. Writes nothing when nothing is forced.
+    func resetLED(reply: @escaping @Sendable (Int) -> Void)
+    /// Version 4. supported, raw ACLC value (-1 if unreadable), forced colour (0 if none), lease seconds left, error code.
+    func ledStatus(reply: @escaping @Sendable (Bool, Int, Int, Int, Int) -> Void)
 }
 
+/// One lease length and range for every helper command: the charger cut, manual fans and the forced MagSafe light.
 public enum AdapterLease {
     public static let defaultSeconds = 90
     public static let range = 10...300

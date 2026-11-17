@@ -48,6 +48,17 @@ public enum FanWhitelist {
     }
 }
 
+/// The only MagSafe light key the helper may touch: ACLC (ui8), written only with 3 (green) or 4 (orange), the two values
+/// seen on Mac17,2 / macOS 27.2 (docs/spikes/led-write-probe-plan.md). Reads: ACLC only. Nothing else.
+public enum LEDWhitelist {
+    public static let key = "ACLC"
+    public static let green: UInt8 = 3
+    public static let orange: UInt8 = 4
+
+    public static func allowsRead(key: String) -> Bool { key == Self.key }
+    public static func allowsWrite(key: String, bytes: [UInt8]) -> Bool { key == Self.key && (bytes == [green] || bytes == [orange]) }
+}
+
 /// SMC "flt " values are 4 bytes, little endian (F0Mn reads 00 d0 10 45 = 2317 rpm on Mac17,2).
 public enum FanBytes {
     public static func float(_ b: [UInt8]) -> Double? {
@@ -77,6 +88,13 @@ public protocol FanSMC: Sendable {
     func fanWrite(_ key: String, _ bytes: [UInt8]) throws
 }
 
+/// Narrow SMC surface for the MagSafe light (LEDWhitelist only). Fakes implement this in tests.
+public protocol LEDSMC: Sendable {
+    func ledKeyType(_ key: String) throws -> SMCKeyType
+    func ledRead(_ key: String) throws -> [UInt8]
+    func ledWrite(_ key: String, _ bytes: [UInt8]) throws
+}
+
 public enum SMCError: Error, Equatable {
     case refused, unavailable, io(Int32), smc(UInt8), keyMissing
     /// The key exists but its type or size is not what the write sequence expects: refused, nothing written.
@@ -96,7 +114,7 @@ public protocol SMCWriting: Sendable {
 }
 
 /// AppleSMC user client, same struct layout and selectors as spikes/smc-probe/main.swift. Needs root to write.
-public final class SMCConnection: SMCWriting, FanSMC, @unchecked Sendable {
+public final class SMCConnection: SMCWriting, FanSMC, LEDSMC, @unchecked Sendable {
     private struct Vers { var major: UInt8 = 0, minor: UInt8 = 0, build: UInt8 = 0, reserved: UInt8 = 0; var release: UInt16 = 0 }
     private struct PLimit { var version: UInt16 = 0, length: UInt16 = 0; var cpu: UInt32 = 0, gpu: UInt32 = 0, mem: UInt32 = 0 }
     private struct KeyInfo { var dataSize: UInt32 = 0, dataType: UInt32 = 0; var attrs: UInt8 = 0 }
@@ -165,13 +183,42 @@ public final class SMCConnection: SMCWriting, FanSMC, @unchecked Sendable {
 
     public func fanKeyType(_ key: String) throws -> SMCKeyType {
         guard FanWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        return try keyType(key)
+    }
+
+    public func fanRead(_ key: String) throws -> [UInt8] {
+        guard FanWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        return try readRaw(key)
+    }
+
+    public func fanWrite(_ key: String, _ bytes: [UInt8]) throws {
+        guard FanWhitelist.allowsWrite(key: key, bytes: bytes) else { throw SMCError.refused }
+        try writeRaw(key, bytes)
+    }
+
+    public func ledKeyType(_ key: String) throws -> SMCKeyType {
+        guard LEDWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        return try keyType(key)
+    }
+
+    public func ledRead(_ key: String) throws -> [UInt8] {
+        guard LEDWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+        return try readRaw(key)
+    }
+
+    public func ledWrite(_ key: String, _ bytes: [UInt8]) throws {
+        guard LEDWhitelist.allowsWrite(key: key, bytes: bytes) else { throw SMCError.refused }
+        try writeRaw(key, bytes)
+    }
+
+    // Callers check their whitelist first; these never run for a key that was not allowed.
+    private func keyType(_ key: String) throws -> SMCKeyType {
         lock.lock(); defer { lock.unlock() }
         let i = try keyInfo(Self.fourCC(key))
         return SMCKeyType(Self.name(i.dataType), Int(i.dataSize))
     }
 
-    public func fanRead(_ key: String) throws -> [UInt8] {
-        guard FanWhitelist.allowsRead(key: key) else { throw SMCError.refused }
+    private func readRaw(_ key: String) throws -> [UInt8] {
         lock.lock(); defer { lock.unlock() }
         let k = Self.fourCC(key)
         let i = try keyInfo(k)
@@ -181,8 +228,7 @@ public final class SMCConnection: SMCWriting, FanSMC, @unchecked Sendable {
         return withUnsafeBytes(of: d.bytes) { Array($0.prefix(Int(i.dataSize))) }
     }
 
-    public func fanWrite(_ key: String, _ bytes: [UInt8]) throws {
-        guard FanWhitelist.allowsWrite(key: key, bytes: bytes) else { throw SMCError.refused }
+    private func writeRaw(_ key: String, _ bytes: [UInt8]) throws {
         lock.lock(); defer { lock.unlock() }
         let k = Self.fourCC(key)
         guard Int(try keyInfo(k).dataSize) == bytes.count else { throw SMCError.typeMismatch }

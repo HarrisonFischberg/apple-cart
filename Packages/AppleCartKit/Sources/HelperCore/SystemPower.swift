@@ -17,23 +17,25 @@ public enum PowerMessage {
     public static func needsAck(_ message: UInt32) -> Bool { message == canSystemSleep || message == systemWillSleep }
 }
 
-/// Registers for system sleep and restores the adapter and the fans before acknowledging it. Keep the instance alive.
+/// Registers for system sleep and restores the adapter, the fans and the light before acknowledging it. Keep the instance alive.
 public final class SystemPowerWatcher: @unchecked Sendable {
     private var root: io_connect_t = 0
     private var port: IONotificationPortRef?
     private var notifier: io_object_t = 0
     private let adapter: AdapterGuard
     private let fan: FanGuard?
+    private let led: LEDGuard?
 
-    public init?(adapter: AdapterGuard, fan: FanGuard? = nil, queue: DispatchQueue) {
+    public init?(adapter: AdapterGuard, fan: FanGuard? = nil, led: LEDGuard? = nil, queue: DispatchQueue) {
         self.adapter = adapter
         self.fan = fan
+        self.led = led
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         root = IORegisterForSystemPower(ctx, &port, { ctx, _, message, argument in
             guard let ctx else { return }
             let me = Unmanaged<SystemPowerWatcher>.fromOpaque(ctx).takeUnretainedValue()
-            if PowerMessage.restoresAdapter(message) { me.adapter.systemWillSleep(); me.fan?.systemWillSleep() }
-            if PowerMessage.endsSleep(message) { me.adapter.systemDidWake(); me.fan?.systemDidWake() }
+            if PowerMessage.restoresAdapter(message) { me.adapter.systemWillSleep(); me.fan?.systemWillSleep(); me.led?.systemWillSleep() }
+            if PowerMessage.endsSleep(message) { me.adapter.systemDidWake(); me.fan?.systemDidWake(); me.led?.systemDidWake() }
             if PowerMessage.needsAck(message) { IOAllowPowerChange(me.root, Int(bitPattern: argument)) }
         }, &notifier)
         guard root != 0, let port else { return nil }

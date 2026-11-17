@@ -40,7 +40,8 @@ public struct ClientGate: Sendable {
 public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Sendable {
     let adapter: AdapterGuard
     let fan: FanGuard?
-    public init(adapter: AdapterGuard, fan: FanGuard? = nil) { self.adapter = adapter; self.fan = fan }
+    let led: LEDGuard?
+    public init(adapter: AdapterGuard, fan: FanGuard? = nil, led: LEDGuard? = nil) { self.adapter = adapter; self.fan = fan; self.led = led }
 
     public func version(reply: @escaping @Sendable (Int) -> Void) { reply(HelperIdentity.version) }
 
@@ -70,6 +71,19 @@ public final class HelperService: NSObject, AppleCartHelperXPC, @unchecked Senda
         guard let s = fan?.status() else { return reply(false, 0, -1, 0, 0, false, 0, 0, HelperErrorCode.unsupported.rawValue) }
         reply(s.supported, s.count, s.actualRPM, s.minimumRPM, s.maximumRPM, s.manual, s.targetRPM, s.leaseRemaining, s.code.rawValue)
     }
+
+    public func setLED(color: Int, leaseSeconds: Int, reply: @escaping @Sendable (Int) -> Void) {
+        reply((led?.setLED(color: color, leaseSeconds: leaseSeconds) ?? .unsupported).rawValue)
+    }
+
+    public func resetLED(reply: @escaping @Sendable (Int) -> Void) {
+        reply((led?.restore(reason: "reset led") ?? .unsupported).rawValue)
+    }
+
+    public func ledStatus(reply: @escaping @Sendable (Bool, Int, Int, Int, Int) -> Void) {
+        guard let s = led?.status() else { return reply(false, -1, 0, 0, HelperErrorCode.unsupported.rawValue) }
+        reply(s.supported, s.raw, s.wanted, s.leaseRemaining, s.code.rawValue)
+    }
 }
 
 /// Live app connections, so the helper restores only when the last one ends (a second copy quitting does not undo the first).
@@ -96,23 +110,24 @@ public final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unc
         connection.setCodeSigningRequirement(requirement) // the system re-checks on every message
         connection.exportedInterface = NSXPCInterface(with: AppleCartHelperXPC.self)
         connection.exportedObject = service
-        Self.attachRestore(to: connection, adapter: service.adapter, fan: service.fan, clients: clients)
+        Self.attachRestore(to: connection, adapter: service.adapter, fan: service.fan, led: service.led, clients: clients)
         connection.resume()
         return true
     }
 
-    /// The app went away (quit, crash, killed): put the adapter back and the fans to macOS now instead of waiting for the lease,
-    /// unless another app connection is still live (its own lease still bounds any cut).
-    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard, fan: FanGuard? = nil, clients: LiveClients = LiveClients()) {
+    /// The app went away (quit, crash, killed): put the adapter back and the fans and light to macOS now instead of waiting for
+    /// the lease, unless another app connection is still live (its own lease still bounds any cut).
+    static func attachRestore(to connection: NSXPCConnection, adapter: AdapterGuard, fan: FanGuard? = nil, led: LEDGuard? = nil,
+                              clients: LiveClients = LiveClients()) {
         let id = ObjectIdentifier(connection)
         clients.opened(id)
         connection.invalidationHandler = {
             guard clients.ended(id) else { return }
-            adapter.restore(reason: "connection invalidated"); fan?.restore(reason: "connection invalidated")
+            adapter.restore(reason: "connection invalidated"); fan?.restore(reason: "connection invalidated"); led?.restore(reason: "connection invalidated")
         }
         connection.interruptionHandler = {
             guard clients.ended(id) else { return }
-            adapter.restore(reason: "connection interrupted"); fan?.restore(reason: "connection interrupted")
+            adapter.restore(reason: "connection interrupted"); fan?.restore(reason: "connection interrupted"); led?.restore(reason: "connection interrupted")
         }
     }
 }
