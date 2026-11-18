@@ -316,8 +316,12 @@ struct PowerFlowSpace: View {
         for (z, m) in sorted where z >= 0 { paint(&ctx, m, light: light, t: t, moving: moving) }
 
         // Labels and the Mac's readout on top of everything.
+        // Each body's label sits on its far side from the planet, so labels spread out instead of meeting in the middle.
         for case (_, .body(let b, let p, let r)) in sorted {
-            tag(&ctx, caption: b.caption, value: b.value, at: CGPoint(x: p.x, y: p.y - r - 16))
+            let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
+            let out = CGPoint(x: p.x + dx / d * (r + 30), y: p.y + dy / d * (r + 18))
+            tag(&ctx, caption: b.caption, value: b.value,
+                at: CGPoint(x: min(max(out.x, 44), size.width - 44), y: min(max(out.y, 16), size.height - 16)))
         }
         let dial = CGFloat(scale) + 7
         var share = "Mac uses"
@@ -325,10 +329,11 @@ struct PowerFlowSpace: View {
             share += " · \(Int((w / Double(rating) * 100).rounded()))% of charger"
         } else if reading?.isPluggedIn == false || pausedAt != nil { share += " · on battery" }
         tag(&ctx, caption: share, value: PowerFlow.watts(reading?.systemWatts), at: CGPoint(x: center.x, y: center.y - dial - 19), big: true)
-        // The Mac's battery level under the planet, the same number as the page's header.
+        // The Mac's battery level just below the ring, the same number as the page's header.
+        let ringBottom = stride(from: 0.0, to: 2 * .pi, by: .pi / 24).map { project(PowerSpace.ringPoint(2.6, $0)).0.y }.max() ?? center.y
         if let r = reading {
             tag(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText,
-                at: CGPoint(x: center.x, y: center.y + CGFloat(scale) * 1.15 + 34), big: true, captionBelow: true)
+                at: CGPoint(x: center.x, y: min(ringBottom + 20, size.height - 20)), big: true, captionBelow: true)
         }
     }
 
