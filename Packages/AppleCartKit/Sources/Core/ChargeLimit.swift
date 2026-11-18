@@ -75,6 +75,8 @@ public final class ChargeLimitSettings {
     public var resumeBand: Int { effectiveSailing ? max(sailingDifference, ChargePolicy.hysteresis) : ChargePolicy.hysteresis }
     /// The lower edge of the range the battery drifts in ("Will sail to X%").
     public var sailFloor: Int { max(limit - resumeBand, 0) }
+    /// The sailing floor when macOS's own limit keeps the charge: it cannot hold below 80%, so the floor stops there.
+    public var nativeSailFloor: Int { NativeChargePlan.floor(limit: limit, sailFloor: sailFloor) }
 
     /// Top Up lifts the limit to 100 until it is cancelled, the battery is full or the Mac unplugs.
     public var effectiveLimit: Int { topUpActive ? 100 : limit }
@@ -97,6 +99,8 @@ public enum ChargeDecision: Equatable, Sendable {
     case holdCharging(at: Int)
     /// Above the limit with Automatic Discharge on: run from the battery down to the limit.
     case discharge(to: Int)
+
+    public var isDischarge: Bool { if case .discharge = self { true } else { false } }
 }
 
 public enum ChargePolicy {
