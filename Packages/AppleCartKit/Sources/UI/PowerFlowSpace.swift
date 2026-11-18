@@ -316,9 +316,9 @@ struct PowerFlowSpace: View {
         for (z, m) in sorted where z >= 0 { paint(&ctx, m, light: light, t: t, moving: moving) }
 
         // Labels and the Mac's readout on top of everything.
-        // The Mac's readout above the planet and its battery level just below the ring (the same number as the page's
-        // header) go first; then each body's label takes the first free spot around it, starting on its far side from
-        // the planet, so labels never cover a moon, the planet or each other at any angle.
+        // The Mac's readout sits above the planet. Then each body's label takes the least crowded spot around it, starting
+        // on its far side from the planet, and last the battery level (the same number as the page's header) goes under
+        // the ring or the nearest free spot beside it, so labels keep off the moons, the planet and each other at any angle.
         let dial = CGFloat(scale) + 7
         var share = "Mac uses"
         if let w = reading?.systemWatts, let rating = reading?.adapterWatts, rating > 0, reading?.isPluggedIn == true, pausedAt == nil {
@@ -332,43 +332,75 @@ struct PowerFlowSpace: View {
             guard case .body(_, let p, let r) = item.1 else { return nil }
             return CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
         } + [CGRect(x: center.x - CGFloat(scale), y: center.y - CGFloat(scale), width: CGFloat(scale) * 2, height: CGFloat(scale) * 2)]
-        if let r = reading {
-            // Under the planet, sliding sideways if a moon is in the way.
-            let caption = pausedAt.map { "Battery · held at \($0)%" } ?? "Battery"
-            let box = tagSize(&ctx, caption: caption, value: r.shownPercentText, big: true)
-            let y = min(ringBottom + 20, size.height - box.height / 2 - 2)
-            let xs = [center.x, center.x - box.width - 8, center.x + box.width + 8]
-            let x = xs.first { x in !discs.contains { $0.intersects(CGRect(x: x - box.width / 2, y: y - box.height / 2, width: box.width, height: box.height)) } } ?? center.x
-            placed.append(tag(&ctx, caption: caption, value: r.shownPercentText, at: CGPoint(x: x, y: y), big: true, captionBelow: true))
-        }
         let room = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
-        for case (_, .body(let b, let p, let r)) in sorted {
+        // A candidate is pulled fully inside the map first, then scored by what it would cover: its own body worst,
+        // then other bodies and the planet, then labels already placed. The least-covering spot wins, so a crowded
+        // label never falls back onto its own moon.
+        func fit(_ c: CGRect) -> CGRect {
+            CGRect(x: min(max(c.minX, room.minX), room.maxX - c.width), y: min(max(c.minY, room.minY), room.maxY - c.height), width: c.width, height: c.height)
+        }
+        func covered(_ a: CGRect, _ b: CGRect) -> CGFloat { let i = a.intersection(b); return i.isNull ? 0 : i.width * i.height }
+        func cost(_ c: CGRect, own: CGRect?, bodies: [CGRect]) -> CGFloat {
+            (own.map { covered(c, $0) * 40 } ?? 0) + bodies.reduce(0) { $0 + covered(c, $1) * 12 } + placed.reduce(0) { $0 + covered(c, $1) * 8 }
+        }
+        // The battery level's usual spot under the planet is held while the moons choose, so they leave it free if they can.
+        if let r = reading {
+            let box = tagSize(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText, big: true)
+            placed.append(fit(CGRect(x: center.x - box.width / 2, y: min(ringBottom + 20, size.height - box.height / 2 - 2) - box.height / 2, width: box.width, height: box.height)))
+        }
+        let held = placed.count
+        // Each moon and the sun first, nearest the viewer first, so the bodies in front get the best spots.
+        var leaders: [(Path, Color)] = [], tags: [(Orb, CGPoint)] = []
+        for case (_, .body(let b, let p, let r)) in sorted.reversed() {
             let box = tagSize(&ctx, caption: b.caption, value: b.value)
             let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
             let outward = Double(atan2(dy / d, dx / d))
-            let tries = [outward] + (0..<8).map { Double($0) * .pi / 4 }.sorted { abs(remainder($0 - outward, 2 * .pi)) < abs(remainder($1 - outward, 2 * .pi)) }
+            let tries = [outward] + (0..<16).map { Double($0) * .pi / 8 }.sorted { abs(remainder($0 - outward, 2 * .pi)) < abs(remainder($1 - outward, 2 * .pi)) }
             func spot(_ a: Double, _ extra: CGFloat) -> CGRect {
                 let ux = CGFloat(cos(a)), uy = CGFloat(sin(a))
                 let reach = r + 6 + extra + abs(ux) * box.width / 2 + abs(uy) * box.height / 2
-                return CGRect(x: p.x + ux * reach - box.width / 2, y: p.y + uy * reach - box.height / 2, width: box.width, height: box.height)
+                return fit(CGRect(x: p.x + ux * reach - box.width / 2, y: p.y + uy * reach - box.height / 2, width: box.width, height: box.height))
             }
             let own = CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
-            let others = discs.filter { $0 != own } + placed
-            // Close in first; when two bodies crowd each other, step further out before giving up.
-            let candidates = [CGFloat(0), 18, 36].flatMap { extra in tries.map { (spot($0, extra), extra) } }
-            let free = candidates.first { c in room.contains(c.0) && !others.contains { $0.intersects(c.0) } }
-            let (rect, extra) = free ?? (spot(outward, 0), 0)
-            let at = CGPoint(x: min(max(rect.midX, room.minX + box.width / 2), room.maxX - box.width / 2),
-                             y: min(max(rect.midY, room.minY + box.height / 2), room.maxY - box.height / 2))
-            if extra > 0 { // pushed away from its body: a thin leader line says whose label it is
-                let ux = at.x - p.x, uy = at.y - p.y, ul = max(hypot(ux, uy), 1)
+            let bodies = discs.filter { $0 != own }
+            // Close in first; when two bodies crowd each other, step further out. Ties keep the nearer, more outward spot.
+            var best = spot(outward, 0), bestCost = CGFloat.infinity
+            search: for extra in [CGFloat(0), 16, 32, 52] {
+                for a in tries {
+                    let c = spot(a, extra), k = cost(c, own: own, bodies: bodies) + extra * 0.5
+                    if k < bestCost { best = c; bestCost = k }
+                    if k == extra * 0.5 { break search }
+                }
+            }
+            // Away from its body: a leader line says whose label it is.
+            let gap = hypot(max(best.minX - p.x, 0, p.x - best.maxX), max(best.minY - p.y, 0, p.y - best.maxY)) - r
+            if gap > 7 {
+                let end = CGPoint(x: min(max(p.x, best.minX), best.maxX), y: min(max(p.y, best.minY), best.maxY))
+                let ux = end.x - p.x, uy = end.y - p.y, ul = max(hypot(ux, uy), 1)
                 var line = Path()
                 line.move(to: CGPoint(x: p.x + ux / ul * (r + 2), y: p.y + uy / ul * (r + 2)))
-                line.addLine(to: CGPoint(x: min(max(p.x, at.x - box.width / 2), at.x + box.width / 2), y: min(max(p.y, at.y - box.height / 2), at.y + box.height / 2)))
-                ctx.stroke(line, with: .color(b.tint.opacity(0.7)), lineWidth: 1)
+                line.addLine(to: end)
+                leaders.append((line, b.tint))
             }
-            placed.append(tag(&ctx, caption: b.caption, value: b.value, at: at))
+            placed.append(best)
+            tags.append((b, CGPoint(x: best.midX, y: best.midY)))
         }
+        if reading != nil { placed.remove(at: held - 1) }
+        if let r = reading {
+            // The battery level under the planet; if a moon or a label is there, the nearest free spot around it.
+            let caption = pausedAt.map { "Battery · held at \($0)%" } ?? "Battery"
+            let box = tagSize(&ctx, caption: caption, value: r.shownPercentText, big: true)
+            let y = min(ringBottom + 20, size.height - box.height / 2 - 2)
+            let step = box.width / 2 + 8
+            let offsets: [(CGFloat, CGFloat)] = [(0, 0), (-1, 0), (1, 0), (0, -0.6), (-2, 0), (2, 0), (-1, -0.8), (1, -0.8), (0, 0.6)]
+            let spots = offsets.map { o in
+                fit(CGRect(x: center.x + o.0 * step - box.width / 2, y: y + o.1 * box.height * 1.4 - box.height / 2, width: box.width, height: box.height))
+            }
+            let pick = spots.min { cost($0, own: nil, bodies: discs) < cost($1, own: nil, bodies: discs) } ?? spots[0]
+            placed.append(tag(&ctx, caption: caption, value: r.shownPercentText, at: CGPoint(x: pick.midX, y: pick.midY), big: true, captionBelow: true))
+        }
+        for (line, tint) in leaders { ctx.stroke(line, with: .color(tint.opacity(0.9)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round)) }
+        for (b, at) in tags { tag(&ctx, caption: b.caption, value: b.value, at: at) }
     }
 
     private func tagSize(_ ctx: inout GraphicsContext, caption: String, value: String, big: Bool = false) -> CGSize {
