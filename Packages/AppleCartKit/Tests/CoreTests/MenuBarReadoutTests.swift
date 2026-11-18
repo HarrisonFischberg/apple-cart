@@ -126,10 +126,12 @@ private func full(percent: Int = 80, amps: Int64 = 0, plugged: Bool = true, char
     @Test func appleIsTheDefaultLookAndCarriesThePercent() throws {
         let defaults = try #require(UserDefaults(suiteName: "glyph-style-\(UUID().uuidString)"))
         let settings = GlyphStyleSettings(defaults: defaults)
-        #expect(settings.style == .apple)
+        let first = settings.style
+        #expect(first == .apple)
         #expect(MenuBarGlyphStyle.apple.showsPercentInside)
         #expect(!MenuBarGlyphStyle.classic.showsPercentInside)
         settings.style = .ring
-        #expect(GlyphStyleSettings(defaults: defaults).style == .ring)
+        let reloaded = GlyphStyleSettings(defaults: defaults).style
+        #expect(reloaded == .ring)
     }
 }
