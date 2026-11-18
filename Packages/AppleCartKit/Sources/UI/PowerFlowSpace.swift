@@ -340,7 +340,7 @@ struct PowerFlowSpace: View {
         for case (_, .body(let b, let p, let r)) in sorted {
             let box = tagSize(&ctx, caption: b.caption, value: b.value)
             let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
-            let outward = atan2(dy / d, dx / d)
+            let outward = Double(atan2(dy / d, dx / d))
             let tries = [outward] + (0..<8).map { Double($0) * .pi / 4 }.sorted { abs(remainder($0 - outward, 2 * .pi)) < abs(remainder($1 - outward, 2 * .pi)) }
             func spot(_ a: Double) -> CGRect {
                 let ux = CGFloat(cos(a)), uy = CGFloat(sin(a))
