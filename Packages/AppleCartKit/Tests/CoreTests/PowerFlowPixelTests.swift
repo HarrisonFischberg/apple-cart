@@ -62,6 +62,12 @@ import Testing
         #expect(PixelFlow.columns(width: 340, cell: 2) > PixelFlow.columns(width: 340, cell: 4))
     }
 
+    @Test func panRoundTripsAndKeepsTheMapWithinReach() {
+        #expect(PixelFlow.pan(PixelFlow.panText(PixelPoint(-12, 7))) == PixelPoint(-12, 7))
+        #expect(PixelFlow.panText(PixelPoint(0, 0)) == "" && PixelFlow.pan("") == PixelPoint(0, 0) && PixelFlow.pan("x,1") == PixelPoint(0, 0))
+        #expect(PixelFlow.clampPan(PixelPoint(500, -500), columns: 100) == PixelPoint(50, -PixelFlow.rows / 2))
+    }
+
     @Test func draggedPlacesRoundTripAndStayInsideTheGrid() {
         let p = PixelPlaces([.charger: PixelPoint(10, 12), .stream("USB"): PixelPoint(90, 40)])
         #expect(PixelPlaces(json: p.json) == p)

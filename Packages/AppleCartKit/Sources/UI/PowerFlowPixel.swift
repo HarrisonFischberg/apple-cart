@@ -2,7 +2,8 @@ import Core
 import SwiftUI
 
 /// The 8-bit power flow: pixel sprites for the charger, the Mac, the battery and outside devices, joined by wires that
-/// pixel packets run along (denser and faster with more watts). Drag a sprite to move it; the places are remembered.
+/// pixel packets run along (denser and faster with more watts). Drag a sprite to move it, or drag the background to move
+/// the whole map; both are remembered.
 /// Tap a sprite for its details. A lit screen in both appearances, like a handheld. Ticks only while `active`;
 /// Reduce Motion draws it still.
 struct PowerFlowPixel: View {
@@ -14,7 +15,10 @@ struct PowerFlowPixel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(PixelPlaces.storageKey) private var saved = ""
     @AppStorage(PixelFlow.zoomKey) private var savedZoom = PixelFlow.cell
+    @AppStorage(PixelFlow.panKey) private var savedPan = ""
     @State private var drag: (id: FlowNodeID, at: PixelPoint)?
+    /// While the background is dragged: where the pan started and where it is now.
+    @State private var panning: (from: PixelPoint, now: PixelPoint)?
     @State private var resize = LiveResize.shared
 
     private static let ground = Color(red: 0.114, green: 0.106, blue: 0.227)
@@ -42,14 +46,23 @@ struct PowerFlowPixel: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 2)
                 .onChanged { v in
+                    let dx = Int((v.translation.width / s).rounded()), dy = Int((v.translation.height / s).rounded())
+                    // Started on empty screen: the whole map slides with the pointer.
+                    if let p = panning {
+                        panning = (p.from, PixelFlow.clampPan(PixelPoint(p.from.x + dx, p.from.y + dy), columns: cols)); return
+                    }
                     // Moves from where the sprite sat when the drag began, in whole cells.
                     let rest = PixelPlaces(json: saved).resolved(homes: PixelFlow.homes(columns: cols, streams: streams), columns: cols)
-                    if drag == nil { guard let id = hit(v.startLocation, s: s, places: rest), let p = rest[id] else { return }; drag = (id, p) }
+                    if drag == nil {
+                        guard let id = hit(v.startLocation, s: s, places: rest), let p = rest[id] else { panning = (pan, pan); return }
+                        drag = (id, p)
+                    }
                     guard let d = drag, let start = rest[d.id] else { return }
                     drag = (d.id, PixelPlaces.clamp(PixelPoint(start.x + Int((v.translation.width / s).rounded()),
                                                                start.y + Int((v.translation.height / s).rounded())), columns: cols))
                 }
                 .onEnded { _ in
+                    if let p = panning { savedPan = PixelFlow.panText(p.now); panning = nil; return }
                     guard let d = drag else { return }
                     var p = PixelPlaces(json: saved); p.byNode[d.id] = d.at; saved = p.json
                     drag = nil
@@ -68,6 +81,9 @@ struct PowerFlowPixel: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    /// How far the map is slid, in cells: the drag under way, else the saved pan.
+    private var pan: PixelPoint { panning?.now ?? PixelFlow.pan(savedPan) }
+
     /// Where each sprite sits now: saved places, the one being dragged, the rest at home.
     private func places(_ cols: Int) -> [FlowNodeID: PixelPoint] {
         var p = PixelPlaces(json: saved).resolved(homes: PixelFlow.homes(columns: cols, streams: streams), columns: cols)
@@ -76,7 +92,7 @@ struct PowerFlowPixel: View {
     }
 
     private func hit(_ pt: CGPoint, s: Double, places: [FlowNodeID: PixelPoint]) -> FlowNodeID? {
-        let x = Int(pt.x / s), y = Int(pt.y / s)
+        let x = Int((pt.x / s).rounded(.down)) - pan.x, y = Int((pt.y / s).rounded(.down)) - pan.y
         return places.first { id, p in
             let (w, h) = PixelFlow.size(PixelFlow.sprite(id))
             return abs(x - p.x) <= w / 2 + 3 && y >= p.y - h / 2 - 3 && y <= p.y + h / 2 + 15 // the sprite and its label
@@ -87,13 +103,16 @@ struct PowerFlowPixel: View {
 
     private func draw(_ ctx: inout GraphicsContext, cols: Int, s: Double, t: Double) {
         var layers: [(Color, Path)] = []
+        let o = pan // everything but the screen itself slides by the pan
         func put(_ c: Color, _ cells: [PixelPoint], size: Int = 1) {
             var p = Path()
-            for q in cells { p.addRect(CGRect(x: Double(q.x) * s, y: Double(q.y) * s, width: s * Double(size), height: s * Double(size))) }
+            for q in cells { p.addRect(CGRect(x: Double(q.x + o.x) * s, y: Double(q.y + o.y) * s, width: s * Double(size), height: s * Double(size))) }
             layers.append((c, p))
         }
         ctx.fill(Path(CGRect(x: 0, y: 0, width: Double(cols) * s, height: Double(PixelFlow.rows) * s)), with: .color(Self.ground))
-        put(Self.dots, stride(from: 0, to: cols, by: 6).flatMap { x in stride(from: 0, to: PixelFlow.rows, by: 6).map { PixelPoint(x, $0) } })
+        // The dot grid repeats every 6 cells, so it scrolls with the map without ever running out.
+        let gx = ((o.x % 6) + 6) % 6 - o.x, gy = ((o.y % 6) + 6) % 6 - o.y
+        put(Self.dots, stride(from: gx, to: gx + cols, by: 6).flatMap { x in stride(from: gy, to: gy + PixelFlow.rows, by: 6).map { PixelPoint(x, $0) } })
 
         let at = places(cols)
         let moving = active && !reduceMotion
