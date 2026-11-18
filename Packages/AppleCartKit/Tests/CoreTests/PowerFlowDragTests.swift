@@ -118,3 +118,40 @@ private func charging() -> FlowLayout {
         #expect(OrbitRing.spin(80) > OrbitRing.spin(5) && OrbitRing.spin(nil) > 0)
     }
 }
+
+@Suite struct PowerFlowSpaceTests {
+    @Test func theCameraKeepsShortOfThePolesAndAPointInFrontProjectsNearer() {
+        #expect(SpaceCamera(yaw: 0, pitch: 9).pitch == SpaceCamera.maxPitch)
+        let cam = SpaceCamera(yaw: 0, pitch: 0)
+        let near = cam.project(cam.view(Vec3(1, 0, 2)), center: .zero, scale: 10), far = cam.project(cam.view(Vec3(1, 0, -2)), center: .zero, scale: 10)
+        #expect(near.s > 1 && far.s < 1 && near.point.x > far.point.x)
+        #expect(cam.project(cam.view(Vec3(0, 1, 0)), center: CGPoint(x: 50, y: 50), scale: 10).point.y == 40) // up is up on screen
+    }
+
+    @Test func draggingAMoonFindsTheAngleUnderThePointer() {
+        let o = PowerSpace.battery, cam = SpaceCamera()
+        let target = cam.project(cam.view(o.position(at: 2.0)), center: CGPoint(x: 170, y: 150), scale: 25).point
+        let a = o.angle(nearest: target, camera: cam, center: CGPoint(x: 170, y: 150), scale: 25)
+        #expect(abs(a - 2.0) < 0.05)
+    }
+
+    @Test func everyReportedDeviceGetsAMoonAndSavedAnglesWin() {
+        let streams = [PowerStream(title: "USB", watts: 15.5), PowerStream(title: "SoC", watts: nil), PowerStream(title: "Charger loss", watts: 2)]
+        let o = PowerSpace.orbits(streams: streams, angles: [.stream("USB"): 1.25])
+        #expect(o.map(\.0) == [.charger, .battery, .stream("USB"), .stream("Charger loss")])
+        #expect(o[2].1.angle == 1.25)
+    }
+
+    @Test func arcsRiseAboveTheRingPlaneAndLandOnThePlanet() {
+        let a = Vec3(4, 0, 0), b = PowerSpace.landing(toward: a)
+        #expect(abs(b.length - 1.12) < 1e-9 && PowerSpace.arc(a, b, 0) == a)
+        #expect(PowerSpace.arc(a, b, 0.5).y > 0.5)
+    }
+
+    @Test func theViewRoundTripsAndDefaultsSaveNothing() {
+        #expect(SpaceView().json == "" && SpaceView(json: "junk").isDefault)
+        let v = SpaceView(camera: SpaceCamera(yaw: 1.2, pitch: -0.4), angles: [.stream("USB"): 0.7, .charger: 3])
+        let back = SpaceView(json: v.json)
+        #expect(abs(back.camera.yaw - 1.2) < 1e-9 && back.camera.pitch == -0.4 && back.angles == v.angles)
+    }
+}

@@ -74,11 +74,17 @@ extension FlowLayout {
     }
 }
 
-/// Which map the Battery page draws. Saved under `storageKey`; the orbit is the default.
+/// Which map the Battery page draws. Saved under `storageKey`; the 3D planets are the default.
 public enum FlowStyle: String, CaseIterable, Sendable {
-    case orbit, column
+    case space, orbit, column
     public static let storageKey = "powerFlow.style"
-    public var title: String { self == .orbit ? "Orbit" : "Columns" }
+    public var title: String {
+        switch self {
+        case .space: "3D planets"
+        case .orbit: "Flat orbit"
+        case .column: "Columns"
+        }
+    }
 }
 
 /// The Saturn-style ring around the planet. Pure numbers so it can be tested and drawn the same way everywhere.

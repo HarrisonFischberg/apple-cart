@@ -21,7 +21,8 @@ struct PowerFlowArt: View {
     /// Where the owner has dragged tiles (kept across launches) and the tile being dragged right now.
     @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
     @State private var drag: (id: FlowNodeID, by: CGSize)?
-    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.orbit.rawValue
+    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.space.rawValue
+    /// The 3D style is drawn by `PowerFlowSpace`; here anything but columns is the flat orbit.
     private var orbit: Bool { style != FlowStyle.column.rawValue }
 
     private var state: FlowState { FlowState(reading) }

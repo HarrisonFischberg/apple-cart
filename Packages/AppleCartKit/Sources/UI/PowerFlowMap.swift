@@ -11,7 +11,8 @@ struct PowerFlowMap: View {
     var resuming = false
     @State private var selected: FlowNodeID?
     @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
-    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.orbit.rawValue
+    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.space.rawValue
+    @AppStorage(SpaceView.storageKey) private var savedView = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// While the charger is held off the Mac runs wholly from the battery, even when one telemetry sample says otherwise.
@@ -34,23 +35,27 @@ struct PowerFlowMap: View {
                     .accessibilityElement(children: .ignore).accessibilityLabel("Live")
                 }
                 Spacer()
-                // Only once a tile has been dragged: put every tile back where the layout puts it.
-                if !FlowOffsets(json: savedOffsets).isEmpty {
-                    Button("Reset layout") {
-                        withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) { savedOffsets = "" }
-                    }
-                    .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
-                    .help("Put the power flow tiles back in their usual places")
+                // Only once something has been moved: put the view or the tiles back where they start.
+                if moved {
+                    Button(space ? "Reset view" : "Reset layout", action: resetLayout)
+                        .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+                        .help(space ? "Turn the view back and put the moons in their usual places" : "Put the power flow tiles back in their usual places")
                 }
             }
-            PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
-                // Right-click to switch between the orbit and the original columns.
+            Group {
+                if space {
+                    PowerFlowSpace(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
+                } else {
+                    PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
+                }
+            }
+                // Right-click to switch between the 3D planets, the flat orbit and the original columns.
                 .contextMenu {
                     Picker("Style", selection: $style) {
                         ForEach(FlowStyle.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                     }
                     .pickerStyle(.inline)
-                    if !FlowOffsets(json: savedOffsets).isEmpty { Button("Reset layout") { savedOffsets = "" } }
+                    if moved { Button(space ? "Reset view" : "Reset layout", action: resetLayout) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(shown, streams: streams, rest: PowerFlows.rest(shown, streams: streams))
@@ -68,6 +73,15 @@ struct PowerFlowMap: View {
                     .font(.callout).foregroundStyle(pausedAt == nil && !waiting ? Palette.drain : Palette.secondary)
                     .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    private var space: Bool { style == FlowStyle.space.rawValue }
+    private var moved: Bool { space ? !SpaceView(json: savedView).isDefault : !FlowOffsets(json: savedOffsets).isEmpty }
+
+    private func resetLayout() {
+        withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) {
+            if space { savedView = "" } else { savedOffsets = "" }
         }
     }
 
