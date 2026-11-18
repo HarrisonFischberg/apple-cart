@@ -328,14 +328,19 @@ struct PowerFlowSpace: View {
         let macAt = CGPoint(x: center.x, y: center.y - dial - 19)
         placed.append(tag(&ctx, caption: share, value: PowerFlow.watts(reading?.systemWatts), at: macAt, big: true))
         let ringBottom = stride(from: 0.0, to: 2 * .pi, by: .pi / 24).map { project(PowerSpace.ringPoint(2.6, $0)).0.y }.max() ?? center.y
-        if let r = reading {
-            placed.append(tag(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText,
-                              at: CGPoint(x: center.x, y: min(ringBottom + 20, size.height - 20)), big: true, captionBelow: true))
-        }
         let discs = sorted.compactMap { item -> CGRect? in
             guard case .body(_, let p, let r) = item.1 else { return nil }
             return CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
         } + [CGRect(x: center.x - CGFloat(scale), y: center.y - CGFloat(scale), width: CGFloat(scale) * 2, height: CGFloat(scale) * 2)]
+        if let r = reading {
+            // Under the planet, sliding sideways if a moon is in the way.
+            let caption = pausedAt.map { "Battery · held at \($0)%" } ?? "Battery"
+            let box = tagSize(&ctx, caption: caption, value: r.shownPercentText, big: true)
+            let y = min(ringBottom + 20, size.height - box.height / 2 - 2)
+            let xs = [center.x, center.x - box.width - 8, center.x + box.width + 8]
+            let x = xs.first { x in !discs.contains { $0.intersects(CGRect(x: x - box.width / 2, y: y - box.height / 2, width: box.width, height: box.height)) } } ?? center.x
+            placed.append(tag(&ctx, caption: caption, value: r.shownPercentText, at: CGPoint(x: x, y: y), big: true, captionBelow: true))
+        }
         let room = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
         for case (_, .body(let b, let p, let r)) in sorted {
             let box = tagSize(&ctx, caption: b.caption, value: b.value)
@@ -350,12 +355,19 @@ struct PowerFlowSpace: View {
             let own = CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
             let others = discs.filter { $0 != own } + placed
             // Close in first; when two bodies crowd each other, step further out before giving up.
-            let candidates = [CGFloat(0), 18, 36].flatMap { extra in tries.map { spot($0, extra) } }
-            let free = candidates.first { rect in room.contains(rect) && !others.contains { $0.intersects(rect) } }
-            let rect = free ?? spot(outward, 0)
-            placed.append(tag(&ctx, caption: b.caption, value: b.value,
-                              at: CGPoint(x: min(max(rect.midX, room.minX + box.width / 2), room.maxX - box.width / 2),
-                                          y: min(max(rect.midY, room.minY + box.height / 2), room.maxY - box.height / 2))))
+            let candidates = [CGFloat(0), 18, 36].flatMap { extra in tries.map { (spot($0, extra), extra) } }
+            let free = candidates.first { c in room.contains(c.0) && !others.contains { $0.intersects(c.0) } }
+            let (rect, extra) = free ?? (spot(outward, 0), 0)
+            let at = CGPoint(x: min(max(rect.midX, room.minX + box.width / 2), room.maxX - box.width / 2),
+                             y: min(max(rect.midY, room.minY + box.height / 2), room.maxY - box.height / 2))
+            if extra > 0 { // pushed away from its body: a thin leader line says whose label it is
+                let ux = at.x - p.x, uy = at.y - p.y, ul = max(hypot(ux, uy), 1)
+                var line = Path()
+                line.move(to: CGPoint(x: p.x + ux / ul * (r + 2), y: p.y + uy / ul * (r + 2)))
+                line.addLine(to: CGPoint(x: min(max(p.x, at.x - box.width / 2), at.x + box.width / 2), y: min(max(p.y, at.y - box.height / 2), at.y + box.height / 2)))
+                ctx.stroke(line, with: .color(b.tint.opacity(0.7)), lineWidth: 1)
+            }
+            placed.append(tag(&ctx, caption: b.caption, value: b.value, at: at))
         }
     }
 
