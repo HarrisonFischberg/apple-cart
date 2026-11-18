@@ -122,7 +122,7 @@ struct PowerFlowSpace: View {
 
     // MARK: Model
 
-    private struct Body { var id: FlowNodeID; var caption: String; var value: String; var tint: Color; var watts: Double?; var lit: Bool; var sun = false }
+    private struct Orb { var id: FlowNodeID; var caption: String; var value: String; var tint: Color; var watts: Double?; var lit: Bool; var sun = false }
     private struct Flow { var id: FlowLinkID; var watts: Double?; var kind: FlowLinkKind }
 
     private func radius(_ id: FlowNodeID) -> Double {
@@ -135,26 +135,26 @@ struct PowerFlowSpace: View {
 
     private var supplied: Double? { flows.chargerToMac.map { $0 + (flows.chargerToBattery ?? 0) } }
 
-    private func info(_ id: FlowNodeID) -> Body {
+    private func info(_ id: FlowNodeID) -> Orb {
         let r = reading
         switch id {
         case .charger:
-            guard let r, r.isPluggedIn else { return Body(id: id, caption: "Charger", value: r == nil ? "—" : "Unplugged", tint: .gray, watts: nil, lit: false, sun: true) }
+            guard let r, r.isPluggedIn else { return Orb(id: id, caption: "Charger", value: r == nil ? "—" : "Unplugged", tint: .gray, watts: nil, lit: false, sun: true) }
             let caption = r.adapterWatts.map { "Charger · \($0) W" } ?? "Charger"
-            if let n = pausedAt { return Body(id: id, caption: caption, value: "Held at \(n)%", tint: Palette.amber, watts: 0, lit: false, sun: true) }
-            return Body(id: id, caption: caption, value: PowerFlow.watts(supplied), tint: Palette.amber, watts: supplied, lit: true, sun: true)
+            if let n = pausedAt { return Orb(id: id, caption: caption, value: "Held at \(n)%", tint: Palette.amber, watts: 0, lit: false, sun: true) }
+            return Orb(id: id, caption: caption, value: PowerFlow.watts(supplied), tint: Palette.amber, watts: supplied, lit: true, sun: true)
         case .battery:
             let caption = "Battery" // its level sits under the planet
             switch state {
-            case .charging: return Body(id: id, caption: caption, value: "+" + PowerFlow.watts(r?.batteryWatts), tint: Palette.green, watts: r?.batteryWatts, lit: true)
-            case .onBattery, .chargerTooWeak: return Body(id: id, caption: caption, value: "−" + PowerFlow.watts(r?.batteryWatts), tint: Palette.drain, watts: r.map { -$0.batteryWatts }, lit: true)
-            default: return Body(id: id, caption: caption, value: r == nil ? "—" : "Idle", tint: Color(white: 0.55), watts: 0, lit: false)
+            case .charging: return Orb(id: id, caption: caption, value: "+" + PowerFlow.watts(r?.batteryWatts), tint: Palette.green, watts: r?.batteryWatts, lit: true)
+            case .onBattery, .chargerTooWeak: return Orb(id: id, caption: caption, value: "−" + PowerFlow.watts(r?.batteryWatts), tint: Palette.drain, watts: r.map { -$0.batteryWatts }, lit: true)
+            default: return Orb(id: id, caption: caption, value: r == nil ? "—" : "Idle", tint: Color(white: 0.55), watts: 0, lit: false)
             }
         default:
-            guard case .stream(let title) = id else { return Body(id: id, caption: "", value: "", tint: .gray, watts: nil, lit: false) }
+            guard case .stream(let title) = id else { return Orb(id: id, caption: "", value: "", tint: .gray, watts: nil, lit: false) }
             let w = streams.first { $0.title == title }?.watts
             let caption = title == "USB" ? r?.usbCaption ?? title : title
-            return Body(id: id, caption: caption, value: PowerFlow.watts(w), tint: Color(red: 0.61, green: 0.79, blue: 1), watts: w, lit: (w ?? 0) > 0.05)
+            return Orb(id: id, caption: caption, value: PowerFlow.watts(w), tint: Color(red: 0.61, green: 0.79, blue: 1), watts: w, lit: (w ?? 0) > 0.05)
         }
     }
 
@@ -227,7 +227,7 @@ struct PowerFlowSpace: View {
         case quad([CGPoint], Color)
         case dot(CGRect, Color)
         case comet(CGPoint, CGFloat, Double)
-        case body(Body, CGPoint, CGFloat)
+        case body(Orb, CGPoint, CGFloat)
     }
 
     private func draw(_ ctx: inout GraphicsContext, size: CGSize, view v: SpaceView, t: Double, moving: Bool) {
