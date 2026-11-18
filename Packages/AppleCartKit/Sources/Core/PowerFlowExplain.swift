@@ -45,6 +45,12 @@ public enum FlowExplain {
             return FlowExplanation(title: "Battery", value: PowerFlow.watts(0), text: "The battery is neither charging nor giving power right now.", facts: [level])
         case .more:
             return FlowExplanation(title: "Rest of Mac", value: "—", text: "", facts: [])
+        case .stream("USB") where r.usbDeviceName != nil || r.usbDeviceCharge != nil:
+            let w = streams.first { $0.title == "USB" }?.watts
+            let name = r.usbDeviceName ?? "The device"
+            return FlowExplanation(title: r.usbLabel, value: PowerFlow.watts(w),
+                                   text: "This Mac is charging \(r.usbDeviceName.map { "your \($0)" } ?? "a device") through one of its USB-C ports. That power is part of the Mac's total.",
+                                   facts: [r.usbDeviceCharge.map { "\(name) battery: \($0)%" }].compactMap { $0 })
         case .stream(let name):
             let w = streams.first { $0.title == name }?.watts
             return FlowExplanation(title: name, value: PowerFlow.watts(w), text: streamText(name), facts: [])

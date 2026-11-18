@@ -269,13 +269,17 @@ struct PowerFlowArt: View {
             return TileContent(symbol: "ellipsis", value: PowerFlow.watts(rest), caption: "Rest of Mac", tint: Palette.secondary, number: rest ?? 0, lit: false)
         case .stream(let title):
             let w = streams.first { $0.title == title }?.watts
+            let device = r?.usbDeviceName?.lowercased() ?? ""
             let symbol = switch title {
             case "SoC": "cpu"
+            case "USB" where device.hasPrefix("iphone"): "iphone"
+            case "USB" where device.hasPrefix("ipad"): "ipad"
             case "USB": "cable.connector"
             case "Charger loss": "flame"
             default: "square.stack.3d.up"
             }
-            return TileContent(symbol: symbol, value: w.map { PowerFlow.watts($0) } ?? "—", caption: title, tint: Palette.flow, number: w ?? 0)
+            let caption = title == "USB" ? r?.usbCaption ?? title : title
+            return TileContent(symbol: symbol, value: w.map { PowerFlow.watts($0) } ?? "—", caption: caption, tint: Palette.flow, number: w ?? 0)
         }
     }
 

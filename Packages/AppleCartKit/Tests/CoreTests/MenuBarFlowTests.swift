@@ -101,6 +101,29 @@ private func reading(percent: Int = 80, amps: Int64 = 0, plugged: Bool = false, 
         #expect(again.layout.order.first == .details && again.layout.hidden == [.history])
     }
 
+    /// Shaped like the registry on the owner's M5 Mac with an iPhone charging from a USB-C port (values measured on 2026-11-18).
+    @Test func phoneOnUSBGivesItsBatteryLevelOnlyWhenItIsUnambiguous() {
+        let fed: [[String: Any]] = [["FedDesignCapacity": 0, "FedStateOfCharge": 0], ["FedDesignCapacity": 0, "FedStateOfCharge": 0],
+                                    ["FedVendorID": 1452, "FedDesignCapacity": 160, "FedRemainingCapacity": 24, "FedStateOfCharge": 15],
+                                    ["FedExternalConnected": 1, "FedDesignCapacity": 0, "FedStateOfCharge": 0]]
+        var r = reading(plugged: true, extra: ["PowerOutDetails": [["Watts": 15504]], "FedDetails": fed])
+        #expect(r.usbOutWatts == 15.504 && r.usbPoweredPorts == 1 && r.usbDeviceCharge == 15)
+        #expect(r.usbLabel == "USB" && r.usbCaption == "USB 15%") // no name until the USB tree gives one
+        r.usbDeviceName = "iPhone"
+        #expect(r.usbCaption == "iPhone 15%")
+        let e = FlowExplain.make(.stream("USB"), reading: r, pausedAt: nil, streams: PowerFlows.streams(r))
+        #expect(e.title == "iPhone" && e.value == "15.5 W" && e.facts == ["iPhone battery: 15%"])
+        #expect(FlowSummary.text(r, streams: PowerFlows.streams(r), rest: nil).contains("Charging iPhone at 15.5 watts, its battery at 15 percent."))
+
+        // Two ports giving power: no level, since it could belong to either device.
+        let two = reading(plugged: true, extra: ["PowerOutDetails": [["Watts": 15000], ["Watts": 4000]], "FedDetails": fed])
+        #expect(two.usbPoweredPorts == 2 && two.usbDeviceCharge == nil && two.usbCaption == "USB")
+        // Nothing drawing power: no level either, and the plain tile wording stays.
+        let idle = reading(plugged: true, extra: ["PowerOutDetails": [["Watts": 0]], "FedDetails": fed])
+        #expect(idle.usbDeviceCharge == nil)
+        #expect(FlowExplain.make(.stream("USB"), reading: idle, pausedAt: nil, streams: []).title == "USB")
+    }
+
     @Test func stateText() {
         #expect(reading(plugged: false).stateText == "On battery")
         #expect(reading(plugged: true).stateText == "Plugged in, not charging")
