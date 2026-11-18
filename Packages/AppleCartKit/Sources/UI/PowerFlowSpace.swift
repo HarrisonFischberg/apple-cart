@@ -342,15 +342,17 @@ struct PowerFlowSpace: View {
             let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
             let outward = Double(atan2(dy / d, dx / d))
             let tries = [outward] + (0..<8).map { Double($0) * .pi / 4 }.sorted { abs(remainder($0 - outward, 2 * .pi)) < abs(remainder($1 - outward, 2 * .pi)) }
-            func spot(_ a: Double) -> CGRect {
+            func spot(_ a: Double, _ extra: CGFloat) -> CGRect {
                 let ux = CGFloat(cos(a)), uy = CGFloat(sin(a))
-                let reach = r + 6 + abs(ux) * box.width / 2 + abs(uy) * box.height / 2
+                let reach = r + 6 + extra + abs(ux) * box.width / 2 + abs(uy) * box.height / 2
                 return CGRect(x: p.x + ux * reach - box.width / 2, y: p.y + uy * reach - box.height / 2, width: box.width, height: box.height)
             }
             let own = CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
             let others = discs.filter { $0 != own } + placed
-            let free = tries.lazy.map(spot).first { rect in room.contains(rect) && !others.contains { $0.intersects(rect) } }
-            let rect = free ?? spot(outward)
+            // Close in first; when two bodies crowd each other, step further out before giving up.
+            let candidates = [CGFloat(0), 18, 36].flatMap { extra in tries.map { spot($0, extra) } }
+            let free = candidates.first { rect in room.contains(rect) && !others.contains { $0.intersects(rect) } }
+            let rect = free ?? spot(outward, 0)
             placed.append(tag(&ctx, caption: b.caption, value: b.value,
                               at: CGPoint(x: min(max(rect.midX, room.minX + box.width / 2), room.maxX - box.width / 2),
                                           y: min(max(rect.midY, room.minY + box.height / 2), room.maxY - box.height / 2))))
