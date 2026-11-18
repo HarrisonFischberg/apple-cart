@@ -16,8 +16,9 @@ final class FakeNative: NativeChargeLimit, @unchecked Sendable {
 
     func isSupported() async -> Bool { supported }
     func current() async -> NativeLimitReading? { limit }
+    private func record(_ percent: Int) { lock.lock(); _writes.append(percent); lock.unlock() }
     func setLimit(_ percent: Int) async -> NativeLimitReading? {
-        lock.lock(); _writes.append(percent); lock.unlock()
+        record(percent)
         if !ignoreWrites { limit = percent >= 100 ? .off : NativeLimitReading(enabled: true, limit: percent) }
         return limit
     }
