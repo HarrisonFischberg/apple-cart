@@ -63,3 +63,58 @@ private func charging() -> FlowLayout {
         for id: FlowNodeID in [.charger, .mac, .battery, .more, .stream("Charger loss")] { #expect(FlowNodeID(storageKey: id.storageKey) == id) }
     }
 }
+
+@Suite struct PowerFlowOrbitTests {
+    private func orbit(_ state: FlowState = .charging, offsets: FlowOffsets = FlowOffsets()) -> FlowLayout {
+        var f = PowerFlows(nil); f.chargerToMac = 20; f.chargerToBattery = 4; f.batteryToMac = 0
+        return FlowLayout.orbit(state: state, flows: f, streams: [PowerStream(title: "USB", watts: 15.5)], width: 340, offsets: offsets)
+    }
+
+    @Test func theMacSitsInTheMiddleWithEveryCardInsideTheMap() {
+        let l = orbit()
+        let hub = l.node(.mac)!.rect
+        #expect(abs(hub.midX - 170) < 0.01)
+        for n in l.nodes { #expect(CGRect(origin: .zero, size: l.size).insetBy(dx: -0.01, dy: -0.01).contains(n.rect)) }
+        #expect(Set(l.nodes.map(\.id)) == [.mac, .charger, .battery, .stream("USB")])
+    }
+
+    @Test func arcsMeetThePlanetsDialAndTheCardsEdges() {
+        let l = orbit()
+        let hub = l.node(.mac)!.rect, m = CGPoint(x: hub.midX, y: hub.midY)
+        let supply = l.link(FlowLinkID(.charger, .mac))!
+        #expect(abs(hypot(supply.end.x - m.x, supply.end.y - m.y) - (FlowLayout.planet + 10)) < 0.01)
+        let card = l.node(.charger)!.rect
+        let onEdge = abs(supply.start.x - card.maxX) < 0.01 || abs(supply.start.y - card.maxY) < 0.01
+        #expect(onEdge)
+        #expect(l.link(FlowLinkID(.mac, .stream("USB")))?.watts == 15.5)
+    }
+
+    @Test func draggingACardMovesItsArcAndTheSameOffsetsWorkAsInTheColumnMap() {
+        let moved = orbit(offsets: FlowOffsets([.charger: CGSize(width: 0, height: 120)]))
+        let base = orbit()
+        #expect(moved.node(.charger)!.rect.minY == base.node(.charger)!.rect.minY + 120)
+        #expect(moved.link(FlowLinkID(.charger, .mac))!.start != base.link(FlowLinkID(.charger, .mac))!.start)
+        // A drop past the bottom keeps only what fits.
+        let o = FlowOffsets().dropping(.charger, by: CGSize(width: 0, height: 900), base: base)
+        #expect(base.applying(o).node(.charger)!.rect.maxY <= base.size.height + 0.01)
+    }
+
+    @Test func onBatteryTheChargerIsDimmedAndTheBatteryFeedsTheMac() {
+        let l = orbit(.onBattery)
+        #expect(l.node(.charger)!.dimmed)
+        #expect(l.link(FlowLinkID(.battery, .mac))?.kind == .drain && l.link(FlowLinkID(.charger, .mac)) == nil)
+    }
+
+    @Test func ringDustSplitsIntoNearAndFarHalvesAndInnerGrainsLead() {
+        let near = OrbitRing.grain(u: 0, a: .pi / 2, size: 30, t: 0, omega: 1)
+        let far = OrbitRing.grain(u: 0, a: -.pi / 2, size: 30, t: 0, omega: 1)
+        #expect(near.front && !far.front)
+        // Over a short time the inner edge sweeps further than the outer edge (measured as the distance moved / radius).
+        func swept(_ u: Double) -> Double {
+            let a = OrbitRing.grain(u: u, a: 0, size: 1, t: 0, omega: 1), b = OrbitRing.grain(u: u, a: 0, size: 1, t: 0.01, omega: 1)
+            return hypot(b.dx - a.dx, b.dy - a.dy) / (OrbitRing.dustInner + u * OrbitRing.dustSpan)
+        }
+        #expect(swept(0) > swept(1))
+        #expect(OrbitRing.spin(80) > OrbitRing.spin(5) && OrbitRing.spin(nil) > 0)
+    }
+}

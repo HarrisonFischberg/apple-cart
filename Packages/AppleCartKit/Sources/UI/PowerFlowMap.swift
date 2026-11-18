@@ -11,6 +11,7 @@ struct PowerFlowMap: View {
     var resuming = false
     @State private var selected: FlowNodeID?
     @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
+    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.orbit.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// While the charger is held off the Mac runs wholly from the battery, even when one telemetry sample says otherwise.
@@ -43,6 +44,14 @@ struct PowerFlowMap: View {
                 }
             }
             PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
+                // Right-click to switch between the orbit and the original columns.
+                .contextMenu {
+                    Picker("Style", selection: $style) {
+                        ForEach(FlowStyle.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.inline)
+                    if !FlowOffsets(json: savedOffsets).isEmpty { Button("Reset layout") { savedOffsets = "" } }
+                }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(FlowSummary.text(shown, streams: streams, rest: PowerFlows.rest(shown, streams: streams))
                     .replacingOccurrences(of: "the charger is too weak", with: pausedAt != nil ? "charging is paused" : resuming ? "charging has not started yet" : "the charger is too weak"))
