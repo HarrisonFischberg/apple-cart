@@ -18,19 +18,51 @@ struct PowerFlowArt: View {
     @State private var settled = true
     @State private var clock = ParticleClock()
     @State private var live = LiveResize.shared
+    /// Where the owner has dragged tiles (kept across launches) and the tile being dragged right now.
+    @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
+    @State private var drag: (id: FlowNodeID, by: CGSize)?
+    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.space.rawValue
+    /// The 3D style is drawn by `PowerFlowSpace`; here anything but columns is the flat orbit.
+    private var orbit: Bool { style != FlowStyle.column.rawValue }
 
     private var state: FlowState { FlowState(reading) }
     private var streams: [PowerStream] { PowerFlows.streams(reading) }
     private var rest: Double? { PowerFlows.rest(reading, streams: streams) }
     private var leafCount: Int { streams.count }
 
-    private func layout(_ w: CGFloat) -> FlowLayout {
-        FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w, held: pausedAt != nil)
+    /// The map before any tile is dragged.
+    private func base(_ w: CGFloat) -> FlowLayout { layout(w, FlowOffsets()) }
+
+    private func layout(_ w: CGFloat, _ o: FlowOffsets) -> FlowLayout {
+        orbit ? FlowLayout.orbit(state: state, flows: PowerFlows(reading), streams: streams, width: w, held: pausedAt != nil, offsets: o)
+              : FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w, held: pausedAt != nil).applying(o)
     }
 
+    private var offsets: FlowOffsets {
+        let saved = FlowOffsets(json: savedOffsets)
+        guard let drag else { return saved }
+        return saved.adding(drag.by, to: drag.id)
+    }
+
+    private func layout(_ w: CGFloat) -> FlowLayout { layout(w, offsets) }
+
+    /// Drag a tile to move it; the ribbons follow. A short press without movement stays a tap.
+    private func dragTile(_ id: FlowNodeID, width w: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
+            .onChanged { v in drag = (id, v.translation) }
+            .onEnded { v in
+                savedOffsets = FlowOffsets(json: savedOffsets).dropping(id, by: v.translation, base: base(w)).json
+                drag = nil
+            }
+    }
+
+    private static let space = "powerFlowMap"
+
     /// What the map is made of, apart from sizes: animations follow this, not every pixel of a resize.
-    private struct Topology: Hashable { var state: FlowState; var streams: [String]; var held: Bool }
-    private var topology: Topology { Topology(state: state, streams: streams.compactMap { $0.watts == nil ? nil : $0.title }, held: pausedAt != nil) }
+    private struct Topology: Hashable { var state: FlowState; var streams: [String]; var held: Bool; var style: String }
+    private var topology: Topology {
+        Topology(state: state, streams: streams.compactMap { $0.watts == nil ? nil : $0.title }, held: pausedAt != nil, style: style)
+    }
 
     private var tick: Animation? { reduceMotion ? nil : .smooth(duration: FlowMotion.transition) }
 
@@ -39,7 +71,7 @@ struct PowerFlowArt: View {
             let target = layout(geo.size.width)
             let moving = target.links.contains { ($0.watts ?? 0) > 0.05 }
             ZStack(alignment: .topLeading) {
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion || live.active || (!moving && settled))) { tl in
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: drag == nil && (!active || reduceMotion || live.active || (!moving && settled)))) { tl in
                     Canvas { ctx, _ in
                         let t = tl.date.timeIntervalSinceReferenceDate
                         let shown = reduceMotion || from == nil ? target
@@ -49,8 +81,14 @@ struct PowerFlowArt: View {
                 }
                 ZStack(alignment: .topLeading) {
                     ForEach(target.nodes, id: \.id) { n in
-                        tile(n).frame(width: n.rect.width, height: n.rect.height)
-                            .contentShape(Rectangle())
+                        Group {
+                            // In the orbit the Mac is the planet drawn in the canvas; this is only its handle.
+                            if orbit && n.id == .mac { Color.clear.contentShape(Circle()) } else { tile(n).contentShape(Rectangle()) }
+                        }
+                            .frame(width: n.rect.width, height: n.rect.height)
+                            .scaleEffect(drag?.id == n.id && !(orbit && n.id == .mac) ? 1.04 : 1)
+                            .shadow(color: .black.opacity(drag?.id == n.id ? 0.35 : 0), radius: 10, y: 4)
+                            .gesture(dragTile(n.id, width: geo.size.width))
                             .onTapGesture { onSelect(n.id) }
                             .position(x: n.rect.midX, y: n.rect.midY)
                             .transition(.opacity)
@@ -58,11 +96,13 @@ struct PowerFlowArt: View {
                 }
                 .frame(width: geo.size.width, height: target.size.height, alignment: .topLeading)
             }
+            .coordinateSpace(.named(Self.space))
             // Animate only real changes (state, tiles, held), never the geometry changes of a window resize.
             .animation(tick, value: topology)
             .onChange(of: target) { old, new in
                 let now = Date.now.timeIntervalSinceReferenceDate
-                if abs(old.size.width - new.size.width) > 0.5 { // the panel was resized: snap, no easing
+                // The panel was resized, or a tile is being dragged: snap, no easing, so the ribbons stay on the tile.
+                if abs(old.size.width - new.size.width) > 0.5 || drag != nil {
                     from = nil; settled = true
                     clock.update(speeds: Dictionary(new.links.map { ($0.id, FlowMotion.speed($0.watts ?? 0)) }, uniquingKeysWith: { a, _ in a }), at: now)
                     return
@@ -83,7 +123,7 @@ struct PowerFlowArt: View {
                 settled = true
             }
         }
-        .frame(height: FlowLayout.height(leaves: leafCount))
+        .frame(height: orbit ? FlowLayout.orbitHeight : FlowLayout.height(leaves: leafCount))
         .animation(tick, value: leafCount)
     }
 
@@ -103,6 +143,11 @@ struct PowerFlowArt: View {
 
     private func curve(_ l: FlowLayout.Link) -> (CGPoint, CGPoint, CGPoint, CGPoint) {
         let a = l.start, b = l.end
+        if orbit { // a gentle arc, bowed to one side, as in a planetary diagram
+            let dx = b.x - a.x, dy = b.y - a.y, d = max(hypot(dx, dy), 0.001)
+            let m = CGPoint(x: (a.x + b.x) / 2 - dy / d * d * 0.2, y: (a.y + b.y) / 2 + dx / d * d * 0.2)
+            return (a, m, m, b)
+        }
         if l.vertical {
             let dy = (b.y - a.y) * 0.5
             return (a, CGPoint(x: a.x, y: a.y + dy), CGPoint(x: b.x, y: b.y - dy), b)
@@ -158,6 +203,8 @@ struct PowerFlowArt: View {
     }
 
     private func draw(_ ctx: inout GraphicsContext, _ lay: FlowLayout, t: Double, particles: Bool) {
+        if orbit { drawOrbit(&ctx, lay, t: t, particles: particles); return }
+        if particles { breathe(&ctx, lay, t: t) }
         for l in lay.links {
             let c = curve(l)
             var path = Path()
@@ -186,17 +233,170 @@ struct PowerFlowArt: View {
             ctx.stroke(band.top, with: .color(.white.opacity(charge ? 0.25 : 0.4)), lineWidth: 1)
             ctx.stroke(Self.chevron(c), with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
-            guard particles, let w = l.watts else { continue }
-            let len = Self.length(c)
-            let r = min(max(width * 0.14, 1.3), 2.6)
-            let fade = min(1, Double(width) / 4) // pulses thin out with a ribbon that is fading away
-            ctx.drawLayer { g in
-                g.addFilter(.blur(radius: 1.2))
-                FlowMotion.particles(distance: clock.distance(l.id, at: t), length: len, watts: w) { f in
-                    let p = Self.point(c, CGFloat(f))
-                    let a = fade * min(1, min(f, 1 - f) * len / 10) // ease in and out at the tiles
-                    g.fill(Path(ellipseIn: CGRect(x: p.x - r * 1.6, y: p.y - r, width: r * 3.2, height: r * 2)), with: .color(.white.opacity(0.85 * a)))
+            if particles, let w = l.watts { comets(&ctx, c, l, watts: w, width: width, t: t) }
+        }
+    }
+
+    /// Comets: a bright head with a fading tail behind it, longer the faster the power moves.
+    private func comets(_ ctx: inout GraphicsContext, _ c: (CGPoint, CGPoint, CGPoint, CGPoint), _ l: FlowLayout.Link, watts w: Double, width: CGFloat, t: Double) {
+        let len = Self.length(c)
+        let r = min(max(width * 0.14, 1.3), 2.6)
+        let fade = min(1, Double(width) / 4) // pulses thin out with a ribbon that is fading away
+        let tail = min(6, 2 + Int(w / 6)), step = 3.2 / len
+        ctx.drawLayer { g in
+            g.addFilter(.blur(radius: 1.1))
+            FlowMotion.particles(distance: clock.distance(l.id, at: t), length: len, watts: w) { f in
+                for k in 0...tail {
+                    let fk = f - Double(k) * step
+                    guard fk > 0 else { break }
+                    let p = Self.point(c, CGFloat(fk))
+                    let a = fade * min(1, min(fk, 1 - fk) * len / 10) * (1 - Double(k) / Double(tail + 1)) // ease in and out at the tiles
+                    let rk = r * (1.15 - 0.6 * CGFloat(k) / CGFloat(tail))
+                    g.fill(Path(ellipseIn: CGRect(x: p.x - rk, y: p.y - rk, width: rk * 2, height: rk * 2)), with: .color(.white.opacity(0.95 * a)))
                 }
+            }
+        }
+    }
+
+    // MARK: Orbit
+
+    /// Fixed starfield and ring dust, as fractions; seeded so every frame and every launch looks the same.
+    private static let stars: [(x: Double, y: Double, phase: Double, big: Bool)] = (0..<70).map { i in
+        let d = Double(i)
+        return (abs((sin(d * 12.9898) * 43758.5453).truncatingRemainder(dividingBy: 1)),
+                abs((sin(d * 78.233) * 12543.31).truncatingRemainder(dividingBy: 1)), d * 0.9, i % 7 == 0)
+    }
+    private static let dust: [(u: Double, a: Double, s: Double)] = (0..<180).map { i in
+        let d = Double(i)
+        return (abs((sin(d * 91.7) * 24634.6).truncatingRemainder(dividingBy: 1)),
+                abs((sin(d * 33.1) * 9137.3).truncatingRemainder(dividingBy: 1)) * 2 * .pi,
+                0.5 + abs((sin(d * 5.3) * 733.1).truncatingRemainder(dividingBy: 1)) * 1.1)
+    }
+    private static let deepSpace = Color(red: 0.05, green: 0.06, blue: 0.09), spaceGlow = Color(red: 0.08, green: 0.10, blue: 0.17)
+    private static let ringGold = Color(red: 0.91, green: 0.83, blue: 0.65)
+    private static let planetLight = Color(red: 0.24, green: 0.44, blue: 0.69), planetDark = Color(red: 0.04, green: 0.08, blue: 0.15)
+    private static let planetMid = Color(red: 0.11, green: 0.21, blue: 0.38)
+
+    /// The ring takes the color of what is happening: gold on the charger, green while charging, orange while the battery helps.
+    private var ringColor: Color {
+        switch state {
+        case .charging: Palette.green
+        case .onBattery, .chargerTooWeak: Palette.drain
+        default: Self.ringGold
+        }
+    }
+
+    /// Space, arcs with comets, the ring's far half, the planet with its load dial, then the ring's near half over it.
+    private func drawOrbit(_ ctx: inout GraphicsContext, _ lay: FlowLayout, t: Double, particles: Bool) {
+        let bounds = CGRect(origin: .zero, size: lay.size)
+        let frame = RoundedRectangle(cornerRadius: 14, style: .continuous).path(in: bounds)
+        ctx.fill(frame, with: .radialGradient(Gradient(colors: [Self.spaceGlow, Self.deepSpace, .black.opacity(0.95)]),
+                                              center: CGPoint(x: bounds.midX, y: bounds.midY * 0.9), startRadius: 10, endRadius: max(bounds.width, bounds.height) * 0.75))
+        ctx.clip(to: frame)
+        for s in Self.stars {
+            let a = 0.18 + 0.4 * (particles ? (sin(t * 1.1 + s.phase) + 1) / 2 : 0.5)
+            ctx.fill(Path(CGRect(x: s.x * bounds.width, y: s.y * bounds.height, width: s.big ? 1.6 : 1, height: s.big ? 1.6 : 1)), with: .color(.white.opacity(a)))
+        }
+
+        for l in lay.links {
+            let c = curve(l)
+            var path = Path()
+            path.move(to: c.0); path.addCurve(to: c.3, control1: c.1, control2: c.2)
+            let width = FlowMotion.ribbonWidth(l.watts)
+            guard width > 0 else {
+                if pausedAt != nil, l.id == FlowLinkID(.charger, .mac) { pausedLink(&ctx, path, c, l) }
+                else { ctx.stroke(path, with: .color(.white.opacity(0.16)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [3, 4])) }
+                continue
+            }
+            let tint = l.id.from == .charger ? Palette.amber : colors(l.kind).0
+            ctx.stroke(path, with: .color(tint.opacity(0.4)), style: StrokeStyle(lineWidth: min(max(width * 0.4, 1.2), 10), lineCap: .round))
+            if particles, let w = l.watts { comets(&ctx, c, l, watts: w, width: max(width, 8), t: t) }
+        }
+
+        guard let hub = lay.node(.mac)?.rect else { return }
+        let m = CGPoint(x: hub.midX, y: hub.midY), r = FlowLayout.planet
+        let watts = reading?.systemWatts
+        let omega = particles ? OrbitRing.spin(watts) : 0
+        ring(&ctx, m, r, front: false, t: t, omega: omega)
+        planet(&ctx, m, r, t: t, particles: particles)
+        ring(&ctx, m, r, front: true, t: t, omega: omega)
+
+        // The readout floats above the planet, so the near ring never covers it.
+        var share = "Mac uses"
+        if let w = watts, let rating = reading?.adapterWatts, rating > 0, reading?.isPluggedIn == true {
+            share += " · \(Int((w / Double(rating) * 100).rounded()))% of charger"
+        }
+        ctx.draw(Text(PowerFlow.watts(watts)).font(.system(size: 16, weight: .bold)).monospacedDigit().foregroundStyle(.white),
+                 at: CGPoint(x: m.x, y: m.y - r - 22))
+        ctx.draw(Text(share).font(.system(size: 9)).foregroundStyle(.white.opacity(0.65)), at: CGPoint(x: m.x, y: m.y - r - 37))
+    }
+
+    /// One half of the ring: the bands, clipped to the far or near half of the ring plane, and the dust on that half.
+    private func ring(_ ctx: inout GraphicsContext, _ m: CGPoint, _ r: CGFloat, front: Bool, t: Double, omega: Double) {
+        let col = ringColor
+        var g = ctx
+        g.translateBy(x: m.x, y: m.y)
+        g.rotate(by: .radians(OrbitRing.tilt))
+        g.scaleBy(x: 1, y: OrbitRing.flat)
+        g.clip(to: Path(CGRect(x: -400, y: front ? 0 : -400, width: 800, height: 400)))
+        for (inner, outer, opacity) in OrbitRing.bands {
+            var p = Path()
+            p.addEllipse(in: CGRect(x: -r * outer, y: -r * outer, width: r * outer * 2, height: r * outer * 2))
+            p.addEllipse(in: CGRect(x: -r * inner, y: -r * inner, width: r * inner * 2, height: r * inner * 2))
+            g.fill(p, with: .color(col.opacity(opacity * (front ? 1 : 0.75))), style: FillStyle(eoFill: true))
+        }
+        let grain = col.mix(with: .white, by: 0.5)
+        for d in Self.dust {
+            let p = OrbitRing.grain(u: d.u, a: d.a, size: Double(r), t: t, omega: omega)
+            guard p.front == front else { continue }
+            ctx.fill(Path(CGRect(x: m.x + p.dx, y: m.y + p.dy, width: d.s, height: d.s)), with: .color(grain.opacity(front ? 0.75 : 0.45)))
+        }
+    }
+
+    /// The Mac as a banded blue planet lit from the top left, a soft atmosphere that breathes with the load, and the
+    /// dial: how much of the charger's rating the Mac is drawing.
+    private func planet(_ ctx: inout GraphicsContext, _ m: CGPoint, _ r: CGFloat, t: Double, particles: Bool) {
+        let w = reading?.systemWatts ?? 0
+        let breath = particles ? sin(t * (1.4 + min(w, 40) / 15)) * 0.08 : 0
+        ctx.fill(Path(ellipseIn: CGRect(x: m.x - r * 1.7, y: m.y - r * 1.7, width: r * 3.4, height: r * 3.4)),
+                 with: .radialGradient(Gradient(colors: [Palette.flow.opacity(0.35 + breath), Palette.flow.opacity(0)]), center: m, startRadius: r * 0.8, endRadius: r * 1.7))
+        let disc = Path(ellipseIn: CGRect(x: m.x - r, y: m.y - r, width: r * 2, height: r * 2))
+        ctx.fill(disc, with: .radialGradient(Gradient(colors: [Self.planetLight, Self.planetMid, Self.planetDark]),
+                                             center: CGPoint(x: m.x - r * 0.45, y: m.y - r * 0.5), startRadius: r * 0.1, endRadius: r * 1.6))
+        var bands = ctx
+        bands.clip(to: disc)
+        bands.translateBy(x: m.x, y: m.y)
+        bands.rotate(by: .radians(OrbitRing.tilt))
+        for i in -3...3 {
+            bands.fill(Path(CGRect(x: -r, y: CGFloat(i) * r * 0.26 - r * 0.06, width: r * 2, height: r * 0.12)), with: .color(.white.opacity(i % 2 == 0 ? 0.055 : 0.035)))
+        }
+        if drag?.id == .mac || selected == .mac { ctx.stroke(disc, with: .color(Palette.flowLight), lineWidth: 2) }
+
+        let dial = r + 7
+        let track = Path(ellipseIn: CGRect(x: m.x - dial, y: m.y - dial, width: dial * 2, height: dial * 2))
+        ctx.stroke(track, with: .color(.white.opacity(0.08)), lineWidth: 4)
+        guard let rating = reading?.adapterWatts, rating > 0, reading?.isPluggedIn == true, let load = reading?.systemWatts else { return }
+        let frac = min(1, load / Double(rating))
+        var arc = Path()
+        arc.addArc(center: m, radius: dial, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * frac), clockwise: false)
+        ctx.drawLayer { g in
+            g.addFilter(.shadow(color: Palette.flow, radius: 5))
+            g.stroke(arc, with: .color(Palette.flow), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        }
+    }
+
+    /// A soft glow behind each tile that power is passing through, swelling and easing at a pace set by its watts.
+    private func breathe(_ ctx: inout GraphicsContext, _ lay: FlowLayout, t: Double) {
+        for n in lay.nodes where !n.dimmed {
+            let links = lay.links.filter { $0.id.from == n.id || $0.id.to == n.id }
+            guard let top = links.max(by: { ($0.watts ?? 0) < ($1.watts ?? 0) }), let w = top.watts, w > 0.5 else { continue }
+            let tint = n.id == .charger ? Palette.amber : colors(top.kind).0
+            let pulse = (sin(t * (1.6 + min(w, 40) / 10)) + 1) / 2
+            let strength = min(1, w / 20)
+            ctx.drawLayer { g in
+                g.addFilter(.blur(radius: 9))
+                g.fill(RoundedRectangle(cornerRadius: 14, style: .continuous).path(in: n.rect.insetBy(dx: -3, dy: -3)),
+                       with: .color(tint.opacity((0.12 + 0.28 * pulse) * strength)))
             }
         }
     }
@@ -207,7 +407,7 @@ struct PowerFlowArt: View {
         let m = Self.point(c, 0.5)
         let label = ctx.resolve(Text("Paused").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.amberText))
         let size = label.measure(in: CGSize(width: 100, height: 20))
-        let wide = size.width + 14 <= l.end.x - l.start.x - 8
+        let wide = size.width + 14 <= hypot(l.end.x - l.start.x, l.end.y - l.start.y) - 8
         let pill = wide ? CGRect(x: m.x - size.width / 2 - 7, y: m.y - 8, width: size.width + 14, height: 16) : CGRect(x: m.x - 8, y: m.y - 8, width: 16, height: 16)
         let shape = Capsule().path(in: pill)
         ctx.fill(shape, with: .color(Palette.amberFill))
