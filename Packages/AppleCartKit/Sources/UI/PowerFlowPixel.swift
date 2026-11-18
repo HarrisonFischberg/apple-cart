@@ -166,7 +166,8 @@ struct PowerFlowPixel: View {
             let b = r?.batteryWatts ?? 0
             return (r?.shownPercentText ?? "--", abs(b) < 0.05 ? "IDLE" : (b > 0 ? "+" : "-") + w(b))
         case .stream(let title):
-            let short = ["Charger loss": "LOSS", "USB": "USB", "SoC": "SOC", "Other": "OTHER"][title] ?? title
+            // The USB device by its own name ("iPhone") when the Mac knows it, like the other maps.
+            let short = ["Charger loss": "LOSS", "USB": r?.usbLabel ?? "USB", "SoC": "SOC", "Other": "OTHER"][title] ?? title
             return (short, w(streams.first { $0.title == title }?.watts))
         case .more: return ("MORE", "")
         }

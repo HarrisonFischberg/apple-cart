@@ -21,6 +21,19 @@ import Testing
         #expect(f.chargerToMac == 0 && f.chargerToBattery == 0 && abs(f.batteryToMac! - 18) < 0.001)
     }
 
+    @Test func unpluggedTheBatteryIsNeverIdleWhileTheMacDrawsPower() {
+        // A sample with no instant current yet: the Mac's 17.1 W can only come from the battery.
+        let r = reading(plugged: 0, amps: 0, system: 17100)!
+        #expect(abs(r.batteryWatts + 17.1) < 0.001 && abs(PowerFlows(r).batteryToMac! - 17.1) < 0.001)
+        // The averaged Amperage stands in when InstantAmperage reads 0.
+        let avg = BatteryReading(properties: ["CurrentCapacity": 79, "ExternalConnected": 0, "Voltage": 12000,
+                                              "InstantAmperage": 0, "Amperage": NSNumber(value: UInt64(bitPattern: -1400)),
+                                              "PowerTelemetryData": ["SystemLoad": 17100]])!
+        #expect(abs(avg.batteryWatts + 16.8) < 0.001)
+        // Plugged in with nothing flowing stays idle.
+        #expect(reading(plugged: 1, amps: 0, system: 9000)!.batteryWatts == 0)
+    }
+
     @Test func missingSystemLoadStaysUnknownAndNoReadingIsAllUnknown() {
         #expect(PowerFlows(reading(plugged: 1, amps: 0, system: nil)).chargerToMac == nil)
         #expect(PowerFlows(nil).batteryToMac == nil)
