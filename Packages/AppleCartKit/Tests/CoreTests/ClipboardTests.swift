@@ -151,4 +151,12 @@ private func make(_ b: FakeBoard, clock: Clock = Clock(), sleep: @escaping @Send
         #expect(!h.paste(h.items[0]) && h.status?.contains("Accessibility") == true)
         b.copy("<b>rich</b>"); #expect(h.pastePlainCurrent() == false && b.text == "<b>rich</b>")
     }
+
+    @Test func copyingAnItemNeverSendsAPaste() {
+        let b = FakeBoard(); let (h, _, _) = make(b)
+        b.copy("first"); h.check(); b.copy("second"); h.check()
+        let first = h.items.first { $0.text == "first" }!
+        #expect(h.paste(first, andSend: false))
+        #expect(b.text == "first" && b.pastes == 0 && h.status == "Copied.")
+    }
 }
