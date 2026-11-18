@@ -102,8 +102,14 @@ struct PowerFlowPixel: View {
             return (PixelFlow.route(from: a, to: b), l.2, l.3)
         }
         put(Self.wireColor, wires.flatMap(\.0))
+        // Packets travel the wire between sprites only; inside a sprite they would show through its outline.
+        let boxes = at.map { id, p in
+            let (w, h) = PixelFlow.size(PixelFlow.sprite(id))
+            return (p.x - w / 2 - 1...p.x + w / 2 + 1, p.y - h / 2 - 1...p.y + h / 2 + 1)
+        }
         for (cells, watts, color) in wires {
             let idx = PixelFlow.packets(length: cells.count, watts: watts, t: moving ? t : 0)
+                .filter { i in !boxes.contains { $0.0.contains(cells[i].x) && $0.1.contains(cells[i].y) } }
             put(color, idx.map { PixelPoint(cells[$0].x - 1, cells[$0].y - 1) }, size: 2)
         }
 
