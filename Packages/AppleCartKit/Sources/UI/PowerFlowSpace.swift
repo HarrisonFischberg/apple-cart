@@ -317,25 +317,33 @@ struct PowerFlowSpace: View {
 
         // Labels and the Mac's readout on top of everything.
         for case (_, .body(let b, let p, let r)) in sorted {
-            ctx.draw(Text(b.caption).font(.system(size: 9)).foregroundStyle(.white.opacity(0.62)), at: CGPoint(x: p.x, y: p.y - r - 20))
-            ctx.draw(Text(b.value).font(.system(size: 11, weight: .bold)).monospacedDigit().foregroundStyle(.white), at: CGPoint(x: p.x, y: p.y - r - 8))
+            tag(&ctx, caption: b.caption, value: b.value, at: CGPoint(x: p.x, y: p.y - r - 16))
         }
         let dial = CGFloat(scale) + 7
         var share = "Mac uses"
         if let w = reading?.systemWatts, let rating = reading?.adapterWatts, rating > 0, reading?.isPluggedIn == true, pausedAt == nil {
             share += " · \(Int((w / Double(rating) * 100).rounded()))% of charger"
         } else if reading?.isPluggedIn == false || pausedAt != nil { share += " · on battery" }
-        ctx.draw(Text(share).font(.system(size: 9)).foregroundStyle(.white.opacity(0.65)), at: CGPoint(x: center.x, y: center.y - dial - 26))
-        ctx.draw(Text(PowerFlow.watts(reading?.systemWatts)).font(.system(size: 16, weight: .bold)).monospacedDigit().foregroundStyle(.white),
-                 at: CGPoint(x: center.x, y: center.y - dial - 11))
-        // The Mac's battery level, under the planet.
+        tag(&ctx, caption: share, value: PowerFlow.watts(reading?.systemWatts), at: CGPoint(x: center.x, y: center.y - dial - 19), big: true)
+        // The Mac's battery level under the planet, the same number as the page's header.
         if let r = reading {
-            ctx.addFilter(.shadow(color: .black.opacity(0.9), radius: 3)) // last thing drawn: keeps the text clear of the ring
-            ctx.draw(Text("\(r.percent)%").font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundStyle(.white),
-                     at: CGPoint(x: center.x, y: center.y + dial + 12))
-            ctx.draw(Text(pausedAt.map { "Battery · held at \($0)%" } ?? "Battery").font(.system(size: 9)).foregroundStyle(.white.opacity(0.65)),
-                     at: CGPoint(x: center.x, y: center.y + dial + 26))
+            tag(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText,
+                at: CGPoint(x: center.x, y: center.y + CGFloat(scale) * 1.15 + 34), big: true, captionBelow: true)
         }
+    }
+
+    /// A label on a soft dark pill, so arcs, the ring and stars never run through the words.
+    private func tag(_ ctx: inout GraphicsContext, caption: String, value: String, at p: CGPoint, big: Bool = false, captionBelow: Bool = false) {
+        let cap = ctx.resolve(Text(caption).font(.system(size: 9)).foregroundStyle(.white.opacity(0.68)))
+        let val = ctx.resolve(Text(value).font(.system(size: big ? 15 : 11, weight: .bold)).monospacedDigit().foregroundStyle(.white))
+        let cs = cap.measure(in: CGSize(width: 240, height: 40)), vs = val.measure(in: CGSize(width: 240, height: 40))
+        let w = max(cs.width, vs.width) + 12, h = cs.height + vs.height + 4
+        ctx.fill(RoundedRectangle(cornerRadius: 7, style: .continuous).path(in: CGRect(x: p.x - w / 2, y: p.y - h / 2, width: w, height: h)),
+                 with: .color(.black.opacity(0.55)))
+        let top = p.y - h / 2 + 2
+        let (first, second, fs, ss) = captionBelow ? (val, cap, vs, cs) : (cap, val, cs, vs)
+        ctx.draw(first, at: CGPoint(x: p.x, y: top + fs.height / 2))
+        ctx.draw(second, at: CGPoint(x: p.x, y: top + fs.height + ss.height / 2))
     }
 
     private func paint(_ ctx: inout GraphicsContext, _ m: Mark, light: Vec3, t: Double, moving: Bool) {
