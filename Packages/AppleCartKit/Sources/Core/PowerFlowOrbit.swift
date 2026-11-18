@@ -74,12 +74,13 @@ extension FlowLayout {
     }
 }
 
-/// Which map the Battery page draws. Saved under `storageKey`; the 3D planets are the default.
+/// Which map the Battery page draws. Saved under `storageKey`; the 8-bit pixel map is the default.
 public enum FlowStyle: String, CaseIterable, Sendable {
-    case space, orbit, column
+    case pixel, space, orbit, column
     public static let storageKey = "powerFlow.style"
     public var title: String {
         switch self {
+        case .pixel: "8-bit"
         case .space: "3D planets"
         case .orbit: "Flat orbit"
         case .column: "Columns"
