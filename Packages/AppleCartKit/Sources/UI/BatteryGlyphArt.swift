@@ -44,14 +44,89 @@ enum BadgeShape {
     }
 }
 
-/// The menu bar glyph as a template image, in one of five styles.
+/// An original apple (round body, stem, leaf, no bite) on a 100 x 100 grid, y pointing down.
+enum AppleShape {
+    /// Top and bottom of the body, for the fill line.
+    static let bodyTop: CGFloat = 22, bodyBottom: CGFloat = 97.5
+    /// Centre of the number inside the body.
+    static let numberCenter = CGPoint(x: 50, y: 64)
+
+    static let body: CGPath = {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 50, y: 30))
+        p.addCurve(to: CGPoint(x: 86, y: 30), control1: CGPoint(x: 58, y: 22), control2: CGPoint(x: 74, y: 20))
+        p.addCurve(to: CGPoint(x: 90, y: 78), control1: CGPoint(x: 98, y: 40), control2: CGPoint(x: 99, y: 62))
+        p.addCurve(to: CGPoint(x: 66, y: 97), control1: CGPoint(x: 84, y: 90), control2: CGPoint(x: 75, y: 98))
+        p.addCurve(to: CGPoint(x: 50, y: 94.5), control1: CGPoint(x: 60, y: 96.5), control2: CGPoint(x: 56, y: 94.5))
+        p.addCurve(to: CGPoint(x: 34, y: 97), control1: CGPoint(x: 44, y: 94.5), control2: CGPoint(x: 40, y: 96.5))
+        p.addCurve(to: CGPoint(x: 10, y: 78), control1: CGPoint(x: 25, y: 98), control2: CGPoint(x: 16, y: 90))
+        p.addCurve(to: CGPoint(x: 14, y: 30), control1: CGPoint(x: 1, y: 62), control2: CGPoint(x: 2, y: 40))
+        p.addCurve(to: CGPoint(x: 50, y: 30), control1: CGPoint(x: 26, y: 20), control2: CGPoint(x: 42, y: 22))
+        p.closeSubpath()
+        return p
+    }()
+
+    /// Stem and leaf as one filled shape.
+    static let leaf: CGPath = {
+        let stem = CGMutablePath()
+        stem.move(to: CGPoint(x: 49.5, y: 31))
+        stem.addCurve(to: CGPoint(x: 53.5, y: 11), control1: CGPoint(x: 49.5, y: 23), control2: CGPoint(x: 50.5, y: 17))
+        let p = CGMutablePath()
+        p.addPath(stem.copy(strokingWithWidth: 5, lineCap: .round, lineJoin: .round, miterLimit: 4))
+        p.move(to: CGPoint(x: 53, y: 19))
+        p.addCurve(to: CGPoint(x: 79, y: 4), control1: CGPoint(x: 56, y: 8), control2: CGPoint(x: 66, y: 3))
+        p.addCurve(to: CGPoint(x: 53, y: 19), control1: CGPoint(x: 77, y: 15), control2: CGPoint(x: 66, y: 21))
+        p.closeSubpath()
+        return p
+    }()
+
+    /// A small bolt where the leaf goes, while charging.
+    static let bolt: CGPath = {
+        let p = CGMutablePath()
+        p.addLines(between: [CGPoint(x: 70, y: 0), CGPoint(x: 56, y: 14), CGPoint(x: 64, y: 14),
+                             CGPoint(x: 59.5, y: 25), CGPoint(x: 75.5, y: 10), CGPoint(x: 67.5, y: 10)])
+        p.closeSubpath()
+        return p
+    }()
+
+    /// Text as glyph outlines, centred on `center` in this y-down grid, so it can be cut out of the fill.
+    static func textPath(_ text: String, size: CGFloat, center: CGPoint) -> CGPath {
+        let base = NSFont.systemFont(ofSize: size, weight: .heavy)
+        let font = base.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: size) } ?? base
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font, .kern: -size * 0.04]))
+        let glyphs = CGMutablePath()
+        for run in (CTLineGetGlyphRuns(line) as? [CTRun]) ?? [] {
+            let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont // swiftlint:disable:this force_cast
+            let n = CTRunGetGlyphCount(run)
+            var ids = [CGGlyph](repeating: 0, count: n)
+            var at = [CGPoint](repeating: .zero, count: n)
+            CTRunGetGlyphs(run, CFRange(), &ids)
+            CTRunGetPositions(run, CFRange(), &at)
+            for i in 0..<n {
+                if let g = CTFontCreatePathForGlyph(runFont, ids[i], nil) {
+                    glyphs.addPath(g, transform: CGAffineTransform(translationX: at[i].x, y: at[i].y))
+                }
+            }
+        }
+        // Glyphs are y-up: flip, then centre the ink box on the point.
+        let flipped = glyphs.copy(using: [CGAffineTransform(scaleX: 1, y: -1)]) ?? glyphs
+        let box = flipped.boundingBoxOfPath
+        let move = CGAffineTransform(translationX: center.x - box.midX, y: center.y - box.midY)
+        return flipped.copy(using: [move]) ?? flipped
+    }
+}
+
+/// The menu bar glyph as a template image, in one of six styles.
 public enum BatteryGlyphImage {
-    public static func make(_ g: BatteryGlyph, style: MenuBarGlyphStyle = .classic) -> NSImage {
+    /// `number` puts the percentage inside the Apple style; it is off when there is no reading.
+    public static func make(_ g: BatteryGlyph, style: MenuBarGlyphStyle = .classic, number: Bool = true) -> NSImage {
+        if style == .apple { return makeApple(g, number: number) }
         // Only Classic has room for the two-glyph badges (plug with pause bars, plug with bolt).
         var g = g
         if style != .classic { g.badge = g.badge.single }
         let size: NSSize
         switch style {
+        case .apple: size = .zero // drawn by makeApple
         case .classic: size = NSSize(width: 36 * classicScale, height: 17 * classicScale)
         case .solid: size = NSSize(width: 28, height: 13)
         case .segments: size = NSSize(width: 38, height: 13)
@@ -60,6 +135,7 @@ public enum BatteryGlyphImage {
         }
         let img = NSImage(size: size, flipped: false) { _ in
             switch style {
+            case .apple: break
             case .classic:
                 NSGraphicsContext.current?.cgContext.scaleBy(x: classicScale, y: classicScale)
                 drawClassic(g)
@@ -73,6 +149,54 @@ public enum BatteryGlyphImage {
         img.isTemplate = true
         img.accessibilityDescription = "Battery"
         return img
+    }
+
+    /// An apple that fills from the bottom up, with the percentage cut out of the fill (solid where the fill has
+    /// not reached). The leaf turns into a bolt while charging. Drawn on AppleShape's 100 x 100 grid.
+    private static func makeApple(_ g: BatteryGlyph, number: Bool) -> NSImage {
+        let side: CGFloat = 21
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
+            guard let cg = NSGraphicsContext.current?.cgContext else { return false }
+            cg.scaleBy(x: side / 100, y: side / 100)
+            drawApple(g, number: number, in: cg)
+            return true
+        }
+        img.isTemplate = true
+        img.accessibilityDescription = number ? "Battery \(Int((g.level * 100).rounded())) percent" : "Battery"
+        return img
+    }
+
+    static func drawApple(_ g: BatteryGlyph, number: Bool, in cg: CGContext) {
+        let level = CGFloat(min(max(g.level, 0), 1))
+        let line = AppleShape.bodyBottom - (AppleShape.bodyBottom - AppleShape.bodyTop) * level
+        let filled = CGRect(x: -10, y: line, width: 120, height: 120)
+        let empty = CGRect(x: -10, y: -10, width: 120, height: line + 10)
+        let ink = NSColor.black.cgColor
+        // Empty part: a dim inside, so the outline reads as a full apple at any level.
+        cg.saveGState()
+        cg.addPath(AppleShape.body); cg.clip(); cg.clip(to: empty)
+        cg.setFillColor(NSColor.black.withAlphaComponent(0.28).cgColor); cg.fill(empty)
+        cg.restoreGState()
+        cg.addPath(AppleShape.body)
+        cg.setStrokeColor(NSColor.black.withAlphaComponent(0.6).cgColor); cg.setLineWidth(4); cg.strokePath()
+        // Charged part: solid up to the fill line.
+        cg.saveGState()
+        cg.addPath(AppleShape.body); cg.clip()
+        cg.setFillColor(ink); cg.fill(filled)
+        cg.restoreGState()
+        if number {
+            let pct = Int((level * 100).rounded())
+            let text = AppleShape.textPath("\(pct)%", size: pct >= 100 ? 27 : 32, center: AppleShape.numberCenter)
+            // Cut out of the fill, solid over the empty part, so it reads wherever the fill line crosses it.
+            cg.saveGState()
+            cg.clip(to: filled); cg.addPath(text); cg.setBlendMode(.clear); cg.fillPath()
+            cg.restoreGState()
+            cg.saveGState()
+            cg.clip(to: empty); cg.addPath(text); cg.setFillColor(ink); cg.fillPath()
+            cg.restoreGState()
+        }
+        cg.addPath(g.badge.single == .bolt ? AppleShape.bolt : AppleShape.leaf)
+        cg.setFillColor(ink); cg.fillPath()
     }
 
     /// Classic is drawn on a 36 x 17 grid and scaled down to its menu bar size.

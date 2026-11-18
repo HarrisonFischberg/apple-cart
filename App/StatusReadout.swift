@@ -31,12 +31,12 @@ final class StatusReadout {
 
     private func track() {
         let wanted = withObservationTracking {
-            let on = registry.isEnabled(.battery) && !settings.items.isEmpty
+            // The Apple style shows the percentage inside the icon, so it needs readings even with no text chosen.
+            let inIcon = glyphStyle.style.showsPercentInside && settings.showGlyph
+            let on = registry.isEnabled(.battery) && (!settings.items.isEmpty || inIcon)
             _ = sampler.latest
             _ = settings.spacing
-            _ = settings.showGlyph
             sampler.interval = .seconds(settings.updateSeconds)
-            _ = glyphStyle.style
             return on
         } onChange: { [weak self] in
             Task { @MainActor in self?.track() }
@@ -47,8 +47,11 @@ final class StatusReadout {
         }
         let reading = wanted ? sampler.latest : nil
         // Percent text first, then the battery glyph (the glyph carries the plug / bolt / pause state).
-        let parts = MenuBarItem.segments(settings.items, for: reading)
-        let glyph = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading), style: glyphStyle.style) // no reading: neutral app icon
+        // The Apple style already has the percentage inside, so the separate percent text would say it twice.
+        let inIcon = glyphStyle.style.showsPercentInside && settings.showGlyph
+        let parts = MenuBarItem.segments(inIcon ? settings.items.subtracting([.percent]) : settings.items, for: reading)
+        let glyph = BatteryGlyphImage.make(reading == nil ? BatteryGlyph(level: 0.75, badge: .none) : MenuBarReadout.glyph(for: reading),
+                                           style: glyphStyle.style, number: reading != nil) // no reading: neutral app icon, no number
         // Never leave the item empty: with no text the icon stays, so there is always something to click.
         button?.image = settings.showGlyph || parts.isEmpty ? glyph : nil
         BatterySampler.log.debug("status icon updated plugged=\(reading?.isPluggedIn ?? false)")

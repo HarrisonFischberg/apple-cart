@@ -3,10 +3,11 @@ import Observation
 
 /// How the battery looks in the menu bar. The percent text beside it is a separate choice.
 public enum MenuBarGlyphStyle: String, CaseIterable, Sendable {
-    case classic, solid, segments, ring, slim
+    case apple, classic, solid, segments, ring, slim
 
     public var title: String {
         switch self {
+        case .apple: "Apple"
         case .classic: "Classic"
         case .solid: "Solid"
         case .segments: "Segments"
@@ -14,6 +15,9 @@ public enum MenuBarGlyphStyle: String, CaseIterable, Sendable {
         case .slim: "Slim bar"
         }
     }
+
+    /// Apple draws the percentage inside the icon, so the separate percent text is left out beside it.
+    public var showsPercentInside: Bool { self == .apple }
 }
 
 /// The chosen glyph style, kept in the app's own defaults.
@@ -25,6 +29,6 @@ public final class GlyphStyleSettings {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        style = defaults.string(forKey: Self.key).flatMap(MenuBarGlyphStyle.init(rawValue:)) ?? .classic
+        style = defaults.string(forKey: Self.key).flatMap(MenuBarGlyphStyle.init(rawValue:)) ?? .apple
     }
 }

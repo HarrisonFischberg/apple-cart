@@ -81,7 +81,7 @@ struct AboutSettingsView: View {
     }
 }
 
-/// Five looks for the menu bar battery, each drawn as it will appear (plugged in at 80%).
+/// Six looks for the menu bar battery, each drawn as it will appear (plugged in at 80%).
 struct GlyphStylePicker: View {
     let settings: GlyphStyleSettings
 
