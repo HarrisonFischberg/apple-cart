@@ -18,6 +18,13 @@ extension BatteryReading {
     /// `shownPercent` as text: one decimal, no decimal at exactly 100.
     public var shownPercentText: String { shownPercent >= 100 ? "100%" : String(format: "%.1f%%", shownPercent) }
 
+    /// Unplugged, the battery is the only source: if no current was read yet the Mac is drawing power, the battery is
+    /// giving what the Mac uses (never "idle", which would leave the Mac's power coming from nowhere). Called again when
+    /// the sampler decides the charger has just gone, a second before macOS says so and while the current still reads 0.
+    public mutating func fillUnpluggedDrain() {
+        if !isPluggedIn, abs(batteryWatts) < 0.05, let load = systemWatts, load > 0.05 { batteryWatts = -load }
+    }
+
     public func whileHeld() -> BatteryReading {
         guard isPluggedIn else { return self }
         var r = self
@@ -82,9 +89,7 @@ public struct BatteryReading: Sendable, Equatable {
             if let load = int(t["SystemLoad"]) { systemWatts = Double(load) / 1000 }
             if let loss = int(t["AdapterEfficiencyLoss"]) { adapterLossWatts = Double(loss) / 1000 }
         }
-        // Unplugged, the battery is the only source: if no current was read yet the Mac is drawing power, the battery is
-        // giving what the Mac uses (never "idle", which would leave the Mac's power coming from nowhere).
-        if !isPluggedIn, abs(batteryWatts) < 0.05, let load = systemWatts, load > 0.05 { batteryWatts = -load }
+        fillUnpluggedDrain()
         if let ports = d["PowerOutDetails"] as? [[String: Any]] {
             usbOutWatts = ports.reduce(0) { $0 + Double(int($1["Watts"]) ?? 0) } / 1000 // milliwatts
             usbPoweredPorts = ports.filter { (int($0["Watts"]) ?? 0) > 0 }.count
@@ -303,7 +308,7 @@ public final class BatterySampler {
     private func adjusted(_ raw: BatteryReading) -> BatteryReading {
         var r = raw
         let present = raw.adapterWatts != nil
-        if raw.isPluggedIn && !present && adapterSeen { r.isPluggedIn = false; r.isCharging = false }
+        if raw.isPluggedIn && !present && adapterSeen { r.isPluggedIn = false; r.isCharging = false; r.fillUnpluggedDrain() }
         else if !raw.isPluggedIn && present { r.isPluggedIn = true }
         // Stay "seen" through the about-one-second window where the flag still lags; forget only once macOS agrees.
         if present { adapterSeen = true } else if !raw.isPluggedIn { adapterSeen = false }
