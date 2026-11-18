@@ -166,7 +166,7 @@ public final class ClipboardHistory: Tool {
 
     public func imageURL(_ item: ClipItem) -> URL? { item.imageFile.map { folder.appendingPathComponent($0) } }
 
-    /// Puts the item on the clipboard and pastes it. `plain` drops formatting by writing text only.
+    /// Puts the item on the clipboard, moves it to the top, and pastes it only when `andSend` is true.
     @discardableResult
     public func paste(_ item: ClipItem, andSend: Bool = true) -> Bool {
         switch item.kind {
@@ -174,10 +174,20 @@ public final class ClipboardHistory: Tool {
         case .image: if let u = imageURL(item), let d = try? Data(contentsOf: u) { pasteboard.write(imageData: d) }
         }
         lastSeen = pasteboard.changeCount
+        bumpToTop(item)
         guard andSend else { status = "Copied."; return true }
         let sent = pasteboard.paste()
         status = sent ? nil : "Copied. Press ⌘V to paste (Accessibility is off)."
         return sent
+    }
+
+    /// Re-copying an item makes it the newest one, so it shows at the top of the list.
+    private func bumpToTop(_ item: ClipItem) {
+        guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+        var moved = items.remove(at: i)
+        moved.copiedAt = now()
+        items.insert(moved, at: 0)
+        save()
     }
 
     /// Whatever is on the clipboard now, as plain text.

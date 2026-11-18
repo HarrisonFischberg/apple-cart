@@ -159,4 +159,12 @@ private func make(_ b: FakeBoard, clock: Clock = Clock(), sleep: @escaping @Send
         #expect(h.paste(first, andSend: false))
         #expect(b.text == "first" && b.pastes == 0 && h.status == "Copied.")
     }
+
+    @Test func copyingAnOlderItemMovesItToTheTop() {
+        let b = FakeBoard(), clock = Clock(); let (h, _, _) = make(b, clock: clock)
+        b.copy("first"); h.check(); clock.t += 1; b.copy("second"); h.check(); clock.t += 1
+        #expect(h.search("").first?.text == "second")
+        h.paste(h.items.first { $0.text == "first" }!, andSend: false)
+        #expect(h.search("").map(\.text) == ["first", "second"] && h.items.count == 2)
+    }
 }
