@@ -316,29 +316,56 @@ struct PowerFlowSpace: View {
         for (z, m) in sorted where z >= 0 { paint(&ctx, m, light: light, t: t, moving: moving) }
 
         // Labels and the Mac's readout on top of everything.
-        // Each body's label sits on its far side from the planet, so labels spread out instead of meeting in the middle.
-        for case (_, .body(let b, let p, let r)) in sorted {
-            let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
-            let out = CGPoint(x: p.x + dx / d * (r + 30), y: p.y + dy / d * (r + 18))
-            tag(&ctx, caption: b.caption, value: b.value,
-                at: CGPoint(x: min(max(out.x, 44), size.width - 44), y: min(max(out.y, 16), size.height - 16)))
-        }
+        // The Mac's readout above the planet and its battery level just below the ring (the same number as the page's
+        // header) go first; then each body's label takes the first free spot around it, starting on its far side from
+        // the planet, so labels never cover a moon, the planet or each other at any angle.
         let dial = CGFloat(scale) + 7
         var share = "Mac uses"
         if let w = reading?.systemWatts, let rating = reading?.adapterWatts, rating > 0, reading?.isPluggedIn == true, pausedAt == nil {
             share += " · \(Int((w / Double(rating) * 100).rounded()))% of charger"
         } else if reading?.isPluggedIn == false || pausedAt != nil { share += " · on battery" }
-        tag(&ctx, caption: share, value: PowerFlow.watts(reading?.systemWatts), at: CGPoint(x: center.x, y: center.y - dial - 19), big: true)
-        // The Mac's battery level just below the ring, the same number as the page's header.
+        var placed: [CGRect] = []
+        let macAt = CGPoint(x: center.x, y: center.y - dial - 19)
+        placed.append(tag(&ctx, caption: share, value: PowerFlow.watts(reading?.systemWatts), at: macAt, big: true))
         let ringBottom = stride(from: 0.0, to: 2 * .pi, by: .pi / 24).map { project(PowerSpace.ringPoint(2.6, $0)).0.y }.max() ?? center.y
         if let r = reading {
-            tag(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText,
-                at: CGPoint(x: center.x, y: min(ringBottom + 20, size.height - 20)), big: true, captionBelow: true)
+            placed.append(tag(&ctx, caption: pausedAt.map { "Battery · held at \($0)%" } ?? "Battery", value: r.shownPercentText,
+                              at: CGPoint(x: center.x, y: min(ringBottom + 20, size.height - 20)), big: true, captionBelow: true))
+        }
+        let discs = sorted.compactMap { item -> CGRect? in
+            guard case .body(_, let p, let r) = item.1 else { return nil }
+            return CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
+        } + [CGRect(x: center.x - CGFloat(scale), y: center.y - CGFloat(scale), width: CGFloat(scale) * 2, height: CGFloat(scale) * 2)]
+        let room = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
+        for case (_, .body(let b, let p, let r)) in sorted {
+            let box = tagSize(&ctx, caption: b.caption, value: b.value)
+            let dx = p.x - center.x, dy = p.y - center.y, d = max(hypot(dx, dy), 1)
+            let outward = atan2(dy / d, dx / d)
+            let tries = [outward] + (0..<8).map { Double($0) * .pi / 4 }.sorted { abs(remainder($0 - outward, 2 * .pi)) < abs(remainder($1 - outward, 2 * .pi)) }
+            func spot(_ a: Double) -> CGRect {
+                let ux = CGFloat(cos(a)), uy = CGFloat(sin(a))
+                let reach = r + 6 + abs(ux) * box.width / 2 + abs(uy) * box.height / 2
+                return CGRect(x: p.x + ux * reach - box.width / 2, y: p.y + uy * reach - box.height / 2, width: box.width, height: box.height)
+            }
+            let own = CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)
+            let others = discs.filter { $0 != own } + placed
+            let free = tries.lazy.map(spot).first { rect in room.contains(rect) && !others.contains { $0.intersects(rect) } }
+            let rect = free ?? spot(outward)
+            placed.append(tag(&ctx, caption: b.caption, value: b.value,
+                              at: CGPoint(x: min(max(rect.midX, room.minX + box.width / 2), room.maxX - box.width / 2),
+                                          y: min(max(rect.midY, room.minY + box.height / 2), room.maxY - box.height / 2))))
         }
     }
 
+    private func tagSize(_ ctx: inout GraphicsContext, caption: String, value: String, big: Bool = false) -> CGSize {
+        let cs = ctx.resolve(Text(caption).font(.system(size: 9))).measure(in: CGSize(width: 240, height: 40))
+        let vs = ctx.resolve(Text(value).font(.system(size: big ? 15 : 11, weight: .bold)).monospacedDigit()).measure(in: CGSize(width: 240, height: 40))
+        return CGSize(width: max(cs.width, vs.width) + 12, height: cs.height + vs.height + 4)
+    }
+
     /// A label on a soft dark pill, so arcs, the ring and stars never run through the words.
-    private func tag(_ ctx: inout GraphicsContext, caption: String, value: String, at p: CGPoint, big: Bool = false, captionBelow: Bool = false) {
+    @discardableResult
+    private func tag(_ ctx: inout GraphicsContext, caption: String, value: String, at p: CGPoint, big: Bool = false, captionBelow: Bool = false) -> CGRect {
         let cap = ctx.resolve(Text(caption).font(.system(size: 9)).foregroundStyle(.white.opacity(0.68)))
         let val = ctx.resolve(Text(value).font(.system(size: big ? 15 : 11, weight: .bold)).monospacedDigit().foregroundStyle(.white))
         let cs = cap.measure(in: CGSize(width: 240, height: 40)), vs = val.measure(in: CGSize(width: 240, height: 40))
@@ -349,6 +376,7 @@ struct PowerFlowSpace: View {
         let (first, second, fs, ss) = captionBelow ? (val, cap, vs, cs) : (cap, val, cs, vs)
         ctx.draw(first, at: CGPoint(x: p.x, y: top + fs.height / 2))
         ctx.draw(second, at: CGPoint(x: p.x, y: top + fs.height + ss.height / 2))
+        return CGRect(x: p.x - w / 2, y: p.y - h / 2, width: w, height: h)
     }
 
     private func paint(_ ctx: inout GraphicsContext, _ m: Mark, light: Vec3, t: Double, moving: Bool) {
