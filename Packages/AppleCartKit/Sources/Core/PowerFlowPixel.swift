@@ -8,10 +8,22 @@ public struct PixelPoint: Hashable, Sendable {
 }
 
 public enum PixelFlow {
-    /// One grid cell in points, and the grid's height in cells. The width follows the panel.
+    /// One grid cell in points at the default zoom, and the grid's height in cells. The width follows the panel.
     public static let cell = 3.0
     public static let rows = 90
-    public static func columns(width: Double) -> Int { max(Int(width / cell), 80) }
+    public static func columns(width: Double, cell: Double = cell) -> Int { max(Int(width / cell), 60) }
+
+    /// Zoom: the cell size in points, saved under `zoomKey`. Smaller cells make the whole map smaller (sprites, text and
+    /// height), larger cells make it bigger.
+    public static let zoomKey = "powerFlow.pixelZoom"
+    public static let zooms: [Double] = [2, 2.5, 3, 3.5, 4]
+    /// The saved zoom kept to a known step; anything else is the default.
+    public static func zoom(_ saved: Double) -> Double { zooms.contains(saved) ? saved : cell }
+    /// One step bigger (`by` > 0) or smaller, stopping at the ends.
+    public static func zoom(_ current: Double, by step: Int) -> Double {
+        let i = zooms.firstIndex(of: zoom(current)) ?? 2
+        return zooms[min(max(i + step, 0), zooms.count - 1)]
+    }
 
     /// Default places, as fractions of the grid's width so they fit any panel. Up to three outside streams stack on the right.
     public static func homes(columns c: Int, streams: [PowerStream]) -> [FlowNodeID: PixelPoint] {

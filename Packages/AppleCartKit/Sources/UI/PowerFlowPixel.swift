@@ -13,6 +13,7 @@ struct PowerFlowPixel: View {
     var onSelect: (FlowNodeID) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(PixelPlaces.storageKey) private var saved = ""
+    @AppStorage(PixelFlow.zoomKey) private var savedZoom = PixelFlow.cell
     @State private var drag: (id: FlowNodeID, at: PixelPoint)?
     @State private var resize = LiveResize.shared
 
@@ -27,12 +28,13 @@ struct PowerFlowPixel: View {
                                                    "3": Color(red: 0.498, green: 0.839, blue: 1), "4": Color(red: 0.788, green: 0.8, blue: 0.867),
                                                    "5": Color(red: 1, green: 0.42, blue: 0.353), "6": Color(red: 1, green: 0.847, blue: 0.29)]
 
+    private var cell: Double { PixelFlow.zoom(savedZoom) }
     private var streams: [PowerStream] { PixelFlow.shown(PowerFlows.streams(reading)) }
     private var flows: PowerFlows { PowerFlows(reading) }
 
     var body: some View {
         GeometryReader { geo in
-            let cols = PixelFlow.columns(width: geo.size.width)
+            let cols = PixelFlow.columns(width: geo.size.width, cell: cell)
             let s = geo.size.width / Double(cols)
             TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || resize.active)) { tl in
                 Canvas { ctx, _ in draw(&ctx, cols: cols, s: s, t: tl.date.timeIntervalSinceReferenceDate) }
@@ -52,11 +54,17 @@ struct PowerFlowPixel: View {
                     var p = PixelPlaces(json: saved); p.byNode[d.id] = d.at; saved = p.json
                     drag = nil
                 })
+            // Pinch on the trackpad to zoom a step in or out.
+            .simultaneousGesture(MagnifyGesture().onEnded { v in
+                let step = v.magnification > 1.12 ? 1 : v.magnification < 0.9 ? -1 : 0
+                if step != 0 { savedZoom = PixelFlow.zoom(cell, by: step) }
+            })
             .simultaneousGesture(SpatialTapGesture().onEnded { v in
                 if let id = hit(v.location, s: s, places: places(cols)) { onSelect(id) }
             })
         }
-        .frame(height: Double(PixelFlow.rows) * PixelFlow.cell)
+        .frame(height: Double(PixelFlow.rows) * cell)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: cell)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
@@ -166,7 +174,8 @@ struct PowerFlowPixel: View {
             let b = r?.batteryWatts ?? 0
             return (r?.shownPercentText ?? "--", abs(b) < 0.05 ? "IDLE" : (b > 0 ? "+" : "-") + w(b))
         case .stream(let title):
-            let short = ["Charger loss": "LOSS", "USB": "USB", "SoC": "SOC", "Other": "OTHER"][title] ?? title
+            // The USB device by its own name ("iPhone") when the Mac knows it, like the other maps.
+            let short = ["Charger loss": "LOSS", "USB": r?.usbLabel ?? "USB", "SoC": "SOC", "Other": "OTHER"][title] ?? title
             return (short, w(streams.first { $0.title == title }?.watts))
         case .more: return ("MORE", "")
         }

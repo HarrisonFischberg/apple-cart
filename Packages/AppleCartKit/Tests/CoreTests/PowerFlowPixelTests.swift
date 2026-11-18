@@ -54,6 +54,14 @@ import Testing
         #expect(t.width == 3 + 1 + 3 + 1 + 1 + 1 + 3 + 1 + 3 && t.cells.allSatisfy { $0.y >= 0 && $0.y < 5 })
     }
 
+    @Test func zoomStepsBetweenTheEndsAndOddSavedValuesFallBackToTheDefault() {
+        #expect(PixelFlow.zoom(3, by: 1) == 3.5 && PixelFlow.zoom(3, by: -1) == 2.5)
+        #expect(PixelFlow.zoom(4, by: 1) == 4 && PixelFlow.zoom(2, by: -1) == 2)
+        #expect(PixelFlow.zoom(7.3) == PixelFlow.cell && PixelFlow.zoom(7.3, by: 1) == 3.5)
+        // Smaller cells mean more of them across the same panel, so everything draws smaller.
+        #expect(PixelFlow.columns(width: 340, cell: 2) > PixelFlow.columns(width: 340, cell: 4))
+    }
+
     @Test func draggedPlacesRoundTripAndStayInsideTheGrid() {
         let p = PixelPlaces([.charger: PixelPoint(10, 12), .stream("USB"): PixelPoint(90, 40)])
         #expect(PixelPlaces(json: p.json) == p)
