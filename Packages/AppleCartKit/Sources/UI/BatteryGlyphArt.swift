@@ -51,7 +51,7 @@ enum AppleShape {
     /// Centre of the number inside the body.
     static let numberCenter = CGPoint(x: 50, y: 64)
 
-    static let body: CGPath = {
+    nonisolated(unsafe) static let body: CGPath = { // immutable once built
         let p = CGMutablePath()
         p.move(to: CGPoint(x: 50, y: 30))
         p.addCurve(to: CGPoint(x: 86, y: 30), control1: CGPoint(x: 58, y: 22), control2: CGPoint(x: 74, y: 20))
@@ -67,7 +67,7 @@ enum AppleShape {
     }()
 
     /// Stem and leaf as one filled shape.
-    static let leaf: CGPath = {
+    nonisolated(unsafe) static let leaf: CGPath = { // immutable once built
         let stem = CGMutablePath()
         stem.move(to: CGPoint(x: 49.5, y: 31))
         stem.addCurve(to: CGPoint(x: 53.5, y: 11), control1: CGPoint(x: 49.5, y: 23), control2: CGPoint(x: 50.5, y: 17))
@@ -81,7 +81,7 @@ enum AppleShape {
     }()
 
     /// A small bolt where the leaf goes, while charging.
-    static let bolt: CGPath = {
+    nonisolated(unsafe) static let bolt: CGPath = { // immutable once built
         let p = CGMutablePath()
         p.addLines(between: [CGPoint(x: 70, y: 0), CGPoint(x: 56, y: 14), CGPoint(x: 64, y: 14),
                              CGPoint(x: 59.5, y: 25), CGPoint(x: 75.5, y: 10), CGPoint(x: 67.5, y: 10)])
