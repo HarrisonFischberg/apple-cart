@@ -23,11 +23,21 @@ public enum QuickToggle: String, CaseIterable, Sendable {
         }
     }
 
+    /// Where the state is read: the app that uses the key. Reading an app's domain falls through to the
+    /// global domain, so this is the value the app actually sees.
     public var domain: String {
         switch self {
-        case .hiddenFiles, .desktopIcons: "com.apple.finder"
-        case .fileExtensions: "kCFPreferencesAnyApplication"
+        case .hiddenFiles, .desktopIcons, .fileExtensions: "com.apple.finder"
         case .dockAutoHide: "com.apple.dock"
+        }
+    }
+
+    /// Where a change is written. File extensions live in the global domain, but a copy in Finder's own domain
+    /// (Finder settings writes one) overrides it, so both get the new value or turning it off does nothing.
+    public var writeDomains: [String] {
+        switch self {
+        case .fileExtensions: [globalPreferenceDomain, "com.apple.finder"]
+        default: [domain]
         }
     }
 
@@ -52,6 +62,9 @@ public enum QuickToggle: String, CaseIterable, Sendable {
     }
 }
 
+/// Stands for the global domain (`defaults write -g`); `SystemPreferences` maps it to `kCFPreferencesAnyApplication`.
+public let globalPreferenceDomain = "NSGlobalDomain"
+
 @MainActor
 public protocol PreferenceAccess: AnyObject {
     func read(domain: String, key: String) -> Bool?
@@ -75,7 +88,7 @@ public final class QuickToggles {
     }
 
     public func set(_ t: QuickToggle, on: Bool) {
-        prefs.write(domain: t.domain, key: t.key, value: on)
+        for d in t.writeDomains { prefs.write(domain: d, key: t.key, value: on) }
         prefs.restart(t.restarts)
         refresh() // show what the system holds, not what we meant
     }

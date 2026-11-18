@@ -6,14 +6,20 @@ import Foundation
 public final class SystemPreferences: PreferenceAccess {
     public init() {}
 
+    /// The literal text "NSGlobalDomain" or "kCFPreferencesAnyApplication" would name an ordinary app domain
+    /// (its own plist that nothing reads), so the global domain must be the CF constant.
+    private func cfDomain(_ domain: String) -> CFString {
+        domain == globalPreferenceDomain ? kCFPreferencesAnyApplication : domain as CFString
+    }
+
     public func read(domain: String, key: String) -> Bool? {
-        CFPreferencesAppSynchronize(domain as CFString)
-        return (CFPreferencesCopyAppValue(key as CFString, domain as CFString) as? NSNumber)?.boolValue
+        CFPreferencesAppSynchronize(cfDomain(domain))
+        return (CFPreferencesCopyAppValue(key as CFString, cfDomain(domain)) as? NSNumber)?.boolValue
     }
 
     public func write(domain: String, key: String, value: Bool) {
-        CFPreferencesSetAppValue(key as CFString, value as CFBoolean, domain as CFString)
-        CFPreferencesAppSynchronize(domain as CFString)
+        CFPreferencesSetAppValue(key as CFString, value as CFBoolean, cfDomain(domain))
+        CFPreferencesAppSynchronize(cfDomain(domain))
     }
 
     public func restart(_ processName: String) {
