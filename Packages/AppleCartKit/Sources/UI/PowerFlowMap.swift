@@ -14,6 +14,7 @@ struct PowerFlowMap: View {
     @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.pixel.rawValue
     @AppStorage(PixelPlaces.storageKey) private var savedPixels = ""
     @AppStorage(PixelFlow.zoomKey) private var pixelZoom = PixelFlow.cell
+    @AppStorage(PixelFlow.panKey) private var pixelPan = ""
     @AppStorage(SpaceView.storageKey) private var savedView = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -94,12 +95,12 @@ struct PowerFlowMap: View {
     private var space: Bool { style == FlowStyle.space.rawValue }
     private var pixel: Bool { style == FlowStyle.pixel.rawValue }
     private var moved: Bool {
-        pixel ? !PixelPlaces(json: savedPixels).isEmpty : space ? !SpaceView(json: savedView).isDefault : !FlowOffsets(json: savedOffsets).isEmpty
+        pixel ? !PixelPlaces(json: savedPixels).isEmpty || !pixelPan.isEmpty : space ? !SpaceView(json: savedView).isDefault : !FlowOffsets(json: savedOffsets).isEmpty
     }
 
     private func resetLayout() {
         withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) {
-            if pixel { savedPixels = "" } else if space { savedView = "" } else { savedOffsets = "" }
+            if pixel { savedPixels = ""; pixelPan = "" } else if space { savedView = "" } else { savedOffsets = "" }
         }
     }
 

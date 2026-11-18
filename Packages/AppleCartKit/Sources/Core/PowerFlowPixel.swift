@@ -17,6 +17,18 @@ public enum PixelFlow {
     /// height), larger cells make it bigger.
     public static let zoomKey = "powerFlow.pixelZoom"
     public static let zooms: [Double] = [2, 2.5, 3, 3.5, 4]
+    /// Pan: how far the whole map has been dragged, in cells, saved under `panKey` as "x,y". Kept within half the map
+    /// each way so the sprites can never be lost off screen.
+    public static let panKey = "powerFlow.pixelPan"
+    public static func pan(_ saved: String) -> PixelPoint {
+        let v = saved.split(separator: ",").compactMap { Int($0) }
+        return v.count == 2 ? PixelPoint(v[0], v[1]) : PixelPoint(0, 0)
+    }
+    public static func panText(_ p: PixelPoint) -> String { p == PixelPoint(0, 0) ? "" : "\(p.x),\(p.y)" }
+    public static func clampPan(_ p: PixelPoint, columns: Int) -> PixelPoint {
+        PixelPoint(min(max(p.x, -columns / 2), columns / 2), min(max(p.y, -rows / 2), rows / 2))
+    }
+
     /// The saved zoom kept to a known step; anything else is the default.
     public static func zoom(_ saved: Double) -> Double { zooms.contains(saved) ? saved : cell }
     /// One step bigger (`by` > 0) or smaller, stopping at the ends.
