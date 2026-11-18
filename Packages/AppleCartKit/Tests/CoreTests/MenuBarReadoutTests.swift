@@ -123,7 +123,7 @@ private func full(percent: Int = 80, amps: Int64 = 0, plugged: Bool = true, char
         #expect(full.shownPercentText == "100%")
     }
 
-    @Test func appleIsTheDefaultLookAndCarriesThePercent() throws {
+    @MainActor @Test func appleIsTheDefaultLookAndCarriesThePercent() throws {
         let defaults = try #require(UserDefaults(suiteName: "glyph-style-\(UUID().uuidString)"))
         let settings = GlyphStyleSettings(defaults: defaults)
         let first = settings.style
