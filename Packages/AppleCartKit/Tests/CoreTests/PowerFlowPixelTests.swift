@@ -15,6 +15,14 @@ import Testing
         #expect(PixelFlow.wire(PixelPoint(5, 5), PixelPoint(5, 5)) == [PixelPoint(5, 5)])
     }
 
+    @Test func routesDropIntoTheLowerBodyFromAboveWhicheverWayPowerGoes() {
+        let mac = PixelPoint(50, 20), battery = PixelPoint(30, 60)
+        let drain = PixelFlow.route(from: battery, to: mac), charge = PixelFlow.route(from: mac, to: battery)
+        #expect(drain.first == battery && drain.last == mac && drain == charge.reversed())
+        // Nothing runs below the Mac (where its label is): the vertical leg is at the battery's x.
+        #expect(drain.allSatisfy { $0.y == mac.y || $0.x == battery.x })
+    }
+
     @Test func moreWattsMeanDenserFasterPacketsAndNoneWhenIdle() {
         #expect(PixelFlow.gap(40) < PixelFlow.gap(2) && PixelFlow.speed(40) > PixelFlow.speed(2))
         #expect(PixelFlow.packets(length: 30, watts: 0, t: 5).isEmpty)
@@ -34,6 +42,9 @@ import Testing
 
     @Test func batteryCellsAndTheFontCoverWhatTheMapShows() {
         #expect(PixelFlow.cells(percent: 79) == 4 && PixelFlow.cells(percent: 100) == 5 && PixelFlow.cells(percent: 3) == 0)
+        let lit = PixelFlow.batteryCells(5, at: PixelPoint(40, 40))
+        #expect(lit.count == 40 && Set(lit.map(\.x)).count == 10) // five separate 2-wide cells
+        #expect(lit.allSatisfy { $0.x > 40 - 9 && $0.x < 40 + 8 })   // inside the shell
         for ch in "CHARGER MAC HELD IDLE USB SOC OTHER LOSS MORE 0123456789.%+-W" { #expect(PixelFlow.glyphs[ch] != nil) }
         let t = PixelFlow.text("79.0%")
         #expect(t.width == 3 + 1 + 3 + 1 + 1 + 1 + 3 + 1 + 3 && t.cells.allSatisfy { $0.y >= 0 && $0.y < 5 })

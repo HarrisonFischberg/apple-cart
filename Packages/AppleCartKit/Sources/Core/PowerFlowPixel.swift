@@ -15,8 +15,10 @@ public enum PixelFlow {
 
     /// Default places, as fractions of the grid's width so they fit any panel. Up to three outside streams stack on the right.
     public static func homes(columns c: Int, streams: [PowerStream]) -> [FlowNodeID: PixelPoint] {
-        var out: [FlowNodeID: PixelPoint] = [.charger: PixelPoint(c * 17 / 100, 20), .mac: PixelPoint(c * 50 / 100, 20),
-                                             .battery: PixelPoint(c * 50 / 100, 58)]
+        // The battery sits below and between the charger and the Mac, so its wires drop into it from above and never
+        // cross a label; outside devices use the right-hand side.
+        var out: [FlowNodeID: PixelPoint] = [.charger: PixelPoint(c * 14 / 100, 20), .mac: PixelPoint(c * 52 / 100, 20),
+                                             .battery: PixelPoint(c * 33 / 100, 60)]
         for (i, s) in shown(streams).enumerated() { out[.stream(s.title)] = PixelPoint(c * 85 / 100, 16 + i * 26) }
         return out
     }
@@ -31,6 +33,12 @@ public enum PixelFlow {
         while p.y != b.y { out.append(p); p.y += b.y > p.y ? 1 : -1 }
         out.append(b)
         return out
+    }
+
+    /// The wire power travels on from `a` to `b`: across at the higher body's level, then straight down into the lower
+    /// one from above. Labels sit under their sprites, so a wire never runs up through one.
+    public static func route(from a: PixelPoint, to b: PixelPoint) -> [PixelPoint] {
+        a.y <= b.y ? wire(a, b) : Array(wire(b, a).reversed())
     }
 
     /// Cells between packets: more watts, denser traffic.
@@ -53,9 +61,15 @@ public enum PixelFlow {
     public static let charger = ["..1..1..", "..1..1..", "22222222", "23333332", "23333332", ".233332.", "..2442..", "...44...", "...44..."]
     public static let mac = ["1111111111111", "1222222222221", "1233333333321", "1233333333321", "1233333333321",
                              "1233333333321", "1222222222221", "1111111111111", "..444444444..", "4444444444444"]
-    /// 14 x 8 shell; cells are drawn inside it.
-    public static let battery = ["44444444444444.", "4............4.", "4............44", "4............44",
-                                 "4............44", "4............44", "4............4.", "44444444444444."]
+    /// 18 x 8 shell with a nub; five 2 x 4 cells, a cell apart, are drawn inside it (see `cellRects`).
+    public static let battery = ["444444444444444444.", "4................4.", "4................44", "4................44",
+                                 "4................44", "4................44", "4................4.", "444444444444444444."]
+
+    /// The lit battery cells for `lit` of five, around the battery's centre `p`.
+    public static func batteryCells(_ lit: Int, at p: PixelPoint) -> [PixelPoint] {
+        let left = p.x - size(battery).w / 2 + 2
+        return (0..<min(max(lit, 0), 5)).flatMap { i in (0..<2).flatMap { dx in (0..<4).map { dy in PixelPoint(left + i * 3 + dx, p.y - 2 + dy) } } }
+    }
     public static let phone = ["11111", "13331", "13331", "13331", "13331", "13331", "11111", "11411"]
     public static let chip = [".4.4.4.", "4111114", ".13331.", "4133314", ".13331.", "4111114", ".4.4.4."]
     public static let heat = ["...5...", "..55...", "..555..", ".55655.", ".56665.", "5566655", ".55555."]

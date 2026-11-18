@@ -99,7 +99,7 @@ struct PowerFlowPixel: View {
         for st in streams { links.append((.mac, .stream(st.title), st.watts ?? 0, Self.out)) }
         let wires = links.compactMap { l -> ([PixelPoint], Double, Color)? in
             guard let a = at[l.0], let b = at[l.1] else { return nil }
-            return (PixelFlow.wire(a, b), l.2, l.3)
+            return (PixelFlow.route(from: a, to: b), l.2, l.3)
         }
         put(Self.wireColor, wires.flatMap(\.0))
         for (cells, watts, color) in wires {
@@ -126,6 +126,10 @@ struct PowerFlowPixel: View {
             }
             let (caption, value) = label(id)
             let top = p.y + h / 2 + 3
+            // A patch of screen behind the words, so a wire or packet passing under a label never cuts through it.
+            let widest = max(PixelFlow.text(caption).width, PixelFlow.text(value).width)
+            let bx = min(max(p.x - widest / 2, 1), cols - widest - 1)
+            put(Self.ground, (bx - 1...bx + widest + 1).flatMap { x in (top - 1...top + 12).map { PixelPoint(x, $0) } })
             for (line, y, c) in [(caption, top, Color.white), (value, top + 7, Self.supply)] {
                 let (cells, width) = PixelFlow.text(line)
                 let x0 = min(max(p.x - width / 2, 1), cols - width - 1)
@@ -141,9 +145,7 @@ struct PowerFlowPixel: View {
         let pct = reading?.shownPercent ?? 0
         let lit = PixelFlow.cells(percent: pct), charging = (reading?.batteryWatts ?? 0) > 0.05
         let shown = charging && t != 0 && Int(t * 2.5) % 2 == 1 ? lit - 1 : lit
-        let left = p.x - w / 2 + 2 // five 2x4 cells, one cell in from the shell
-        let cells = (0..<max(shown, 0)).flatMap { i in (0..<2).flatMap { dx in (0..<4).map { dy in PixelPoint(left + i * 2 + dx, p.y - 2 + dy) } } }
-        return (pct > 20 ? Self.charge : Self.drain, cells)
+        return (pct > 20 ? Self.charge : Self.drain, PixelFlow.batteryCells(shown, at: p))
     }
 
     private func label(_ id: FlowNodeID) -> (String, String) {
