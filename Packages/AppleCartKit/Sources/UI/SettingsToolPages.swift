@@ -159,7 +159,7 @@ struct ChargeControlOptions: View {
                     Text("%").foregroundStyle(Palette.secondary)
                 }
             }
-            SettingsRow("Automatic discharge", detail: "Above the limit while plugged in, run from the battery down to the limit. On this Mac a pause also runs from the battery, so the level drifts down either way.") {
+            SettingsRow("Automatic discharge", detail: "Above the limit while plugged in, run from the battery down to the limit. Limits of 80% and up are held by macOS's own charge limit with the Mac on the charger; below 80% a pause also runs from the battery.") {
                 Toggle("Automatic discharge", isOn: Binding(get: { settings.autoDischarge }, set: { settings.setAutoDischarge($0); changed() }))
                     .toggleStyle(.switch).labelsHidden()
             }
@@ -168,10 +168,13 @@ struct ChargeControlOptions: View {
                     .toggleStyle(.switch).labelsHidden()
             }
             if settings.sailing {
-                SettingsRow("Difference", detail: settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(settings.sailFloor)%") {
+                SettingsRow("Difference", detail: settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(limiter?.shownSailFloor ?? settings.sailFloor)%") {
                     Stepper("\(settings.sailingDifference) %", value: Binding(get: { settings.sailingDifference }, set: { settings.setSailingDifference($0); changed() }),
                             in: ChargeLimitSettings.sailingRange).fixedSize()
                 }
+            }
+            if limiter != nil, settings.limit < 100, limiter?.usesMacOSLimit != true {
+                DimmingTip()
             }
             heat
             if let r = battery?.latest, r.magSafeLight != .notAvailable {

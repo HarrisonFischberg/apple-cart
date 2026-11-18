@@ -21,10 +21,19 @@ public struct ChargeLimitState: Equatable, Sendable {
     public var sailFloor: Int?
     /// The confirmed cut is a heat pause (the limit alone would let it charge); the battery temperature that caused it.
     public var heatPausedAtC: Double?
+    /// The limit is being kept by macOS's own charge limit: the Mac stays on the charger while it holds (no helper needed).
+    public var native = false
+    /// The confirmed hold is a charger cut, so macOS runs the Mac on its battery while it lasts and may dim the display
+    /// ("Slightly dim the display on battery"). False for macOS-limit holds, discharges (asked for) and when nothing is held.
+    public var holdRunsOnBattery = false
+    /// A hold or pause is in place and the charger is cut for it (the Mac runs on its battery); false for macOS-limit holds.
+    public var chargerCut: Bool { holdingAt != nil && !native }
 
     public init() {}
 
     public static let notResumedText = "Charging has not resumed. Unplug and replug the charger."
+    /// Shown while a cut hold runs the Mac on its battery: macOS treats that as unplugged and may dim the screen.
+    public static let dimmingTip = "While the limit holds, your Mac runs on its battery, so macOS may dim the screen. To stop that, turn off \"Slightly dim the display on battery\" in System Settings > Battery > Options."
 
     /// The confirmed hold in words, with its reason: heat, discharge, sailing range or the limit. Nil when nothing is held.
     public var holdText: String? {
@@ -37,6 +46,11 @@ public struct ChargeLimitState: Equatable, Sendable {
 
     public var reasonText: String {
         if chargingNotResumed { return Self.notResumedText }
+        if native {
+            if let h = holdText { return h }
+            if commandFailed { return "Could not set the macOS charge limit. Trying again." }
+            return "Charging up to \(target)%"
+        }
         switch helperStatus {
         case .notInstalled: return "Install the charging helper in Settings to use this."
         case .needsApproval: return "Approve Apple Cart in Login Items."
@@ -100,10 +114,26 @@ public final class ChargeLimiter {
     @ObservationIgnored private var busy = false
     @ObservationIgnored private var again = false
     @ObservationIgnored private var heat = HeatGuard()
+    /// macOS's own charge limit, used for holds at 80% and up so the Mac stays on the charger (nil: cuts only).
+    @ObservationIgnored private let native: NativeChargeLimit?
+    @ObservationIgnored private let nativeSnapshot: NativeLimitSnapshotStore
+    /// Nil until checked; false after the check or repeated failed writes (then holds fall back to cuts).
+    @ObservationIgnored private(set) var nativeSupported: Bool?
+    /// The macOS limit value we last confirmed by reading it back.
+    @ObservationIgnored private var nativeConfirmed: Int?
+    @ObservationIgnored private var nativeFailures = 0
+    @ObservationIgnored private var nativeRetryAt: Date?
+    @ObservationIgnored private var nativeSailing = false
+    /// Writes that fail this many times in a row stop the macOS-limit route for this session.
+    public static let nativeMaxFailures = 3
+    public static let nativeRetryAfter: TimeInterval = 30
 
-    public init(settings: ChargeLimitSettings, controller: ChargeController, now: @escaping () -> Date = Date.init) {
+    public init(settings: ChargeLimitSettings, controller: ChargeController, native: NativeChargeLimit? = nil,
+                nativeSnapshot: NativeLimitSnapshotStore = NativeLimitSnapshotStore(), now: @escaping () -> Date = Date.init) {
         self.settings = settings
         self.controller = controller
+        self.native = native
+        self.nativeSnapshot = nativeSnapshot
         self.now = now
     }
 
@@ -117,10 +147,12 @@ public final class ChargeLimiter {
     public func setToolEnabled(_ on: Bool) async {
         toolEnabled = on
         if on {
+            if nativeSupported == nil, let native { nativeSupported = await native.isSupported() }
             await refreshHelperStatus()
             await evaluate(lastReading)
         } else {
             clearCommandState()
+            await leaveNative(force: true)
             if await controller.resetAll() == .applied { maybeCutUntil = nil }
         }
     }
@@ -167,7 +199,7 @@ public final class ChargeLimiter {
     public func shutdown() async { await setToolEnabled(false) }
 
     private func helperUndidCut() {
-        lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil
+        lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil; state.holdRunsOnBattery = false
         restoredAt = now(); retries = 0
     }
 
@@ -175,6 +207,7 @@ public final class ChargeLimiter {
         lastCut = nil; restoredAt = nil; unpluggedInCutSince = nil; releasedForUnplugAt = nil; cutStartedAt = nil
         heat = HeatGuard()
         state.holdingAt = nil; state.chargingNotResumed = false; state.commandFailed = false; state.waitingForWake = false
+        state.holdRunsOnBattery = false
     }
 
     private func step(_ r: BatteryReading?) async {
@@ -185,12 +218,16 @@ public final class ChargeLimiter {
         if let r, (!cut && restoredAt == nil) || r.isPluggedIn { settings.observe(r) }
         state.target = settings.effectiveLimit
         if let r { state.level = r.percent }
-        guard state.helperStatus == .ready else {
+        let useNative = nativeEligible
+        if !useNative, nativeConfirmed != nil || nativeSnapshot.load() != nil { await leaveNative() }
+        let helperReady = state.helperStatus == .ready
+        if !helperReady {
             // Nothing can be commanded safely. If a cut may still be live, ask for the restore anyway.
             if lastCut != nil || cutMayBeLive { cutUndoneWhileAway = true }
             if cutMayBeLive, await controller.resetAll() == .applied { maybeCutUntil = nil }
             clearCommandState()
-            return
+            // macOS's own limit needs no helper.
+            guard useNative else { state.native = false; return }
         }
         if !cut, let r { learnPlug(r) }
         let seen = plugAdjusted(r, cut: cut)
@@ -210,6 +247,14 @@ public final class ChargeLimiter {
         let limitDecision = decision
         decision = ChargePolicy.applyingHeat(decision, paused: hot, reading: seen, limit: settings.effectiveLimit)
         let heatC = decision != limitDecision ? seen?.temperatureC : nil
+        // Holds at 80% and up go to macOS's own limit, so the Mac stays on the charger. A discharge (asked for) and a heat
+        // pause still need the charger cut: both mean running on the battery.
+        if useNative, heatC == nil, !decision.isDischarge {
+            await holdNatively(r)
+            return
+        }
+        state.native = false
+        guard helperReady else { return }
         switch decision {
         case .holdCharging(let at), .discharge(to: let at):
             await hold(decision, at: at, reading: r, heatC: heatC)
@@ -260,7 +305,9 @@ public final class ChargeLimiter {
             return
         }
         if let last = lastCut, now().timeIntervalSince(last) < Self.renewEvery {
-            state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC; return
+            state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC
+            state.holdRunsOnBattery = !discharging
+            return
         }
         let wasCut = lastCut != nil
         if !wasCut { cutStartedAt = now() }
@@ -270,15 +317,16 @@ public final class ChargeLimiter {
         if result == .applied {
             lastCut = now(); restoredAt = nil
             state.holdingAt = at; state.discharging = discharging; state.sailFloor = sailFloor; state.heatPausedAtC = heatC
+            state.holdRunsOnBattery = !discharging
             state.chargingNotResumed = false
             state.commandFailed = false; state.waitingForWake = false
         } else if result == .sleeping {
             // Refused before anything was written: the helper restored for sleep and blocks cuts until power-on.
-            lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil; state.waitingForWake = true
+            lastCut = nil; maybeCutUntil = nil; state.holdingAt = nil; state.holdRunsOnBattery = false; state.waitingForWake = true
             if wasCut { restoredAt = now(); retries = 0 } // our cut was undone by the helper: still check charging resumes
         } else {
             // Failed or timed out: the cut may still have landed. Ask for the restore now, and keep asking while it may be live.
-            lastCut = nil; state.holdingAt = nil; state.commandFailed = true
+            lastCut = nil; state.holdingAt = nil; state.holdRunsOnBattery = false; state.commandFailed = true
             if await controller.resetAll() == .applied { maybeCutUntil = nil }
             if wasCut { restoredAt = now(); retries = 0 }
             await refreshHelperStatus()
@@ -286,7 +334,7 @@ public final class ChargeLimiter {
     }
 
     private func allow(_ r: BatteryReading?) async {
-        state.holdingAt = nil
+        state.holdingAt = nil; state.holdRunsOnBattery = false
         if lastCut != nil || cutMayBeLive {
             let result = await controller.apply(.allowCharging)
             if result == .applied || !cutMayBeLive {
@@ -299,6 +347,73 @@ public final class ChargeLimiter {
         }
         state.waitingForWake = false
         if let start = restoredAt { await verifyResume(r, since: start) }
+    }
+
+    // MARK: macOS's own charge limit
+
+    /// Limits of 80% and up use macOS's limit when this Mac has it (Top Up keeps the route and lifts it to 100).
+    public var usesMacOSLimit: Bool { nativeEligible }
+    /// "Will sail to X%": macOS's limit cannot sail below 80%.
+    public var shownSailFloor: Int { nativeEligible ? settings.nativeSailFloor : settings.sailFloor }
+
+    private var nativeEligible: Bool {
+        guard native != nil, nativeSupported == true else { return false }
+        return settings.limit >= NativeChargeLimits.minimum && settings.limit < 100
+    }
+
+    /// One pass of the macOS-limit route: make sure no cut of ours is live, keep macOS's limit on the planned value
+    /// (Sailing lets it follow the battery down to the floor), and claim a hold only once macOS read it back.
+    private func holdNatively(_ r: BatteryReading?) async {
+        guard let native else { return }
+        state.native = true
+        state.discharging = false; state.heatPausedAtC = nil; state.holdRunsOnBattery = false; state.chargingNotResumed = false
+        // A cut from before (a discharge, a heat pause, a limit below 80) goes away: on this route the charger stays on.
+        if lastCut != nil || cutMayBeLive {
+            if state.helperStatus == .ready, await controller.apply(.allowCharging) == .applied || !cutMayBeLive {
+                lastCut = nil; maybeCutUntil = nil; unpluggedInCutSince = nil; cutStartedAt = nil
+            }
+        }
+        restoredAt = nil
+        let limit = settings.effectiveLimit
+        let floor = NativeChargePlan.floor(limit: limit, sailFloor: settings.effectiveSailing ? settings.sailFloor : nil)
+        // macOS's limit works on macOS's own percentage, so the plan does too.
+        let target = NativeChargePlan.target(level: r?.percent, limit: limit, floor: floor, latched: &nativeSailing)
+        if nativeConfirmed != target, nativeRetryAt.map({ now() >= $0 }) ?? true {
+            if nativeSnapshot.load() == nil { nativeSnapshot.save(await native.current() ?? .off) }
+            if let back = await native.setLimit(target), back.confirms(target) {
+                nativeConfirmed = target; nativeFailures = 0; nativeRetryAt = nil; state.commandFailed = false
+            } else {
+                nativeConfirmed = nil; nativeFailures += 1; state.commandFailed = true
+                nativeRetryAt = now().addingTimeInterval(Self.nativeRetryAfter)
+                if nativeFailures >= Self.nativeMaxFailures {
+                    // macOS keeps refusing: fall back to cuts (and their dimming tip) for the rest of this session.
+                    nativeSupported = false
+                    await leaveNative(force: true)
+                    state.native = false; state.commandFailed = false
+                    return
+                }
+            }
+        }
+        state.waitingForWake = false
+        let holding = nativeConfirmed == target && target < 100 && (r.map { $0.isPluggedIn && !$0.isCharging && $0.percent >= target - 1 } ?? false)
+        state.holdingAt = holding ? limit : nil
+        state.sailFloor = holding && floor < limit ? floor : nil
+    }
+
+    /// Give macOS's limit back to what the person had before Apple Cart changed it. A failed restore keeps the snapshot and
+    /// is tried again on a later pass (at most every `nativeRetryAfter`), or at the next launch.
+    private func leaveNative(force: Bool = false) async {
+        nativeConfirmed = nil; nativeSailing = false
+        state.native = false
+        guard let native, let before = nativeSnapshot.load() else { nativeRetryAt = nil; return }
+        if !force, let t = nativeRetryAt, now() < t { return }
+        // On, with the percent unknown: 80 is macOS's own default.
+        let value = before.enabled ? min(max(before.limit ?? NativeChargeLimits.minimum, NativeChargeLimits.minimum), 100) : 100
+        if let back = await native.setLimit(value), back.confirms(value) {
+            nativeSnapshot.clear(); nativeRetryAt = nil
+        } else {
+            nativeRetryAt = now().addingTimeInterval(Self.nativeRetryAfter)
+        }
     }
 
     private func verifyResume(_ r: BatteryReading?, since start: Date) async {

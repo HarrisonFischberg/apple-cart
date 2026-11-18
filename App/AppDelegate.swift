@@ -34,8 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let battery = BatterySampler()
     private let chargeLimit = ChargeLimitSettings()
     private let chargeController: ChargeController = HelperChargeController()
-    /// The single writer to the root helper.
-    private lazy var chargeLimiter = ChargeLimiter(settings: chargeLimit, controller: chargeController)
+    /// The single writer to the root helper. Holds at 80% and up go through macOS's own charge limit instead of a charger cut,
+    /// so the Mac stays on the charger and the display does not dim.
+    private lazy var chargeLimiter = ChargeLimiter(settings: chargeLimit, controller: chargeController, native: PowerUINativeChargeLimit())
     private let fanController: FanController = HelperFanController()
     /// The single writer of fan commands.
     private lazy var fanRunner = FanRunner(settings: FanSettings(), controller: fanController)

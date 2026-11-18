@@ -1,3 +1,4 @@
+import AppKit
 import Core
 import SwiftUI
 
@@ -16,6 +17,9 @@ struct ChargeHeader: View {
                 Label(state.reasonText, systemImage: state.chargingNotResumed ? "exclamationmark.triangle.fill" : "info.circle")
                     .font(.system(size: 12)).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 16).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if state.holdRunsOnBattery {
+                DimmingTip().padding(.horizontal, 16).padding(.bottom, 6)
             }
         }
     }
@@ -119,7 +123,7 @@ struct LimitPopover: View {
                     Text("Difference \(settings.sailingDifference)%").font(.system(size: 13)).monospacedDigit()
                 }
                 .accessibilityValue("\(settings.sailingDifference) percent")
-                Text(settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(settings.sailFloor)%").hint()
+                Text(settings.topUpActive ? "Off while Top Up runs." : "Will sail to \(limiter?.shownSailFloor ?? settings.sailFloor)%").hint()
             }
             // Reference behavior: the Discharge button is hidden while Automatic Discharge is on.
             if !settings.autoDischarge, state.helperStatus == .ready, settings.dischargeActive || (state.level ?? 0) > settings.effectiveLimit {
@@ -131,10 +135,33 @@ struct LimitPopover: View {
             }
             Text(state.reasonText)
                 .font(.callout).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            if limiter?.usesMacOSLimit == true, settings.limit < 100 {
+                Text("Held by macOS's own charge limit, so your Mac stays on the charger.").hint().fixedSize(horizontal: false, vertical: true)
+            }
             if settings.topUpActive && state.helperStatus != .ready {
                 Text("Top Up is on. It takes effect once the helper is ready.").hint().fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14).frame(width: 240)
+    }
+}
+
+/// While a hold cuts the charger (limits below 80%, or a Mac without macOS's own limit) macOS runs on the battery and may dim
+/// the screen. Apple Cart cannot stop that from here; this points at the one System Settings switch that does.
+struct DimmingTip: View {
+    /// System Settings > Battery.
+    static let batterySettings = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(ChargeLimitState.dimmingTip, systemImage: "sun.min")
+                .font(.system(size: 12)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            if let url = Self.batterySettings {
+                Button("Open Battery Settings") { NSWorkspace.shared.open(url) }
+                    .buttonStyle(.link).font(.system(size: 12))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }

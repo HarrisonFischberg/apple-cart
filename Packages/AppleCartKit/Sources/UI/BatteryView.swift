@@ -66,7 +66,7 @@ public struct BatteryView: View {
                     Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-        case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.holdingAt, resuming: limiter?.state.resuming == true)
+        case .powerFlow: PowerFlowMap(reading: r, active: active, pausedAt: limiter?.state.chargerCut == true ? limiter?.state.holdingAt : nil, resuming: limiter?.state.resuming == true)
         case .details: details(r)
         case .history: graph
         case .energyApps: apps
@@ -126,7 +126,7 @@ public struct BatteryView: View {
                         StatusText(state(r))
                     }
                 }
-                Text(flow(held == nil ? r : r.whileHeld())).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
+                Text(flow(limiter?.state.chargerCut == true ? r.whileHeld() : r)).font(.callout).foregroundStyle(Palette.secondary).monospacedDigit()
             }
             .multilineTextAlignment(.trailing)
         }

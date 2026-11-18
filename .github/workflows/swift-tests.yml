@@ -1,0 +1,21 @@
+name: Swift tests
+
+# Runs the AppleCartKit package tests on a macOS runner, so changes made away from a Mac still get compiled and tested.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build and test AppleCartKit
+        run: swift test --package-path Packages/AppleCartKit
+      - name: Type-check the app's macOS charge limit client
+        run: |
+          MODS=$(dirname "$(find Packages/AppleCartKit/.build -name Core.swiftmodule -path '*debug*' | head -1)")
+          swiftc -typecheck -swift-version 6 -warnings-as-errors -target arm64-apple-macos26.0 -I "$MODS" App/PowerUINativeChargeLimit.swift
