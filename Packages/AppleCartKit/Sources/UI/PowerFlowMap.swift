@@ -10,6 +10,7 @@ struct PowerFlowMap: View {
     /// The charger was just given back and macOS has not started charging yet.
     var resuming = false
     @State private var selected: FlowNodeID?
+    @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// While the charger is held off the Mac runs wholly from the battery, even when one telemetry sample says otherwise.
@@ -30,6 +31,15 @@ struct PowerFlowMap: View {
                     .background(Palette.raised, in: Capsule())
                     .overlay(Capsule().strokeBorder(.primary.opacity(0.12)))
                     .accessibilityElement(children: .ignore).accessibilityLabel("Live")
+                }
+                Spacer()
+                // Only once a tile has been dragged: put every tile back where the layout puts it.
+                if !FlowOffsets(json: savedOffsets).isEmpty {
+                    Button("Reset layout") {
+                        withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) { savedOffsets = "" }
+                    }
+                    .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+                    .help("Put the power flow tiles back in their usual places")
                 }
             }
             PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)

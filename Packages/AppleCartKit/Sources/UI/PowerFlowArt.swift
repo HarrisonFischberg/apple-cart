@@ -18,15 +18,38 @@ struct PowerFlowArt: View {
     @State private var settled = true
     @State private var clock = ParticleClock()
     @State private var live = LiveResize.shared
+    /// Where the owner has dragged tiles (kept across launches) and the tile being dragged right now.
+    @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
+    @State private var drag: (id: FlowNodeID, by: CGSize)?
 
     private var state: FlowState { FlowState(reading) }
     private var streams: [PowerStream] { PowerFlows.streams(reading) }
     private var rest: Double? { PowerFlows.rest(reading, streams: streams) }
     private var leafCount: Int { streams.count }
 
-    private func layout(_ w: CGFloat) -> FlowLayout {
+    private func base(_ w: CGFloat) -> FlowLayout {
         FlowLayout.make(state: state, flows: PowerFlows(reading), streams: streams, rest: rest, width: w, held: pausedAt != nil)
     }
+
+    private var offsets: FlowOffsets {
+        let saved = FlowOffsets(json: savedOffsets)
+        guard let drag else { return saved }
+        return saved.adding(drag.by, to: drag.id)
+    }
+
+    private func layout(_ w: CGFloat) -> FlowLayout { base(w).applying(offsets) }
+
+    /// Drag a tile to move it; the ribbons follow. A short press without movement stays a tap.
+    private func dragTile(_ id: FlowNodeID, width w: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
+            .onChanged { v in drag = (id, v.translation) }
+            .onEnded { v in
+                savedOffsets = FlowOffsets(json: savedOffsets).dropping(id, by: v.translation, base: base(w)).json
+                drag = nil
+            }
+    }
+
+    private static let space = "powerFlowMap"
 
     /// What the map is made of, apart from sizes: animations follow this, not every pixel of a resize.
     private struct Topology: Hashable { var state: FlowState; var streams: [String]; var held: Bool }
@@ -39,7 +62,7 @@ struct PowerFlowArt: View {
             let target = layout(geo.size.width)
             let moving = target.links.contains { ($0.watts ?? 0) > 0.05 }
             ZStack(alignment: .topLeading) {
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion || live.active || (!moving && settled))) { tl in
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: drag == nil && (!active || reduceMotion || live.active || (!moving && settled)))) { tl in
                     Canvas { ctx, _ in
                         let t = tl.date.timeIntervalSinceReferenceDate
                         let shown = reduceMotion || from == nil ? target
@@ -51,6 +74,9 @@ struct PowerFlowArt: View {
                     ForEach(target.nodes, id: \.id) { n in
                         tile(n).frame(width: n.rect.width, height: n.rect.height)
                             .contentShape(Rectangle())
+                            .scaleEffect(drag?.id == n.id ? 1.04 : 1)
+                            .shadow(color: .black.opacity(drag?.id == n.id ? 0.35 : 0), radius: 10, y: 4)
+                            .gesture(dragTile(n.id, width: geo.size.width))
                             .onTapGesture { onSelect(n.id) }
                             .position(x: n.rect.midX, y: n.rect.midY)
                             .transition(.opacity)
@@ -58,11 +84,13 @@ struct PowerFlowArt: View {
                 }
                 .frame(width: geo.size.width, height: target.size.height, alignment: .topLeading)
             }
+            .coordinateSpace(.named(Self.space))
             // Animate only real changes (state, tiles, held), never the geometry changes of a window resize.
             .animation(tick, value: topology)
             .onChange(of: target) { old, new in
                 let now = Date.now.timeIntervalSinceReferenceDate
-                if abs(old.size.width - new.size.width) > 0.5 { // the panel was resized: snap, no easing
+                // The panel was resized, or a tile is being dragged: snap, no easing, so the ribbons stay on the tile.
+                if abs(old.size.width - new.size.width) > 0.5 || drag != nil {
                     from = nil; settled = true
                     clock.update(speeds: Dictionary(new.links.map { ($0.id, FlowMotion.speed($0.watts ?? 0)) }, uniquingKeysWith: { a, _ in a }), at: now)
                     return
@@ -158,6 +186,7 @@ struct PowerFlowArt: View {
     }
 
     private func draw(_ ctx: inout GraphicsContext, _ lay: FlowLayout, t: Double, particles: Bool) {
+        if particles { breathe(&ctx, lay, t: t) }
         for l in lay.links {
             let c = curve(l)
             var path = Path()
@@ -190,13 +219,36 @@ struct PowerFlowArt: View {
             let len = Self.length(c)
             let r = min(max(width * 0.14, 1.3), 2.6)
             let fade = min(1, Double(width) / 4) // pulses thin out with a ribbon that is fading away
+            // Comets: a bright head with a fading tail behind it, longer the faster the power moves.
+            let tail = min(6, 2 + Int(w / 6)), step = 3.2 / len
             ctx.drawLayer { g in
-                g.addFilter(.blur(radius: 1.2))
+                g.addFilter(.blur(radius: 1.1))
                 FlowMotion.particles(distance: clock.distance(l.id, at: t), length: len, watts: w) { f in
-                    let p = Self.point(c, CGFloat(f))
-                    let a = fade * min(1, min(f, 1 - f) * len / 10) // ease in and out at the tiles
-                    g.fill(Path(ellipseIn: CGRect(x: p.x - r * 1.6, y: p.y - r, width: r * 3.2, height: r * 2)), with: .color(.white.opacity(0.85 * a)))
+                    for k in 0...tail {
+                        let fk = f - Double(k) * step
+                        guard fk > 0 else { break }
+                        let p = Self.point(c, CGFloat(fk))
+                        let a = fade * min(1, min(fk, 1 - fk) * len / 10) * (1 - Double(k) / Double(tail + 1)) // ease in and out at the tiles
+                        let rk = r * (1.15 - 0.6 * CGFloat(k) / CGFloat(tail))
+                        g.fill(Path(ellipseIn: CGRect(x: p.x - rk, y: p.y - rk, width: rk * 2, height: rk * 2)), with: .color(.white.opacity(0.95 * a)))
+                    }
                 }
+            }
+        }
+    }
+
+    /// A soft glow behind each tile that power is passing through, swelling and easing at a pace set by its watts.
+    private func breathe(_ ctx: inout GraphicsContext, _ lay: FlowLayout, t: Double) {
+        for n in lay.nodes where !n.dimmed {
+            let links = lay.links.filter { $0.id.from == n.id || $0.id.to == n.id }
+            guard let top = links.max(by: { ($0.watts ?? 0) < ($1.watts ?? 0) }), let w = top.watts, w > 0.5 else { continue }
+            let tint = n.id == .charger ? Palette.amber : colors(top.kind).0
+            let pulse = (sin(t * (1.6 + min(w, 40) / 10)) + 1) / 2
+            let strength = min(1, w / 20)
+            ctx.drawLayer { g in
+                g.addFilter(.blur(radius: 9))
+                g.fill(RoundedRectangle(cornerRadius: 14, style: .continuous).path(in: n.rect.insetBy(dx: -3, dy: -3)),
+                       with: .color(tint.opacity((0.12 + 0.28 * pulse) * strength)))
             }
         }
     }

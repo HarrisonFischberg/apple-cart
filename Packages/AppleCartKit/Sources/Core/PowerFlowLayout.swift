@@ -198,8 +198,8 @@ public enum FlowMotion {
         return p * p * (3 - 2 * p)
     }
 
-    /// Particle speed in points per second: a slow trickle at 1 W, brisk at 30 W and above.
-    public static func speed(_ w: Double) -> Double { w > 0.05 ? 12 + min(w, 40) * 2 : 0 }
+    /// Particle speed in points per second: an easy drift at 1 W, racing at 30 W and above, so the load reads at a glance.
+    public static func speed(_ w: Double) -> Double { w > 0.05 ? 16 + min(w, 40) * 3.2 : 0 }
     /// Share of particle slots that are lit: sparse at low watts, full at 26 W and above.
     public static func density(_ w: Double) -> Double { min(1, 0.35 + max(w, 0) / 40) }
     public static let spacing: Double = 22
