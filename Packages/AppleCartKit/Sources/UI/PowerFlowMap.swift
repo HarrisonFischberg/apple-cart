@@ -11,7 +11,8 @@ struct PowerFlowMap: View {
     var resuming = false
     @State private var selected: FlowNodeID?
     @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
-    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.space.rawValue
+    @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.pixel.rawValue
+    @AppStorage(PixelPlaces.storageKey) private var savedPixels = ""
     @AppStorage(SpaceView.storageKey) private var savedView = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -43,13 +44,15 @@ struct PowerFlowMap: View {
                 }
             }
             Group {
-                if space {
+                if pixel {
+                    PowerFlowPixel(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
+                } else if space {
                     PowerFlowSpace(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
                 } else {
                     PowerFlowArt(reading: shown, active: active, pausedAt: pausedAt, selected: selected, onSelect: select)
                 }
             }
-                // Right-click to switch between the 3D planets, the flat orbit and the original columns.
+                // Right-click to switch between the 8-bit map, the 3D planets, the flat orbit and the original columns.
                 .contextMenu {
                     Picker("Style", selection: $style) {
                         ForEach(FlowStyle.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
@@ -77,11 +80,14 @@ struct PowerFlowMap: View {
     }
 
     private var space: Bool { style == FlowStyle.space.rawValue }
-    private var moved: Bool { space ? !SpaceView(json: savedView).isDefault : !FlowOffsets(json: savedOffsets).isEmpty }
+    private var pixel: Bool { style == FlowStyle.pixel.rawValue }
+    private var moved: Bool {
+        pixel ? !PixelPlaces(json: savedPixels).isEmpty : space ? !SpaceView(json: savedView).isDefault : !FlowOffsets(json: savedOffsets).isEmpty
+    }
 
     private func resetLayout() {
         withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) {
-            if space { savedView = "" } else { savedOffsets = "" }
+            if pixel { savedPixels = "" } else if space { savedView = "" } else { savedOffsets = "" }
         }
     }
 
