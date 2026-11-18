@@ -49,6 +49,13 @@ public struct BatteryReading: Sendable, Equatable {
     public var adapterAmps: Double?      // the charger's current limit
     public var usbOutWatts: Double?      // power this Mac hands to devices on its USB-C ports (PowerOutDetails), nil when not reported
     public var adapterLossWatts: Double? // lost as heat in the charger path (PowerTelemetryData.AdapterEfficiencyLoss)
+    /// The iPhone or iPad this Mac is powering over USB, by the name it gives ("iPhone"). Filled by `BatteryReader.read()` from
+    /// the USB tree, and only when exactly one port gives power and exactly one such device is attached, so it is never a guess.
+    public var usbDeviceName: String?
+    /// That device's own battery level, 0...100, as it reports it over USB-C power delivery (FedDetails). nil when it does not.
+    public var usbDeviceCharge: Int?
+    /// How many USB-C ports are giving power right now (PowerOutDetails entries above 0 W).
+    public var usbPoweredPorts = 0
 
     /// Builds a reading from the AppleSmartBattery property dictionary (top level plus nested BatteryData).
     public init?(properties d: [String: Any], date: Date = Date()) {
@@ -75,6 +82,17 @@ public struct BatteryReading: Sendable, Equatable {
         }
         if let ports = d["PowerOutDetails"] as? [[String: Any]] {
             usbOutWatts = ports.reduce(0) { $0 + Double(int($1["Watts"]) ?? 0) } / 1000 // milliwatts
+            usbPoweredPorts = ports.filter { (int($0["Watts"]) ?? 0) > 0 }.count
+        }
+        // A device on a USB-C port that has a battery reports it here (measured on an M5 Mac with an iPhone: FedStateOfCharge
+        // matched the phone and rose as it charged). Entries for empty ports and the charger are all zero. Only one powered
+        // port and one battery entry name a level, so a level is never pinned on the wrong device.
+        if usbPoweredPorts == 1, let fed = d["FedDetails"] as? [[String: Any]] {
+            let levels = fed.compactMap { f -> Int? in
+                guard (int(f["FedDesignCapacity"]) ?? 0) > 0, let soc = int(f["FedStateOfCharge"]), (0...100).contains(soc) else { return nil }
+                return soc
+            }
+            if levels.count == 1 { usbDeviceCharge = levels[0] }
         }
         let adapter = d["AdapterDetails"] as? [String: Any]
         adapterWatts = int(adapter?["Watts"])
@@ -86,6 +104,11 @@ public struct BatteryReading: Sendable, Equatable {
 
 extension BatteryReading {
     /// Plain-language state, shared by the panel and Shortcuts.
+    /// What the USB tile is called: the device's name when it is known, otherwise "USB".
+    public var usbLabel: String { usbDeviceName ?? "USB" }
+    /// The USB tile's caption: the name plus the device's own battery level when it reports one, e.g. "iPhone 15%".
+    public var usbCaption: String { usbDeviceCharge.map { "\(usbLabel) \($0)%" } ?? usbLabel }
+
     public var stateText: String { isCharging ? "Charging" : isPluggedIn ? "Plugged in, not charging" : "On battery" }
 }
 
@@ -98,7 +121,27 @@ public enum BatteryReader {
         var props: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
               let dict = props?.takeRetainedValue() as? [String: Any] else { return nil }
-        return BatteryReading(properties: dict)
+        guard var r = BatteryReading(properties: dict) else { return nil }
+        if r.usbPoweredPorts == 1 { r.usbDeviceName = iOSDeviceName() } // the USB tree is walked only while a port gives power
+        return r
+    }
+
+    /// The name of the one iPhone, iPad or iPod on the Mac's USB ports ("SupportsIPhoneOS" in the USB tree). nil for none or several.
+    static func iOSDeviceName() -> String? {
+        var it: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(it) }
+        func prop(_ s: io_object_t, _ key: String) -> Any? {
+            IORegistryEntryCreateCFProperty(s, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+        }
+        var names: [String] = []
+        var s = IOIteratorNext(it)
+        while s != 0 {
+            if (prop(s, "SupportsIPhoneOS") as? Bool) == true, let n = prop(s, "USB Product Name") as? String, !n.isEmpty { names.append(n) }
+            IOObjectRelease(s)
+            s = IOIteratorNext(it)
+        }
+        return names.count == 1 ? names[0] : nil
     }
 
     /// `read()` plus the SMC battery temperature (when the battery entry has none, as on Apple silicon) and the MagSafe light.

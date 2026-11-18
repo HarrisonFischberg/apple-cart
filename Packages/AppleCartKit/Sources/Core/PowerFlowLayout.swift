@@ -263,7 +263,13 @@ public enum FlowSummary {
             }
         }
         parts.append(r.systemWatts.map { "The Mac uses \(w($0))." } ?? "The Mac's use is not reported.")
-        for s in streams { parts.append(s.watts.map { "\(s.title) \(w($0))." } ?? "\(s.title) not reported by macOS.") }
+        for s in streams {
+            if s.title == "USB", let watts = s.watts, r.usbDeviceName != nil || r.usbDeviceCharge != nil {
+                parts.append("Charging \(r.usbDeviceName ?? "a USB device") at \(w(watts))\(r.usbDeviceCharge.map { ", its battery at \($0) percent" } ?? "").")
+                continue
+            }
+            parts.append(s.watts.map { "\(s.title) \(w($0))." } ?? "\(s.title) not reported by macOS.")
+        }
         if let rest, rest >= PowerFlows.hideBelow { parts.append("Rest of the Mac \(w(rest)).") }
         switch FlowState(r) {
         case .charging: parts.append("Battery charging at \(w(r.batteryWatts)), \(r.percent) percent.")
