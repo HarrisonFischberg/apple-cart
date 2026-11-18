@@ -40,6 +40,17 @@ private final class FakeAudio: AudioOutput {
         #expect(p.restarted == ["Finder", "Dock"])
     }
 
+    @Test func fileExtensionsWriteGlobalAndFinderSoAFinderCopyCannotOverrideIt() {
+        let p = FakePrefs()
+        p.values["com.apple.finder/AppleShowAllExtensions"] = true // left there by Finder settings
+        let t = QuickToggles(prefs: p)
+        #expect(t.states[.fileExtensions] == true)
+        t.set(.fileExtensions, on: false)
+        #expect(p.values["NSGlobalDomain/AppleShowAllExtensions"] == false)
+        #expect(p.values["com.apple.finder/AppleShowAllExtensions"] == false)
+        #expect(t.states[.fileExtensions] == false && p.restarted == ["Finder"])
+    }
+
     @Test func stateComesFromTheSystemNotTheRequest() {
         final class Stubborn: PreferenceAccess {
             func read(domain: String, key: String) -> Bool? { false }
