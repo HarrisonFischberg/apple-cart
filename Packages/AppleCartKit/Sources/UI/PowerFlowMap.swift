@@ -13,6 +13,7 @@ struct PowerFlowMap: View {
     @AppStorage(FlowOffsets.storageKey) private var savedOffsets = ""
     @AppStorage(FlowStyle.storageKey) private var style = FlowStyle.pixel.rawValue
     @AppStorage(PixelPlaces.storageKey) private var savedPixels = ""
+    @AppStorage(PixelFlow.zoomKey) private var pixelZoom = PixelFlow.cell
     @AppStorage(SpaceView.storageKey) private var savedView = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -36,6 +37,13 @@ struct PowerFlowMap: View {
                     .accessibilityElement(children: .ignore).accessibilityLabel("Live")
                 }
                 Spacer()
+                // The 8-bit map zooms in steps: smaller to take less room, bigger to read from further away. Pinch works too.
+                if pixel {
+                    HStack(spacing: 2) {
+                        zoomButton(-1, "minus.magnifyingglass", "Make the power flow smaller")
+                        zoomButton(1, "plus.magnifyingglass", "Make the power flow bigger")
+                    }
+                }
                 // Only once something has been moved: put the view or the tiles back where they start.
                 if moved {
                     Button(space ? "Reset view" : "Reset layout", action: resetLayout)
@@ -58,6 +66,10 @@ struct PowerFlowMap: View {
                         ForEach(FlowStyle.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                     }
                     .pickerStyle(.inline)
+                    if pixel {
+                        Button("Bigger") { zoom(1) }.disabled(PixelFlow.zoom(pixelZoom) == PixelFlow.zooms.last)
+                        Button("Smaller") { zoom(-1) }.disabled(PixelFlow.zoom(pixelZoom) == PixelFlow.zooms.first)
+                    }
                     if moved { Button(space ? "Reset view" : "Reset layout", action: resetLayout) }
                 }
                 .accessibilityElement(children: .ignore)
@@ -89,6 +101,19 @@ struct PowerFlowMap: View {
         withAnimation(reduceMotion ? nil : .smooth(duration: FlowMotion.transition)) {
             if pixel { savedPixels = "" } else if space { savedView = "" } else { savedOffsets = "" }
         }
+    }
+
+    private func zoom(_ step: Int) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { pixelZoom = PixelFlow.zoom(pixelZoom, by: step) }
+    }
+
+    private func zoomButton(_ step: Int, _ symbol: String, _ label: String) -> some View {
+        let atEnd = PixelFlow.zoom(pixelZoom) == (step > 0 ? PixelFlow.zooms.last : PixelFlow.zooms.first)
+        return Button { zoom(step) } label: {
+            Image(systemName: symbol).font(.system(size: 12, weight: .medium)).frame(width: 24, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundStyle(Palette.secondary).disabled(atEnd).opacity(atEnd ? 0.4 : 1)
+        .help(label).accessibilityLabel(label)
     }
 
     private func select(_ id: FlowNodeID) {
