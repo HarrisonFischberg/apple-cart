@@ -17,8 +17,10 @@ public enum PixelFlow {
     public static func homes(columns c: Int, streams: [PowerStream]) -> [FlowNodeID: PixelPoint] {
         // The battery sits below and between the charger and the Mac, so its wires drop into it from above and never
         // cross a label; outside devices use the right-hand side.
-        var out: [FlowNodeID: PixelPoint] = [.charger: PixelPoint(c * 14 / 100, 20), .mac: PixelPoint(c * 52 / 100, 20),
-                                             .battery: PixelPoint(c * 33 / 100, 60)]
+        // With no outside devices the three spread across the whole width.
+        let spread = shown(streams).isEmpty
+        var out: [FlowNodeID: PixelPoint] = [.charger: PixelPoint(c * (spread ? 18 : 14) / 100, 20), .mac: PixelPoint(c * (spread ? 80 : 52) / 100, 20),
+                                             .battery: PixelPoint(c * (spread ? 49 : 33) / 100, 60)]
         for (i, s) in shown(streams).enumerated() { out[.stream(s.title)] = PixelPoint(c * 85 / 100, 16 + i * 26) }
         return out
     }

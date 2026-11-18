@@ -38,6 +38,10 @@ import Testing
         #expect(Set(h.keys) == [.charger, .mac, .battery, .stream("USB"), .stream("Charger loss")])
         for p in h.values { #expect(p.x > 0 && p.x < c && p.y > 0 && p.y < PixelFlow.rows) }
         #expect(h[.stream("USB")]!.x > h[.mac]!.x && h[.stream("Charger loss")]!.y > h[.stream("USB")]!.y)
+        // Alone, the charger, battery and Mac spread across the width, the battery between the other two.
+        let alone = PixelFlow.homes(columns: c, streams: [])
+        #expect(alone[.mac]!.x > c * 3 / 4 && alone[.charger]!.x < c / 4)
+        #expect(alone[.battery]!.x > alone[.charger]!.x && alone[.battery]!.x < alone[.mac]!.x)
     }
 
     @Test func batteryCellsAndTheFontCoverWhatTheMapShows() {
