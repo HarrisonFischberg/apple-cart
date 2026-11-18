@@ -27,7 +27,7 @@ public enum Permission: String, CaseIterable, Sendable {
         switch self {
         case .screenRecording: "Reads text and QR codes from the screen region you pick. Nothing is recorded or kept."
         case .fullDiskAccess: "Lets the cleaner and uninstaller see leftover files in protected folders."
-        case .accessibility: "Pastes the clipboard item you choose into the app you are using, and lets cleaning mode lock the keyboard."
+        case .accessibility: "Lets the paste-as-plain-text shortcut paste for you, and lets cleaning mode lock the keyboard."
         case .notifications: "Tells you when a break, timer or limit is reached."
         }
     }

@@ -54,7 +54,8 @@ public struct ClipboardView: View {
 
     private func row(_ item: ClipItem) -> some View {
         HStack(spacing: 10) {
-            Button { history.paste(item); close() } label: {
+            // Picking an item only puts it back on the clipboard. It never types into the app in front.
+            Button { history.paste(item, andSend: false); close() } label: {
                 HStack(spacing: 10) {
                     preview(item)
                     Spacer(minLength: 0)
@@ -62,10 +63,9 @@ public struct ClipboardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Pastes this item")
+            .accessibilityHint("Copies this item to the clipboard")
             if item.pinned { Image(systemName: "pin.fill").foregroundStyle(Palette.accent).accessibilityLabel("Pinned") }
             Menu {
-                Button("Paste") { history.paste(item); close() }
                 Button("Copy") { history.paste(item, andSend: false) }
                 Button(item.pinned ? "Unpin" : "Pin") { history.togglePin(item) }
                 if let src = item.sourceBundleID { Button("Never store from this app") { history.neverStore(from: src) } }
