@@ -38,7 +38,7 @@ final class HelperClient: @unchecked Sendable {
     func command(_ body: @escaping @Sendable (AppleCartHelperXPC, @escaping @Sendable (Int) -> Void) -> Void) async -> ChargeApplyResult {
         guard Self.service.status == .enabled else { return .unavailable }
         let code: Int? = await call(body)
-        return HelperCall.result(code: code, name: { HelperErrorCode(rawValue: $0).map { "\($0)" } ?? "\($0)" })
+        return HelperCall.result(code: code, name: HelperErrorCode.name(for:))
     }
 
     private func connect() -> NSXPCConnection? {

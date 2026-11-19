@@ -50,9 +50,11 @@ import HelperProtocol
         #expect(HelperCall.result(code: HelperErrorCode.ok.rawValue) == .applied)
         #expect(HelperCall.result(code: HelperErrorCode.sleeping.rawValue) == .sleeping)
         #expect(HelperCall.result(code: nil) == .failed("The helper did not answer."))
-        #expect(HelperCall.result(code: HelperErrorCode.notApplied.rawValue, name: { HelperErrorCode(rawValue: $0).map { "\($0)" } ?? "\($0)" })
+        #expect(HelperCall.result(code: HelperErrorCode.notApplied.rawValue, name: HelperErrorCode.name(for:))
                 == .failed("Helper error notApplied"))
         #expect(HelperCall.result(code: 99) == .failed("Helper error 99"))
+        #expect(HelperCall.result(code: 99, name: HelperErrorCode.name(for:)) == .failed("Helper error 99"))
+        #expect(HelperErrorCode.smcFailed.name == "smcFailed")
     }
 
     @Test func coreCodesMatchTheHelperProtocol() {

@@ -36,6 +36,23 @@ public enum HelperIdentity {
     case unsupported = 6
     /// The SMC took the write but reads back something else (fan mode did not switch); the helper restored.
     case notApplied = 7
+
+    /// Readable name for error text. String interpolation of an @objc enum prints "HelperErrorCode(rawValue: 7)".
+    public var name: String {
+        switch self {
+        case .ok: "ok"
+        case .outdated: "outdated"
+        case .refused: "refused"
+        case .smcFailed: "smcFailed"
+        case .notAllowed: "notAllowed"
+        case .sleeping: "sleeping"
+        case .unsupported: "unsupported"
+        case .notApplied: "notApplied"
+        }
+    }
+
+    /// Name for any reply code, including ones this build does not know.
+    public static func name(for code: Int) -> String { HelperErrorCode(rawValue: code)?.name ?? "\(code)" }
 }
 
 /// The whole XPC surface. Inputs are clamped on the helper side; nothing here is ever run as a shell string.
