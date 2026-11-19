@@ -25,7 +25,8 @@ Tick every line before a public build. Nothing here deploys anything by itself.
 - [ ] Sparkle EdDSA key generated and `SUPublicEDKey` added; updater turned on (blocker 10).
 - [ ] Support address confirmed (blocker 11).
 - [ ] Publisher and business details confirmed; legal drafts in `docs/legal/` reviewed by a qualified person (T025).
-- [ ] Helper accepts only Developer ID signed callers in Release builds (audit 10).
+- [x] Helper accepts only Developer ID signed callers in Release builds (audit 10, done 2026-11-19). Consequence: a Release
+      build signed with Apple Development or ad hoc cannot talk to the helper; use Debug for local testing.
 - [ ] Charge control spike finished: sleep, reboot and helper-killed-mid-cut tests (T002, blocker 6).
 - [ ] Accessibility pass (T024).
 - [ ] `phase-4/build` merged into `main`.

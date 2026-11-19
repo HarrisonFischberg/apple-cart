@@ -21,7 +21,7 @@ let package = Package(
         .target(name: "HelperCore", dependencies: ["HelperProtocol"]),
         .target(name: "UI", dependencies: ["Core"]),
         .executableTarget(name: "UIPreview", dependencies: ["UI", "Core"]),
-        .testTarget(name: "CoreTests", dependencies: ["Core"]),
+        .testTarget(name: "CoreTests", dependencies: ["Core", "HelperProtocol"]),
         .testTarget(name: "HelperProtocolTests", dependencies: ["HelperProtocol"]),
         .testTarget(name: "HelperCoreTests", dependencies: ["HelperCore", "HelperProtocol"]),
     ]

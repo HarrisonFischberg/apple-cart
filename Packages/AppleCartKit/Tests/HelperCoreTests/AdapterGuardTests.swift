@@ -365,6 +365,15 @@ struct FakeChecker: CodeChecking {
         #expect(!gate.accepts(pid: 0))
     }
 
+    @Test func releaseGateRequiresDeveloperID() {
+        let release = ClientGate(teamID: "KTV2G3Z883", developerIDOnly: true, checker: FakeChecker(allowed: [42]))
+        #expect(release.requirement?.hasSuffix("certificate leaf[field.1.2.840.113635.100.6.1.13]") == true)
+        #expect(release.accepts(pid: 42))
+        let debug = ClientGate(teamID: "KTV2G3Z883", checker: FakeChecker(allowed: [42]))
+        #expect(debug.requirement?.contains("6.1.13") == false)
+        #expect(ClientGate(teamID: nil, developerIDOnly: true, checker: FakeChecker(allowed: [42])).requirement == nil)
+    }
+
     @Test func missingOrBadTeamIDRejectsEveryone() {
         for team in [nil, "", "$(AC_TEAM_ID)", "ktv2g3z883", "KTV2G3Z88"] as [String?] {
             let gate = ClientGate(teamID: team, checker: FakeChecker(allowed: [42]))
