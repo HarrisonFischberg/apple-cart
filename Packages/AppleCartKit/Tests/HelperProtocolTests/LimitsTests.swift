@@ -18,6 +18,25 @@ import Testing
         #expect(CodeSigningRequirement.make(identifier: "a\" or true", teamID: "KTV2G3Z883") == nil)
     }
 
+    @Test func releaseRequirementsAlsoDemandDeveloperID() {
+        let devID = "certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]"
+        #expect(CodeSigningRequirement.app(teamID: "KTV2G3Z883", developerIDOnly: true)
+                == "anchor apple generic and identifier \"app.rarecreatures.applecart\" and certificate leaf[subject.OU] = \"KTV2G3Z883\" and \(devID)")
+        #expect(CodeSigningRequirement.helper(teamID: "KTV2G3Z883", developerIDOnly: true)
+                == "anchor apple generic and identifier \"app.rarecreatures.applecart.helper\" and certificate leaf[subject.OU] = \"KTV2G3Z883\" and \(devID)")
+        // Debug keeps today's string, so Apple Development builds still work on the owner's Mac.
+        #expect(CodeSigningRequirement.app(teamID: "KTV2G3Z883", developerIDOnly: false) == CodeSigningRequirement.app(teamID: "KTV2G3Z883"))
+        #expect(CodeSigningRequirement.app(teamID: "KTV2G3Z883")?.contains("6.1.13") == false)
+        // Still fails closed without a valid team ID.
+        #expect(CodeSigningRequirement.app(teamID: nil, developerIDOnly: true) == nil)
+        #expect(CodeSigningRequirement.helper(teamID: "bad", developerIDOnly: true) == nil)
+    }
+
+    @Test func onlyReleaseBuildsAreDeveloperIDOnly() {
+        #expect(CodeSigningRequirement.developerIDOnly(debugBuild: false))
+        #expect(!CodeSigningRequirement.developerIDOnly(debugBuild: true))
+    }
+
     @Test func leaseIsClamped() {
         #expect(AdapterLease.clamped(0) == 10)
         #expect(AdapterLease.clamped(90) == 90)
