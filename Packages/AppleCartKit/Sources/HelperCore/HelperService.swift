@@ -25,8 +25,9 @@ public struct ClientGate: Sendable {
     public let requirement: String?
     let checker: CodeChecking
 
-    public init(teamID: String?, checker: CodeChecking = SecCodeChecker()) {
-        requirement = CodeSigningRequirement.app(teamID: teamID)
+    /// `developerIDOnly` is true in the Release helper: only the Developer ID signed app gets in (audit 10).
+    public init(teamID: String?, developerIDOnly: Bool = false, checker: CodeChecking = SecCodeChecker()) {
+        requirement = CodeSigningRequirement.app(teamID: teamID, developerIDOnly: developerIDOnly)
         self.checker = checker
     }
 

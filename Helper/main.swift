@@ -44,7 +44,14 @@ if power == nil {
         .error("IORegisterForSystemPower failed: no restore before sleep; the wall-clock lease still ends any cut")
 }
 
-let gate = ClientGate(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String)
+#if DEBUG
+let debugBuild = true
+#else
+let debugBuild = false
+#endif
+// Release: only the Developer ID signed app may connect (Apple Development builds are refused).
+let gate = ClientGate(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String,
+                      developerIDOnly: CodeSigningRequirement.developerIDOnly(debugBuild: debugBuild))
 let listener = NSXPCListener(machServiceName: HelperIdentity.machService)
 if let requirement = gate.requirement { listener.setConnectionCodeSigningRequirement(requirement) }
 let delegate = HelperListenerDelegate(gate: gate, service: HelperService(adapter: adapter, fan: fan, led: led))

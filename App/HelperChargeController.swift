@@ -12,8 +12,17 @@ final class HelperClient: @unchecked Sendable {
 
     private let lock = NSLock()
     private var connection: NSXPCConnection?
-    /// Nil when the team ID build setting is missing: then we never connect (fail closed).
-    private let requirement = CodeSigningRequirement.helper(teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String)
+    /// Nil when the team ID build setting is missing: then we never connect (fail closed). Release builds also require the
+    /// helper to be Developer ID signed (audit 10).
+    private let requirement = CodeSigningRequirement.helper(
+        teamID: Bundle.main.object(forInfoDictionaryKey: HelperIdentity.teamIDInfoKey) as? String,
+        developerIDOnly: CodeSigningRequirement.developerIDOnly(debugBuild: HelperClient.debugBuild))
+
+    #if DEBUG
+    static let debugBuild = true
+    #else
+    static let debugBuild = false
+    #endif
 
     /// Helper status before any XPC call: nil when registered and enabled (then ask the helper itself).
     static var registrationStatus: ChargeHelperStatus? {
@@ -28,10 +37,8 @@ final class HelperClient: @unchecked Sendable {
     /// A command's reply code as an apply result.
     func command(_ body: @escaping @Sendable (AppleCartHelperXPC, @escaping @Sendable (Int) -> Void) -> Void) async -> ChargeApplyResult {
         guard Self.service.status == .enabled else { return .unavailable }
-        guard let code: Int = await call(body) else { return .failed("The helper did not answer.") }
-        if code == HelperErrorCode.ok.rawValue { return .applied }
-        if code == HelperErrorCode.sleeping.rawValue { return .sleeping }
-        return .failed("Helper error \(HelperErrorCode(rawValue: code).map { "\($0)" } ?? "\(code)")")
+        let code: Int? = await call(body)
+        return HelperCall.result(code: code, name: HelperErrorCode.name(for:))
     }
 
     private func connect() -> NSXPCConnection? {
@@ -54,13 +61,11 @@ final class HelperClient: @unchecked Sendable {
     /// One XPC round trip; nil on error, invalidation or timeout. Resumes exactly once.
     func call<T: Sendable>(_ body: @escaping @Sendable (AppleCartHelperXPC, @escaping @Sendable (T) -> Void) -> Void) async -> T? {
         guard let conn = connect() else { return nil }
-        return await withCheckedContinuation { (cont: CheckedContinuation<T?, Never>) in
-            let once = Once(cont)
-            DispatchQueue.global().asyncAfter(deadline: .now() + Self.timeout) { once.resume(nil) }
-            guard let proxy = conn.remoteObjectProxyWithErrorHandler({ _ in once.resume(nil) }) as? AppleCartHelperXPC else {
-                once.resume(nil); return
+        return await HelperCall.first(timeout: Self.timeout) { finish in
+            guard let proxy = conn.remoteObjectProxyWithErrorHandler({ _ in finish(nil) }) as? AppleCartHelperXPC else {
+                finish(nil); return
             }
-            body(proxy) { once.resume($0) }
+            body(proxy) { finish($0) }
         }
     }
 }
@@ -171,16 +176,6 @@ final class HelperLEDController: LEDController, @unchecked Sendable {
     func resetLED() async -> ChargeApplyResult {
         guard let v = await version(), HelperIdentity.supportsLED(helperVersion: v) else { return .unavailable }
         return await client.command { p, done in p.resetLED(reply: done) }
-    }
-}
-
-private final class Once<T: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cont: CheckedContinuation<T?, Never>?
-    init(_ cont: CheckedContinuation<T?, Never>) { self.cont = cont }
-    func resume(_ value: T?) {
-        lock.lock(); let c = cont; cont = nil; lock.unlock()
-        c?.resume(returning: value)
     }
 }
 
