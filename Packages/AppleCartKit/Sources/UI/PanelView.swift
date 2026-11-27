@@ -21,6 +21,7 @@ extension FeatureID {
         case .cleaningMode: "keyboard"
         case .notifications: "bell"
         case .flushDNS: "network"
+        case .mouseMover: "cursorarrow.motionlines"
         }
     }
 }

@@ -46,7 +46,7 @@ public enum SettingsSidebar {
                                                .tool(.flushDNS), .tool(.fanSafeMode)]),
         SettingsGroup(title: "Clean", pages: [.tool(.uninstaller), .tool(.cleaner), .tool(.diskMap), .tool(.updates)]),
         SettingsGroup(title: "Clipboard", pages: [.tool(.clipboard)]),
-        SettingsGroup(title: "Screen", pages: [.tool(.copyText), .tool(.readQR)]),
+        SettingsGroup(title: "Screen", pages: [.tool(.copyText), .tool(.readQR), .tool(.mouseMover)]),
         SettingsGroup(title: "Wellness", pages: [.tool(.breakReminders), .tool(.cleaningMode)]),
         SettingsGroup(title: "About", pages: [.about]),
     ]

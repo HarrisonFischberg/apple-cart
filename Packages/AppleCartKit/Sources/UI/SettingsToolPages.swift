@@ -101,6 +101,7 @@ struct ToolSettingsPage: View {
         case .clipboard: ClipboardOptions(history: tools.clipboard)
         case .breakReminders: BreakOptions(reminders: tools.breaks)
         case .cleaningMode: CleaningOptions()
+        case .mouseMover: MouseMoverOptionsCard()
         case .volumeGuard: VolumeOptions()
         case .quickToggles: QuickToggleOptions(toggles: tools.quickToggles)
         case .updates: UpdatesOptions(checker: tools.updateChecker)

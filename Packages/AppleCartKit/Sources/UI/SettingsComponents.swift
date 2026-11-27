@@ -91,6 +91,7 @@ extension FeatureID {
         case .cleaningMode: "Locks the keyboard and trackpad while you wipe them."
         case .notifications: "Not built yet."
         case .flushDNS: "Clears the DNS cache when a site still goes to an old address."
+        case .mouseMover: "Moves the pointer around a black screen like a screensaver, to help prevent burn-in."
         }
     }
 

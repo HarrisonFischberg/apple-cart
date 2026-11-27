@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         r.register(.updates) { OnDemandTool() }
         r.register(.flushDNS) { OnDemandTool() }
         r.register(.fanSafeMode) { [fanRunner] in FanTool(runner: fanRunner) }
+        r.register(.mouseMover) { [mouseMover] in MouseMoverTool(mouseMover) }
         return r
     }()
     private let battery = BatterySampler()
@@ -67,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var breaks = BreakReminders(notifier: breakBanners)
     private let cleaningMode = CleaningMode(blocker: EventTapBlocker())
     private let cleaningOverlay = CleaningOverlay()
+    private let mouseMover = MouseMover(driver: QuartzPointer())
+    private let blackout = BlackoutOverlay()
     private let cleaner = CleanerModel()
     private let diskMap = DiskMapModel()
     private let flushDNS = FlushDNS(runner: AdminPromptRunner())
@@ -76,8 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // "Keep the display on too" applies to a running Keep awake session at once, not only to the next one.
-        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [keepAwake] _ in
-            MainActor.assumeIsolated { keepAwake.setKeepDisplayOn(KeepAwakeOptions.storedKeepDisplayOn()) }
+        // Mouse mover settings (idle start, black screen) also apply at once.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [keepAwake, mouseMover] _ in
+            MainActor.assumeIsolated { keepAwake.setKeepDisplayOn(KeepAwakeOptions.storedKeepDisplayOn()); mouseMover.settingsChanged() }
         }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "battery.75percent", accessibilityDescription: "Apple Cart")
@@ -87,7 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
         breakBanners.onSnooze = { [breaks] in breaks.snooze($0) }
         let ws = NSWorkspace.shared.notificationCenter
-        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [breaks] _ in MainActor.assumeIsolated { breaks.pause() } }
+        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [breaks, mouseMover] _ in
+            MainActor.assumeIsolated { breaks.pause(); mouseMover.stop(reason: "Stopped when the Mac went to sleep") }
+        }
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self, breaks] _ in
             MainActor.assumeIsolated {
                 breaks.resume()
@@ -102,17 +108,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [clipboard] _ in
             MainActor.assumeIsolated { clipboard.screenLocked() }
         }
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [mouseMover] _ in
+            MainActor.assumeIsolated { mouseMover.stop(reason: "Stopped when the screen locked") }
+        }
         cleaningMode.onChange = { [weak self] on in
             guard let self else { return }
             if on { self.panelController?.close(); self.cleaningOverlay.show(mode: self.cleaningMode) } else { self.cleaningOverlay.hide() }
         }
+        mouseMover.onBlackoutChange = { [blackout] on in if on { blackout.show() } else { blackout.hide() } }
         defer { if UserDefaults.standard.bool(forKey: BatteryWidgetSettings.startupKey) { panelController?.toggle() } }
         statusReadout = StatusReadout(item: item, button: item.button, sampler: battery, registry: registry, settings: readoutSettings, glyphStyle: glyphStyle)
         panelController = PanelController(registry: registry, store: store, anchor: item.button,
                                           openSettings: { [weak self] in self?.openSettings() },
                                           firstRun: FirstRunModel(store: store), readout: readoutSettings,
                                           chargeLimit: chargeLimit, chargeLimiter: chargeLimiter,
-                                          toolView: { [weak self, battery, chargeLimit, chargeLimiter, ledRunner, fanRunner, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, clipboard, screenReader] id, panel in
+                                          toolView: { [weak self, battery, chargeLimit, chargeLimiter, ledRunner, fanRunner, systemSampler, keepAwake, quickToggles, volumeGuard, updateChecker, flushDNS, uninstaller, cleaner, diskMap, breaks, cleaningMode, mouseMover, clipboard, screenReader] id, panel in
             switch id {
             case .battery: AnyView(BatteryView(sampler: battery, active: panel.isOpen && panel.route == .battery, limiter: chargeLimiter, chargeLimit: chargeLimit, led: ledRunner))
             case .system: AnyView(SystemView(sampler: systemSampler, active: panel.isOpen && panel.route == .system))
@@ -127,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .diskMap: AnyView(DiskMapView(model: diskMap))
             case .breakReminders: AnyView(BreaksView(reminders: breaks))
             case .cleaningMode: AnyView(CleaningModeView(mode: cleaningMode, openAccessibility: { if !requestAccessibility() { NSWorkspace.shared.open(Permission.accessibility.settingsURL) } }))
+            case .mouseMover: AnyView(MouseMoverView(mover: mouseMover, start: { [weak self] in self?.panelController?.close(); mouseMover.startSoon() }))
             case .clipboard: AnyView(ClipboardView(history: clipboard, close: { [weak self] in self?.panelController?.close() }))
             case .copyText: AnyView(ScreenReadView(reader: screenReader, mode: .text, start: { [weak self] in self?.panelController?.close(); Task { await self?.screenReader.run(.text) } },
                                                    openSettings: { NSWorkspace.shared.open(Permission.screenRecording.settingsURL) }))
