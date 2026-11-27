@@ -2,7 +2,7 @@
 
 A free, private Mac menu bar app for battery care and system upkeep: charge limit, sailing, top up, heat protection,
 MagSafe light, fan control, keep awake, system monitor, clipboard history, copy text / read QR, uninstaller, cache
-cleaner, update checks, break reminders and cleaning mode. Every tool is a switch, off by default. No account, no
+cleaner, update checks, break reminders, cleaning mode and a screensaver-style mouse mover. Every tool is a switch, off by default. No account, no
 server, no analytics.
 
 "Apple Cart" is a working title only and will change before any public release (`docs/launch-blockers.md` #1).

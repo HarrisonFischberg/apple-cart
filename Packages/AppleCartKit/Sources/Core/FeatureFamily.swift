@@ -22,7 +22,7 @@ public extension FeatureID {
         case .system, .keepAwake, .quickToggles, .volumeGuard, .fanSafeMode, .flushDNS: .system
         case .uninstaller, .cleaner, .diskMap, .updates: .clean
         case .clipboard, .copyText, .readQR: .clipboard
-        case .breakReminders, .cleaningMode, .notifications: .tools
+        case .breakReminders, .cleaningMode, .notifications, .mouseMover: .tools
         }
     }
 }
